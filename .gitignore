@@ -1,0 +1,26 @@
+# Node
+node_modules/
+dist/
+.vite/
+# Rust / Tauri
+target/
+src-tauri/target/
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+# OS
+.DS_Store
+Thumbs.db
+# Logs
+*.log
+logs/
+# Local app data
+data/
