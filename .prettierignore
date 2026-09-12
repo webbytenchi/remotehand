@@ -1,0 +1,9 @@
+node_modules
+dist
+src-tauri/target
+package-lock.json
+README.md
+CONTRIBUTING.md
+SECURITY.md
+docs
+LICENSE

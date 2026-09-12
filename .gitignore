@@ -1,26 +1,31 @@
-# Node
+Node
 node_modules/
 dist/
 .vite/
-# Rust / Tauri
+dist-ssr/
+Rust / Tauri
 target/
 src-tauri/target/
-# Environment / secrets
+Environment / secrets
 .env
 .env.*
 !.env.example
 *.key
 *.pem
-# IDE / editor
+IDE / editor
 .vscode/
 .idea/
 *.swp
 *.swo
-# OS
+OS
 .DS_Store
 Thumbs.db
-# Logs
+Logs
 *.log
 logs/
-# Local app data
-data/
+Portable runtime state
+/config/
+/data/
+/layouts/
+/themes/
+/logs/
