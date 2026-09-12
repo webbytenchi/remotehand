@@ -91,6 +91,15 @@ Safe disconnect/reconnect behavior.
 
 Keyboard-first navigation.
 
+Terminal mouse interaction must support MobaXterm-style behavior:
+
+- Selecting terminal text with the mouse automatically copies the selection to the system clipboard.
+- Right-clicking the terminal pastes the current clipboard contents into the active terminal session by default.
+- Right-click behavior must be configurable so users may choose a context menu instead of immediate paste.
+- An alternate mouse/modifier action should remain available for the action not assigned to plain right-click.
+- Multi-line paste protection must be configurable and able to require confirmation before potentially executable multi-line text is sent to a terminal.
+- These interaction preferences should be available globally and may later support per-profile overrides.
+
 Command palette.
 
 Settings import/export that does not silently expose credentials.

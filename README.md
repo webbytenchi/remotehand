@@ -47,6 +47,10 @@ Portable-only application model
 
 Local terminal support
 
+MobaXterm-style terminal mouse workflow: auto-copy selection and right-click paste
+
+Configurable multi-line paste protection
+
 SSH key and password authentication
 
 SSH port forwarding

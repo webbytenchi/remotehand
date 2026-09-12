@@ -63,6 +63,14 @@ Resize handling
 
 Copy/paste
 
+Auto-copy terminal selection to the system clipboard
+
+Right-click paste with configurable context-menu behavior
+
+Alternate modifier/mouse action for paste or context menu
+
+Configurable multi-line paste confirmation/protection
+
 Search
 
 Terminal themes
