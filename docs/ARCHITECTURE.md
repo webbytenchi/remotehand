@@ -89,9 +89,11 @@ File-system operations requiring native APIs
 
 Platform-specific integration
 
-5. Portable mode
-Portable mode should alter configuration/data locations without weakening credential handling.
-A future portable directory may resemble:
+5. Portable-only distribution
+RemoteHand is portable-only on Windows and Linux. Portability is the default runtime model, not an alternate installation mode.
+
+The application should resolve non-sensitive configuration and application data relative to the RemoteHand directory rather than relying on an installer-created system location.
+The portable directory should resemble:
 RemoteHand/
 +-- RemoteHand.exe
 +-- data/
@@ -99,7 +101,11 @@ RemoteHand/
 +-- layouts/
 +-- themes/
 +-- logs/
-Secrets should use an encrypted vault or OS credential storage unless the user explicitly chooses another supported model.
+Secrets must remain separate from ordinary profile/configuration files.
+
+V1 should not persist passwords by default. A later portable encrypted vault may allow credentials to travel with the application. OS credential storage may also be supported as an optional non-portable secret backend, but it must never be required for normal portable operation.
+
+Official packaging targets are archive-based only: ZIP for Windows and a compressed archive for Linux. Native installers/packages are intentionally out of scope.
 Proposed Frontend Stack
 Tauri
 Provides the native desktop shell and Rust backend while keeping application size and resource use lower than a typical Electron application.

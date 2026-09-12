@@ -59,9 +59,9 @@ Protocol-specific advanced settings
 
 V1 Functional Requirements
 
-Windows-first desktop application.
+Windows and Linux desktop application.
 
-Portable Windows mode.
+Portable-only distribution on Windows and Linux.
 
 SSH connections.
 
@@ -148,11 +148,15 @@ Idle sessions should have low CPU use.
 
 Portability
 
-Windows portable mode must not require installation.
+RemoteHand must not require installation on Windows or Linux.
 
-Portable mode must not require administrative privileges for ordinary use.
+Normal portable operation must not require administrator or root privileges.
 
-The application should make it clear which data remains outside the portable directory if OS credential storage is used.
+Non-sensitive application state should remain inside the RemoteHand directory by default.
+
+The product must not depend on MSI, DEB, RPM, AppImage, system package managers, registry installation, or privileged installation steps.
+
+If an OS credential store is supported later, the application must clearly state that those secrets do not travel with the portable directory.
 
 Maintainability
 
@@ -181,3 +185,7 @@ Centralized fleet policy management
 Remote monitoring/management agent deployment
 
 Cloud account requirement
+
+Windows or Linux installers
+
+MSI, DEB, RPM, or AppImage packaging as official distribution formats

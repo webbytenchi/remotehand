@@ -12,7 +12,7 @@ Multiple tabs and split panes
 
 Drag-and-drop docking and layout persistence
 
-Portable-first Windows experience
+Portable-only Windows and Linux distribution
 
 Cross-platform architecture
 
@@ -43,7 +43,7 @@ Saved workspace layouts
 
 Dark, light, and system themes
 
-Portable configuration mode
+Portable-only application model
 
 Local terminal support
 
@@ -95,8 +95,18 @@ X11-forwarded application
 
 This allows layouts such as an SSH shell beside an RDP desktop, or several SSH sessions arranged across split panes.
 ## Portable Mode
-Portable operation is a first-class requirement, especially on Windows.
-A portable installation should be able to keep non-sensitive configuration, themes, connection profiles, and workspace layouts inside a self-contained application directory. Sensitive credentials must not be stored as plaintext merely to support portability.
+RemoteHand is distributed as a portable application only on Windows and Linux. There is no installer.
+
+The normal workflow is extract -> run. Normal operation must not require administrator/root privileges.
+
+Non-sensitive configuration, themes, connection profiles, and workspace layouts live inside the RemoteHand directory so the application can be moved as a unit. Sensitive credentials must not be stored as plaintext merely to support portability.
+
+Initial target release formats:
+
+- Windows x64: ZIP containing `RemoteHand.exe` and the portable data directory
+- Linux x86_64: compressed archive containing the `remotehand` binary and portable data directory
+
+Installers and native package formats such as MSI, DEB, RPM, or AppImage are not project goals.
 ## Project Status
 Status: Planning / bootstrap
 The repository currently contains the initial product, architecture, security, and roadmap documentation. Implementation has not started yet.

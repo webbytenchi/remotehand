@@ -42,7 +42,9 @@ Whether safer maintained alternatives exist
 Credential Storage
 The final credential system is not yet selected.
 The design must support a credential reference separate from ordinary connection-profile serialization.
-Portable mode must not quietly downgrade secrets to plaintext storage.
+Portable-only distribution must not quietly downgrade secrets to plaintext storage.
+
+Normal configuration files may travel with the RemoteHand directory, but credentials must remain separate. Initial releases should prefer prompting for passwords over persisting them insecurely. A future portable credential vault must use established cryptographic libraries and a documented threat model.
 Reporting Vulnerabilities
 Until a dedicated security-reporting channel is configured, please avoid publishing exploitable details in a public issue.
 For private deployments of this repository, contact the repository owner directly.

@@ -10,7 +10,7 @@ Strong security defaults
 
 Cross-platform design
 
-Portable Windows support
+Portable-only Windows and Linux support
 
 Reuse of mature protocol implementations
 

@@ -17,7 +17,7 @@ Add coding standards and automated checks
 
 Add CI
 
-Validate Windows portable packaging strategy
+Validate portable-only Windows and Linux archive layout
 
 Phase 1 - Workspace Shell
 Goal: create the application experience before networking complexity.
@@ -93,9 +93,9 @@ Known-host management
 Security-focused integration tests
 
 Acceptance target: daily-use SSH client with tabs and splits.
-Phase 4 - Portable and Credential UX
+Phase 4 - Portable Data and Credential UX
 
-Finalize portable storage rules
+Finalize Windows/Linux portable storage rules
 
 Credential abstraction
 
@@ -103,7 +103,7 @@ Encrypted secret storage strategy
 
 Import/export
 
-Clear portable-mode security documentation
+Clear portable-only security documentation
 
 Backup/restore configuration
 
