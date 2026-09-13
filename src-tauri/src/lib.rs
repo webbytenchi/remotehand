@@ -1,4 +1,5 @@
 mod logging;
+mod sftp;
 mod storage;
 mod terminal;
 mod vault;
@@ -18,6 +19,7 @@ pub fn run() {
             storage::load_workspace,
             storage::save_workspace,
             storage::clear_workspace,
+            sftp::sftp_list,
             vault::vault_status,
             vault::vault_initialize,
             vault::vault_unlock,

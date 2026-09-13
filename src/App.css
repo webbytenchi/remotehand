@@ -809,3 +809,135 @@ border-color: #c7ced8;
 background: #ffffff;
 color: #29313d;
 }
+.connection-sftp {
+border: 1px solid #354a61;
+border-radius: 7px;
+background: #132033;
+color: #9ec7ef;
+padding: 7px 11px;
+cursor: pointer;
+}
+.connection-sftp:hover {
+background: #182b42;
+}
+.sftp-panel {
+display: grid;
+grid-template-rows: auto auto 1fr;
+gap: 12px;
+min-height: 0;
+}
+.sftp-heading {
+display: flex;
+align-items: flex-start;
+justify-content: space-between;
+gap: 16px;
+}
+.sftp-heading h2 {
+margin: 0 0 4px;
+}
+.sftp-heading > div > span {
+color: #718094;
+font-size: 12px;
+}
+.sftp-toolbar {
+display: flex;
+gap: 8px;
+}
+.sftp-toolbar button {
+border: 1px solid #2e3c4f;
+border-radius: 7px;
+background: #111925;
+color: #c5cfdb;
+padding: 7px 11px;
+cursor: pointer;
+}
+.sftp-toolbar button:disabled {
+opacity: 0.45;
+cursor: default;
+}
+.sftp-path {
+overflow: hidden;
+border: 1px solid #222c39;
+border-radius: 7px;
+padding: 8px 10px;
+background: #090d13;
+color: #9eacbd;
+font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+font-size: 12px;
+text-overflow: ellipsis;
+white-space: nowrap;
+}
+.sftp-list {
+min-height: 0;
+overflow: auto;
+border: 1px solid #222c39;
+border-radius: 9px;
+background: #090d13;
+}
+.sftp-row {
+display: grid;
+grid-template-columns: minmax(220px, 1fr) 110px 120px;
+gap: 12px;
+width: 100%;
+align-items: center;
+padding: 9px 12px;
+border: 0;
+border-bottom: 1px solid #18212d;
+background: transparent;
+color: #c7d0dc;
+text-align: left;
+}
+.sftp-row-header {
+position: sticky;
+top: 0;
+z-index: 1;
+background: #0f151e;
+color: #718094;
+font-size: 11px;
+font-weight: 700;
+}
+.sftp-entry {
+cursor: default;
+font: inherit;
+}
+.sftp-entry:not(:disabled) {
+cursor: pointer;
+}
+.sftp-entry:not(:disabled):hover {
+background: #111a25;
+}
+.sftp-entry:disabled {
+opacity: 1;
+}
+.sftp-name {
+min-width: 0;
+overflow: hidden;
+text-overflow: ellipsis;
+white-space: nowrap;
+}
+.sftp-name > span {
+display: inline-block;
+width: 18px;
+color: #75aee6;
+}
+.sftp-state,
+.sftp-error {
+padding: 16px;
+color: #8391a3;
+}
+.sftp-error {
+border: 1px solid #5a3035;
+border-radius: 8px;
+background: #241316;
+color: #efaaaa;
+}
+html[data-theme="light"] .sftp-path,
+html[data-theme="light"] .sftp-list {
+background: #ffffff;
+}
+html[data-theme="light"] .sftp-row-header {
+background: #edf2f7;
+}
+html[data-theme="light"] .sftp-entry:not(:disabled):hover {
+background: #f1f5f9;
+}

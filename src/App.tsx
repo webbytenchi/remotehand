@@ -10,6 +10,7 @@ themeLight,
 } from "dockview-react";
 import "dockview-react/dist/styles/dockview.css";
 import { LocalTerminalPanel } from "./LocalTerminalPanel";
+import { SftpPanel } from "./SftpPanel";
 import "./App.css";
 type Connection = {
 id: string;
@@ -113,12 +114,14 @@ onAdd,
 onUpdate,
 onRemove,
 onConnect,
+onSftp,
 }: {
 connections: Connection[];
 onAdd: (connection: Omit<Connection, "id">) => void;
 onUpdate: (connection: Connection) => void;
 onRemove: (connection: Connection) => void;
 onConnect: (connection: Connection) => void;
+onSftp: (connection: Connection) => void;
 }) {
 const [showForm, setShowForm] = useState(false);
 const [editingId, setEditingId] = useState<string | null>(null);
@@ -228,6 +231,7 @@ setShowForm(true);
 </div>
 <div className="connection-actions">
 <button type="button" className="connection-connect" onClick={() => onConnect(connection)}>Connect</button>
+<button type="button" className="connection-sftp" onClick={() => onSftp(connection)}>SFTP</button>
 <details className="connection-menu">
 <summary aria-label={`Manage ${connection.name}`}>⋯</summary>
 <div className="connection-menu-popover">
@@ -383,10 +387,28 @@ name: connection.name,
 },
 });
 }, []);
+const openSftp = useCallback((connection: Connection) => {
+const api = apiRef.current;
+if (!api) return;
+api.addPanel({
+id: "sftp-" + connection.id + "-" + Date.now(),
+component: "sftp",
+title: connection.name + " Files",
+params: {
+connection: {
+host: connection.host,
+port: connection.port,
+user: connection.user,
+name: connection.name,
+},
+},
+});
+}, []);
 const components = useMemo(
 () => ({
 welcome: WelcomePanel,
 terminal: LocalTerminalPanel,
+sftp: SftpPanel,
 connections: (props: IDockviewPanelProps<ConnectionsPanelParams>) => (
 <ConnectionsPanel
 connections={props.params?.connections ?? []}
@@ -394,10 +416,11 @@ onAdd={addConnection}
 onUpdate={updateConnection}
 onRemove={removeConnection}
 onConnect={connectSsh}
+onSftp={openSftp}
 />
 ),
 }),
-[addConnection, updateConnection, removeConnection, connectSsh],
+[addConnection, updateConnection, removeConnection, connectSsh, openSftp],
 );
 const addTerminal = useCallback((position?: "right" | "below", shell: "default" | "powershell" | "cmd" | "wsl" = "default") => {
 const api = apiRef.current;
