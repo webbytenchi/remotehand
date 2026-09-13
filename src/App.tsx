@@ -20,7 +20,7 @@ port: number;
 user: string;
 credentialRef?: string;
 };
-type ThemeMode = "dark" | "light";
+type ThemeMode = "system" | "dark" | "light";
 type Settings = { theme: ThemeMode };
 type WorkspaceLayout = Parameters<DockviewApi["fromJSON"]>[0];
 const WORKSPACE_KEY = "remotehand.workspace";
@@ -316,9 +316,15 @@ onCancel={() => setNotice(null)}
 function App() {
 const [connections, setConnections] = useState(initialConnections);
 const [connectionsLoaded, setConnectionsLoaded] = useState(() => !isTauri());
-const [themeMode, setThemeMode] = useState<ThemeMode>(() =>
-!isTauri() && localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark",
+const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+if (isTauri()) return "system";
+const saved = localStorage.getItem(THEME_KEY);
+return saved === "dark" || saved === "light" || saved === "system" ? saved : "system";
+});
+const [systemTheme, setSystemTheme] = useState<"dark" | "light">(() =>
+window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light",
 );
+const resolvedTheme = themeMode === "system" ? systemTheme : themeMode;
 const [settingsLoaded, setSettingsLoaded] = useState(() => !isTauri());
 const settingsPersistenceEnabledRef = useRef(true);
 const [paletteOpen, setPaletteOpen] = useState(false);
@@ -424,6 +430,7 @@ host: connection.host,
 port: connection.port,
 user: connection.user,
 name: connection.name,
+credentialRef: connection.credentialRef,
 },
 },
 });
@@ -542,7 +549,7 @@ return;
 }
 void invoke<Settings>("load_settings")
 .then((settings) => {
-if (settings.theme === "dark" || settings.theme === "light") {
+if (settings.theme === "dark" || settings.theme === "light" || settings.theme === "system") {
 setThemeMode(settings.theme);
 }
 setSettingsLoaded(true);
@@ -553,12 +560,18 @@ console.error("Failed to load settings", error);
 });
 }, []);
 useEffect(() => {
-document.documentElement.dataset.theme = themeMode;
+const media = window.matchMedia("(prefers-color-scheme: dark)");
+const update = () => setSystemTheme(media.matches ? "dark" : "light");
+media.addEventListener("change", update);
+return () => media.removeEventListener("change", update);
+}, []);
+useEffect(() => {
+document.documentElement.dataset.theme = resolvedTheme;
 if (!settingsLoaded || !isTauri() || !settingsPersistenceEnabledRef.current) return;
 void invoke("save_settings", { settings: { theme: themeMode } satisfies Settings }).catch((error) =>
 console.error("Failed to save settings", error),
 );
-}, [themeMode, settingsLoaded]);
+}, [themeMode, resolvedTheme, settingsLoaded]);
 useEffect(() => {
 const api = apiRef.current;
 if (!api) return;
@@ -657,9 +670,9 @@ const commands = [
 { label: "Undo layout change", hint: "Ctrl/Cmd+Z", run: undoLayout },
 { label: "Redo layout change", hint: "Ctrl/Cmd+Y", run: redoLayout },
 {
-label: themeMode === "dark" ? "Switch to light theme" : "Switch to dark theme",
-hint: "Theme",
-run: () => setThemeMode((value) => (value === "dark" ? "light" : "dark")),
+label: themeMode === "system" ? "Theme: system" : themeMode === "dark" ? "Theme: dark" : "Theme: light",
+hint: "Cycle theme",
+run: () => setThemeMode((value) => value === "system" ? "dark" : value === "dark" ? "light" : "system"),
 },
 { label: "Reset workspace layout", hint: "Reset", run: resetLayout },
 ];
@@ -688,12 +701,12 @@ Command Palette
 <button
 className="topbar-button icon-button"
 type="button"
-onClick={() => setThemeMode((value) => (value === "dark" ? "light" : "dark"))}
+onClick={() => setThemeMode((value) => value === "system" ? "dark" : value === "dark" ? "light" : "system")}
 title="Toggle theme"
 >
-{themeMode === "dark" ? "☀" : "☾"}
+{themeMode === "system" ? "◐" : resolvedTheme === "dark" ? "☀" : "☾"}
 </button>
-<span className="phase-badge">Milestone 3</span>
+<span className="phase-badge">Milestone 5</span>
 </div>
 </header>
 <section className="workspace">
@@ -741,7 +754,7 @@ title="Toggle theme"
 <div className="dockview-host">
 <DockviewReact
 className="remotehand-dockview"
-theme={themeMode === "dark" ? themeDark : themeLight}
+theme={resolvedTheme === "dark" ? themeDark : themeLight}
 components={components}
 onReady={handleReady}
 keyboardNavigation
