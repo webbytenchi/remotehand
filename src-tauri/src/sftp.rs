@@ -116,8 +116,6 @@ pub fn sftp_list(
     let mut command = Command::new("sftp");
     command
         .arg("-q")
-        .arg("-b")
-        .arg("-")
         .arg("-o")
         .arg("ConnectTimeout=10")
         .arg("-P")
@@ -141,6 +139,7 @@ pub fn sftp_list(
             .env("REMOTEHAND_ASKPASS", "1")
             .env("REMOTEHAND_ASKPASS_SECRET", password);
     } else {
+        command.arg("-b").arg("-");
         command.arg("-o").arg("BatchMode=yes");
     }
 
