@@ -4,6 +4,7 @@ import {
 DockviewReact,
 type DockviewApi,
 type DockviewReadyEvent,
+type IDockviewPanelProps,
 themeDark,
 themeLight,
 } from "dockview-react";
@@ -21,6 +22,9 @@ type ThemeMode = "dark" | "light";
 const WORKSPACE_KEY = "remotehand.workspace";
 const THEME_KEY = "remotehand.theme";
 const initialConnections: Connection[] = [];
+type ConnectionsPanelParams = {
+connections?: Connection[];
+};
 function WelcomePanel() {
 return (
 <section className="panel-content welcome-panel">
@@ -194,15 +198,15 @@ const components = useMemo(
 () => ({
 welcome: WelcomePanel,
 terminal: LocalTerminalPanel,
-connections: () => (
+connections: (props: IDockviewPanelProps<ConnectionsPanelParams>) => (
 <ConnectionsPanel
-connections={connections}
+connections={props.params?.connections ?? []}
 onAdd={addConnection}
 onConnect={connectSsh}
 />
 ),
 }),
-[connections, addConnection, connectSsh],
+[addConnection, connectSsh],
 );
 const addTerminal = useCallback((position?: "right" | "below", shell: "default" | "powershell" | "cmd" | "wsl" = "default") => {
 const api = apiRef.current;
@@ -256,6 +260,14 @@ localStorage.setItem(THEME_KEY, themeMode);
 document.documentElement.dataset.theme = themeMode;
 }, [themeMode]);
 useEffect(() => {
+const api = apiRef.current;
+if (!api) return;
+for (const panel of api.panels) {
+if (panel.api.component !== "connections") continue;
+panel.api.updateParameters({ connections });
+}
+}, [connections]);
+useEffect(() => {
 const onKeyDown = (event: KeyboardEvent) => {
 if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
 event.preventDefault();
@@ -300,6 +312,10 @@ component: "connections",
 title: "Connections",
 position: { referencePanel: "welcome", direction: "right" },
 });
+}
+for (const panel of event.api.panels) {
+if (panel.api.component !== "connections") continue;
+panel.api.updateParameters({ connections });
 }
 captureLayout(event.api);
 event.api.onDidMutateLayout(() => {
