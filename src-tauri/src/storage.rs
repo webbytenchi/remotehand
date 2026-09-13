@@ -2,6 +2,18 @@ use serde::{Deserialize, Serialize};
 use std::{env, fs, path::PathBuf};
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct Settings {
+    pub theme: String,
+}
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            theme: "dark".to_string(),
+        }
+    }
+}
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SavedConnection {
     pub id: String,
     pub name: String,
@@ -21,6 +33,28 @@ fn connections_path() -> Result<PathBuf, String> {
 }
 fn workspace_path() -> Result<PathBuf, String> {
     Ok(data_root()?.join("workspaces").join("default.json"))
+}
+fn settings_path() -> Result<PathBuf, String> {
+    Ok(data_root()?.join("config").join("settings.json"))
+}
+#[tauri::command]
+pub fn load_settings() -> Result<Settings, String> {
+    let path = settings_path()?;
+    if !path.exists() {
+        return Ok(Settings::default());
+    }
+    let contents = fs::read_to_string(&path).map_err(|error| error.to_string())?;
+    serde_json::from_str(&contents).map_err(|error| error.to_string())
+}
+#[tauri::command]
+pub fn save_settings(settings: Settings) -> Result<(), String> {
+    let path = settings_path()?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| "failed to resolve config directory".to_string())?;
+    fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    let contents = serde_json::to_string_pretty(&settings).map_err(|error| error.to_string())?;
+    fs::write(path, contents).map_err(|error| error.to_string())
 }
 #[tauri::command]
 pub fn load_connections() -> Result<Vec<SavedConnection>, String> {

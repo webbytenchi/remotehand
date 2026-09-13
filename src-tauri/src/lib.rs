@@ -8,6 +8,8 @@ pub fn run() {
     tauri::Builder::default()
         .manage(TerminalState::default())
         .invoke_handler(tauri::generate_handler![
+            storage::load_settings,
+            storage::save_settings,
             storage::load_connections,
             storage::save_connections,
             storage::load_workspace,

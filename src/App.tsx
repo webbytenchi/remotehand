@@ -19,6 +19,7 @@ port: number;
 user: string;
 };
 type ThemeMode = "dark" | "light";
+type Settings = { theme: ThemeMode };
 type WorkspaceLayout = Parameters<DockviewApi["fromJSON"]>[0];
 const WORKSPACE_KEY = "remotehand.workspace";
 const THEME_KEY = "remotehand.theme";
@@ -267,8 +268,10 @@ function App() {
 const [connections, setConnections] = useState(initialConnections);
 const [connectionsLoaded, setConnectionsLoaded] = useState(() => !isTauri());
 const [themeMode, setThemeMode] = useState<ThemeMode>(() =>
-localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark",
+!isTauri() && localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark",
 );
+const [settingsLoaded, setSettingsLoaded] = useState(() => !isTauri());
+const settingsPersistenceEnabledRef = useRef(true);
 const [paletteOpen, setPaletteOpen] = useState(false);
 const [paletteQuery, setPaletteQuery] = useState("");
 const [workspaceReady, setWorkspaceReady] = useState(false);
@@ -466,9 +469,30 @@ console.error("Failed to save connections", error),
 );
 }, [connections, connectionsLoaded]);
 useEffect(() => {
+if (!isTauri()) {
 localStorage.setItem(THEME_KEY, themeMode);
+setSettingsLoaded(true);
+return;
+}
+void invoke<Settings>("load_settings")
+.then((settings) => {
+if (settings.theme === "dark" || settings.theme === "light") {
+setThemeMode(settings.theme);
+}
+setSettingsLoaded(true);
+})
+.catch((error) => {
+settingsPersistenceEnabledRef.current = false;
+console.error("Failed to load settings", error);
+});
+}, []);
+useEffect(() => {
 document.documentElement.dataset.theme = themeMode;
-}, [themeMode]);
+if (!settingsLoaded || !isTauri() || !settingsPersistenceEnabledRef.current) return;
+void invoke("save_settings", { settings: { theme: themeMode } satisfies Settings }).catch((error) =>
+console.error("Failed to save settings", error),
+);
+}, [themeMode, settingsLoaded]);
 useEffect(() => {
 const api = apiRef.current;
 if (!api) return;
