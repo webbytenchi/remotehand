@@ -56,13 +56,13 @@ fn decrypt_document(passphrase: SecretString, encrypted: &[u8]) -> Result<VaultD
     let identity = age::scrypt::Identity::new(passphrase);
     let mut reader = decryptor
         .decrypt(std::iter::once(&identity as &dyn age::Identity))
-        .map_err(|| "failed to unlock vault".to_string())?;
+        .map_err(|_| "failed to unlock vault".to_string())?;
     let mut plaintext = Vec::new();
     reader
         .read_to_end(&mut plaintext)
         .map_err(|error| error.to_string())?;
     let document: VaultDocument =
-        serde_json::from_slice(&plaintext).map_err(|| "vault contents are invalid".to_string())?;
+        serde_json::from_slice(&plaintext).map_err(|_| "vault contents are invalid".to_string())?;
     if document.version != VAULT_VERSION {
         return Err(format!("unsupported vault version: {}", document.version));
     }
@@ -102,7 +102,7 @@ pub fn vault_status<'a>(state: State<'a, VaultState>) -> Result<VaultStatus, Str
     let unlocked = state
         .unlocked
         .lock()
-        .map_err(|| "vault state is unavailable".to_string())?
+        .map_err(|_| "vault state is unavailable".to_string())?
         .is_some();
     Ok(VaultStatus { exists, unlocked })
 }
@@ -134,7 +134,8 @@ pub fn vault_initialize(state: State<'_, VaultState>, passphrase: String) -> Res
 #[tauri::command]
 pub fn vault_unlock<'a>(state: State<'a, VaultState>, passphrase: String) -> Result<(), String> {
     validate_passphrase(&passphrase)?;
-    let encrypted = fs::read(vault_path()?).map_err(|| "credential vault not found".to_string())?;
+    let encrypted =
+        fs::read(vault_path()?).map_err(|_| "credential vault not found".to_string())?;
     let passphrase = SecretString::from(passphrase);
     let document = decrypt_document(passphrase.clone(), &encrypted)?;
     *state
@@ -153,7 +154,7 @@ pub fn vault_lock<'a>(state: State<'a, VaultState>) -> Result<(), String> {
     *state
         .unlocked
         .lock()
-        .map_err(|| "vault state is unavailable".to_string())? = None;
+        .map_err(|_| "vault state is unavailable".to_string())? = None;
     log::info!("Credential vault locked");
     Ok(())
 }
@@ -167,7 +168,7 @@ pub fn vault_store_secret<'a>(
     let mut guard = state
         .unlocked
         .lock()
-        .map_err(|| "vault state is unavailable".to_string())?;
+        .map_err(|_| "vault state is unavailable".to_string())?;
     let vault = guard
         .as_mut()
         .ok_or_else(|| "credential vault is locked".to_string())?;
@@ -185,7 +186,7 @@ pub fn vault_get_secret<'a>(
     let guard = state
         .unlocked
         .lock()
-        .map_err(|| "vault state is unavailable".to_string())?;
+        .map_err(|_| "vault state is unavailable".to_string())?;
     let vault = guard
         .as_ref()
         .ok_or_else(|| "credential vault is locked".to_string())?;
@@ -200,7 +201,7 @@ pub fn vault_delete_secret<'a>(
     let mut guard = state
         .unlocked
         .lock()
-        .map_err(|| "vault state is unavailable".to_string())?;
+        .map_err(|_| "vault state is unavailable".to_string())?;
     let vault = guard
         .as_mut()
         .ok_or_else(|| "credential vault is locked".to_string())?;
