@@ -189,7 +189,7 @@ export function SftpPanel(props: IDockviewPanelProps<SftpPanelParams>) {
       {error ? <div className="sftp-error">{error}</div> : null}
       {loading ? <div className="sftp-state">Loading remote directory…</div> : null}
 
-      {!loading && !error ? (
+      {!loading && !error && !needsVaultUnlock && !unlocking ? (
         <div className="sftp-list" role="table" aria-label="Remote files">
           <div className="sftp-row sftp-row-header" role="row">
             <span>Name</span>
