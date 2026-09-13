@@ -121,7 +121,7 @@ export function SftpPanel(props: IDockviewPanelProps<SftpPanelParams>) {
   const canGoUp = Boolean(currentPath && currentPath !== "/" && currentPath !== ".");
 
   return (
-    <section className="panel-content sftp-panel">
+    <section className={"panel-content sftp-panel" + (needsVaultUnlock ? " sftp-panel-unlock" : "")}>
       <div className="sftp-heading">
         <div>
           <p className="eyebrow">Milestone 5</p>

@@ -828,6 +828,10 @@ height: 100%;
 min-height: 0;
 overflow: hidden;
 }
+.sftp-panel-unlock {
+grid-template-rows: auto auto auto auto;
+align-content: start;
+}
 .sftp-heading {
 display: flex;
 align-items: flex-start;
