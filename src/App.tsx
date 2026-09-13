@@ -119,6 +119,54 @@ const [paletteQuery, setPaletteQuery] = useState("");
 const [workspaceReady, setWorkspaceReady] = useState(false);
 const apiRef = useRef<DockviewApi | null>(null);
 const restoredRef = useRef(false);
+const layoutHistoryRef = useRef<string[]>([]);
+const layoutHistoryIndexRef = useRef(-1);
+const applyingHistoryRef = useRef(false);
+
+const captureLayout = useCallback((api: DockviewApi) => {
+const snapshot = JSON.stringify(api.toJSON());
+if (applyingHistoryRef.current) return;
+const history = layoutHistoryRef.current;
+const index = layoutHistoryIndexRef.current;
+if (index >= 0 && history[index] === snapshot) return;
+const next = history.slice(0, index + 1);
+next.push(snapshot);
+if (next.length > 50) next.shift();
+layoutHistoryRef.current = next;
+layoutHistoryIndexRef.current = next.length - 1;
+localStorage.setItem(WORKSPACE_KEY, snapshot);
+}, []);
+
+const applyHistorySnapshot = useCallback((snapshot: string, index: number) => {
+const api = apiRef.current;
+if (!api) return;
+applyingHistoryRef.current = true;
+try {
+api.fromJSON(JSON.parse(snapshot));
+layoutHistoryIndexRef.current = index;
+localStorage.setItem(WORKSPACE_KEY, snapshot);
+} finally {
+queueMicrotask(() => {
+applyingHistoryRef.current = false;
+});
+}
+}, []);
+
+const undoLayout = useCallback(() => {
+const index = layoutHistoryIndexRef.current;
+if (index <= 0) return;
+const nextIndex = index - 1;
+applyHistorySnapshot(layoutHistoryRef.current[nextIndex], nextIndex);
+}, [applyHistorySnapshot]);
+
+const redoLayout = useCallback(() => {
+const index = layoutHistoryIndexRef.current;
+const history = layoutHistoryRef.current;
+if (index < 0 || index >= history.length - 1) return;
+const nextIndex = index + 1;
+applyHistorySnapshot(history[nextIndex], nextIndex);
+}, [applyHistorySnapshot]);
+
 const addConnection = useCallback(() => {
 setConnections((current) => [
 ...current,
@@ -199,17 +247,17 @@ setPaletteOpen((open) => !open);
 if (event.key === "Escape") setPaletteOpen(false);
 if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
 event.preventDefault();
-if (event.shiftKey) apiRef.current?.redo();
-else apiRef.current?.undo();
+if (event.shiftKey) redoLayout();
+else undoLayout();
 }
 if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
 event.preventDefault();
-apiRef.current?.redo();
+redoLayout();
 }
 };
 window.addEventListener("keydown", onKeyDown);
 return () => window.removeEventListener("keydown", onKeyDown);
-}, []);
+}, [redoLayout, undoLayout]);
 const handleReady = (event: DockviewReadyEvent) => {
 apiRef.current = event.api;
 const saved = localStorage.getItem(WORKSPACE_KEY);
@@ -236,9 +284,9 @@ title: "Connections",
 position: { referencePanel: "welcome", direction: "right" },
 });
 }
-event.api.clearHistory();
+captureLayout(event.api);
 event.api.onDidMutateLayout(() => {
-localStorage.setItem(WORKSPACE_KEY, JSON.stringify(event.api.toJSON()));
+captureLayout(event.api);
 });
 setWorkspaceReady(true);
 };
@@ -248,8 +296,8 @@ const commands = [
 { label: "Split terminal below", hint: "Split", run: () => addTerminal("below") },
 { label: "Open connections", hint: "Panel", run: addConnections },
 { label: "Pop out active panel", hint: "Window", run: popoutActive },
-{ label: "Undo layout change", hint: "Ctrl/Cmd+Z", run: () => apiRef.current?.undo() },
-{ label: "Redo layout change", hint: "Ctrl/Cmd+Y", run: () => apiRef.current?.redo() },
+{ label: "Undo layout change", hint: "Ctrl/Cmd+Z", run: undoLayout },
+{ label: "Redo layout change", hint: "Ctrl/Cmd+Y", run: redoLayout },
 {
 label: themeMode === "dark" ? "Switch to light theme" : "Switch to dark theme",
 hint: "Theme",
@@ -312,8 +360,8 @@ title="Toggle theme"
 <div className="sidebar-divider" />
 <div className="sidebar-heading">Layout</div>
 <div className="sidebar-row">
-<button className="mini-action" type="button" onClick={() => apiRef.current?.undo()}>Undo</button>
-<button className="mini-action" type="button" onClick={() => apiRef.current?.redo()}>Redo</button>
+<button className="mini-action" type="button" onClick={undoLayout}>Undo</button>
+<button className="mini-action" type="button" onClick={redoLayout}>Redo</button>
 </div>
 <button className="new-connection" type="button" onClick={resetLayout}>Reset layout</button>
 
@@ -339,7 +387,6 @@ theme={themeMode === "dark" ? themeDark : themeLight}
 components={components}
 onReady={handleReady}
 keyboardNavigation
-layoutHistory={{ enabled: true, undoableProgrammaticMutations: true }}
 popoutUrl="popout.html"
 />
 </div>
