@@ -361,6 +361,7 @@ theme={themeMode === "dark" ? themeDark : themeLight}
 components={components}
 onReady={handleReady}
 keyboardNavigation
+dndStrategy="pointer"
 popoutUrl="popout.html"
 />
 </div>
