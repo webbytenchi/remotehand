@@ -236,6 +236,7 @@ title: "Connections",
 position: { referencePanel: "welcome", direction: "right" },
 });
 }
+event.api.clearHistory();
 event.api.onDidMutateLayout(() => {
 localStorage.setItem(WORKSPACE_KEY, JSON.stringify(event.api.toJSON()));
 });
@@ -338,7 +339,7 @@ theme={themeMode === "dark" ? themeDark : themeLight}
 components={components}
 onReady={handleReady}
 keyboardNavigation
-layoutHistory={{ enabled: true }}
+layoutHistory={{ enabled: true, undoableProgrammaticMutations: true }}
 popoutUrl="popout.html"
 />
 </div>
