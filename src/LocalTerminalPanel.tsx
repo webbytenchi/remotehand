@@ -1,5 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import type { IDockviewPanelProps } from "dockview-react";
 import { useEffect, useRef, useState } from "react";
@@ -32,12 +33,6 @@ return document.documentElement.dataset.theme === "light"
 ? LIGHT_THEME
 : DARK_THEME;
 }
-function terminalSize(element: HTMLElement) {
-return {
-cols: Math.max(2, Math.floor(element.clientWidth / 8.2)),
-rows: Math.max(1, Math.floor(element.clientHeight / 17)),
-};
-}
 async function writeTerminal(sessionId: string, data: string) {
 await invoke("terminal_write", { sessionId, data });
 }
@@ -59,6 +54,7 @@ const shell = params?.shell ?? "default";
 useEffect(() => {
 const host = hostRef.current;
 if (!host) return;
+const fitAddon = new FitAddon();
 const terminal = new Terminal({
 cursorBlink: true,
 convertEol: false,
@@ -69,8 +65,10 @@ scrollback: 10000,
 theme: getTheme(),
 });
 
+terminal.loadAddon(fitAddon);
 terminalRef.current = terminal;
 terminal.open(host);
+fitAddon.fit();
 terminal.focus();
 
 if (!isTauri()) {
@@ -140,14 +138,13 @@ unlistenExit?.();
 return;
 }
 
-const size = terminalSize(host);
-terminal.resize(size.cols, size.rows);
+fitAddon.fit();
 
 await invoke("terminal_start", {
 sessionId,
 shell,
-rows: size.rows,
-cols: size.cols,
+rows: terminal.rows,
+cols: terminal.cols,
 });
 
 if (cancelled) {
@@ -159,14 +156,15 @@ return;
 setStatus(shell === "default" ? "Local shell" : shell);
 
 resizeObserver = new ResizeObserver(() => {
-const next = terminalSize(host);
-if (next.cols === terminal.cols && next.rows === terminal.rows) return;
+const previousCols = terminal.cols;
+const previousRows = terminal.rows;
+fitAddon.fit();
+if (terminal.cols === previousCols && terminal.rows === previousRows) return;
 
-terminal.resize(next.cols, next.rows);
 void invoke("terminal_resize", {
 sessionId,
-rows: next.rows,
-cols: next.cols,
+rows: terminal.rows,
+cols: terminal.cols,
 }).catch(() => undefined);
 });
 

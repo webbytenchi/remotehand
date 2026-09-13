@@ -494,8 +494,8 @@ select {
 .local-terminal-panel {
 height: 100%;
 min-height: 0;
-display: grid;
-grid-template-rows: auto auto 1fr;
+display: flex;
+flex-direction: column;
 overflow: hidden;
 background: #05070a;
 }
@@ -558,6 +558,7 @@ font: inherit;
 border-color: #53657d;
 }
 .terminal-host {
+flex: 1 1 auto;
 min-width: 0;
 min-height: 0;
 overflow: hidden;
