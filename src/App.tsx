@@ -123,8 +123,8 @@ const addConnection = useCallback(() => {
 setConnections((current) => [
 ...current,
 {
-id: connection-${Date.now()},
-name: New connection ${current.length},
+id: `connection-${Date.now()}`,
+name: `New connection ${current.length}`,
 host: "example.local",
 user: "user",
 },
@@ -143,7 +143,7 @@ connections: () => (
 const addTerminal = useCallback((position?: "right" | "below") => {
 const api = apiRef.current;
 if (!api) return;
-const id = terminal-${Date.now()};
+const id = `terminal-${Date.now()}`;
 const activePanel = api.activePanel;
 api.addPanel({
 id,
@@ -156,7 +156,7 @@ title: "Terminal",
 }, []);
 const addConnections = useCallback(() => {
 apiRef.current?.addPanel({
-id: connections-${Date.now()},
+id: `connections-${Date.now()}`,
 component: "connections",
 title: "Connections",
 });
