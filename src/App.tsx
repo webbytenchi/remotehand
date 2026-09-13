@@ -45,41 +45,85 @@ keyboard navigation, layout history, and local persistence.
 function ConnectionsPanel({
 connections,
 onAdd,
+onUpdate,
+onRemove,
 onConnect,
 }: {
 connections: Connection[];
 onAdd: (connection: Omit<Connection, "id">) => void;
+onUpdate: (connection: Connection) => void;
+onRemove: (connection: Connection) => void;
 onConnect: (connection: Connection) => void;
 }) {
 const [showForm, setShowForm] = useState(false);
+const [editingId, setEditingId] = useState<string | null>(null);
 const [name, setName] = useState("");
 const [host, setHost] = useState("");
 const [port, setPort] = useState("22");
 const [user, setUser] = useState("");
-const saveConnection = () => {
-const parsedPort = Number(port);
-if (!name.trim() || !host.trim() || !user.trim()) return;
-if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65535) return;
-onAdd({
-name: name.trim(),
-host: host.trim(),
-port: parsedPort,
-user: user.trim(),
-});
+const resetForm = () => {
+setEditingId(null);
 setName("");
 setHost("");
 setPort("22");
 setUser("");
 setShowForm(false);
 };
+const editConnection = (connection: Connection) => {
+setEditingId(connection.id);
+setName(connection.name);
+setHost(connection.host);
+setPort(String(connection.port));
+setUser(connection.user);
+setShowForm(true);
+};
+const saveConnection = () => {
+const parsedPort = Number(port);
+const trimmedName = name.trim();
+const trimmedHost = host.trim();
+const trimmedUser = user.trim();
+if (!trimmedName || !trimmedHost || !trimmedUser) return;
+if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65535) return;
+if (connections.some((connection) => connection.name.toLowerCase() === trimmedName.toLowerCase() && connection.id !== editingId)) {
+window.alert("A connection with that name already exists.");
+return;
+}
+const next = {
+name: trimmedName,
+host: trimmedHost,
+port: parsedPort,
+user: trimmedUser,
+};
+if (editingId) {
+onUpdate({ ...next, id: editingId });
+} else {
+onAdd(next);
+}
+resetForm();
+};
+const removeConnection = (connection: Connection) => {
+if (!window.confirm("Remove saved connection " + connection.name + "?")) return;
+onRemove(connection);
+if (editingId === connection.id) resetForm();
+};
 return (
 <section className="panel-content connections-panel">
 <div className="panel-heading">
 <div>
-<p className="eyebrow">Milestone 3</p>
+<p className="eyebrow">Milestone 4</p>
 <h2>SSH Connections</h2>
 </div>
-<button type="button" className="primary-button" onClick={() => setShowForm((value) => !value)}>
+<button
+type="button"
+className="primary-button"
+onClick={() => {
+if (showForm) {
+resetForm();
+} else {
+setShowForm(true);
+}
+}}
+>
 {showForm ? "Cancel" : "+ New connection"}
 </button>
 </div>
@@ -89,7 +133,9 @@ return (
 <label><span>Host</span><input value={host} onChange={(event) => setHost(event.target.value)} placeholder="server.example.com" /></label>
 <label><span>Port</span><input value={port} onChange={(event) => setPort(event.target.value)} inputMode="numeric" placeholder="22" /></label>
 <label><span>User</span><input value={user} onChange={(event) => setUser(event.target.value)} placeholder="username" /></label>
-<button type="button" className="primary-button" onClick={saveConnection}>Save connection</button>
+<button type="button" className="primary-button" onClick={saveConnection}>
+{editingId ? "Save changes" : "Save connection"}
+</button>
 </div>
 ) : null}
 <div className="connection-list">
@@ -106,7 +152,16 @@ return (
 <strong>{connection.name}</strong>
 <span>{connection.user}@{connection.host}:{connection.port}</span>
 </div>
+<div className="connection-actions">
 <button type="button" className="connection-connect" onClick={() => onConnect(connection)}>Connect</button>
+<details className="connection-menu">
+<summary aria-label={`Manage ${connection.name}`}>⋯</summary>
+<div className="connection-menu-popover">
+<button type="button" onClick={() => editConnection(connection)}>Edit</button>
+<button type="button" className="danger" onClick={() => removeConnection(connection)}>Remove</button>
+</div>
+</details>
+</div>
 </article>
 ))}
 </div>
@@ -115,6 +170,7 @@ return (
 }
 function App() {
 const [connections, setConnections] = useState(initialConnections);
+const [connectionsLoaded, setConnectionsLoaded] = useState(() => !isTauri());
 const [themeMode, setThemeMode] = useState<ThemeMode>(() =>
 localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark",
 );
@@ -177,6 +233,12 @@ setConnections((current) => [
 { ...connection, id: "connection-" + Date.now() },
 ]);
 }, []);
+const updateConnection = useCallback((connection: Connection) => {
+setConnections((current) => current.map((item) => item.id === connection.id ? connection : item));
+}, []);
+const removeConnection = useCallback((connection: Connection) => {
+setConnections((current) => current.filter((item) => item.id !== connection.id));
+}, []);
 const connectSsh = useCallback((connection: Connection) => {
 const api = apiRef.current;
 if (!api) return;
@@ -202,11 +264,13 @@ connections: (props: IDockviewPanelProps<ConnectionsPanelParams>) => (
 <ConnectionsPanel
 connections={props.params?.connections ?? []}
 onAdd={addConnection}
+onUpdate={updateConnection}
+onRemove={removeConnection}
 onConnect={connectSsh}
 />
 ),
 }),
-[addConnection, connectSsh],
+[addConnection, updateConnection, removeConnection, connectSsh],
 );
 const addTerminal = useCallback((position?: "right" | "below", shell: "default" | "powershell" | "cmd" | "wsl" = "default") => {
 const api = apiRef.current;
@@ -255,6 +319,19 @@ title: "Connections",
 position: { referencePanel: "welcome", direction: "right" },
 });
 }, []);
+useEffect(() => {
+if (!isTauri()) return;
+void invoke<Connection[]>("load_connections")
+.then((saved) => setConnections(saved))
+.then(() => setConnectionsLoaded(true))
+.catch((error) => console.error("Failed to load connections", error))
+}, []);
+useEffect(() => {
+if (!connectionsLoaded || !isTauri()) return;
+void invoke("save_connections", { connections }).catch((error) =>
+console.error("Failed to save connections", error),
+);
+}, [connections, connectionsLoaded]);
 useEffect(() => {
 localStorage.setItem(THEME_KEY, themeMode);
 document.documentElement.dataset.theme = themeMode;

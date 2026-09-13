@@ -1,3 +1,4 @@
+mod storage;
 mod terminal;
 
 use terminal::TerminalState;
@@ -7,6 +8,8 @@ pub fn run() {
     tauri::Builder::default()
         .manage(TerminalState::default())
         .invoke_handler(tauri::generate_handler![
+            storage::load_connections,
+            storage::save_connections,
             terminal::terminal_start,
             terminal::ssh_start,
             terminal::terminal_write,
