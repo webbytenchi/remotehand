@@ -41,6 +41,45 @@ rows: Math.max(1, Math.floor(element.clientHeight / 17)),
 async function writeTerminal(sessionId: string, data: string) {
 await invoke("terminal_write", { sessionId, data });
 }
+
+const terminalMountCounts = new Map<string, number>();
+const terminalCloseTimers = new Map<string, number>();
+
+function retainTerminalSession(sessionId: string) {
+terminalMountCounts.set(
+sessionId,
+(terminalMountCounts.get(sessionId) ?? 0) + 1,
+);
+const timer = terminalCloseTimers.get(sessionId);
+if (timer !== undefined) {
+window.clearTimeout(timer);
+terminalCloseTimers.delete(sessionId);
+}
+}
+
+function releaseTerminalSession(sessionId: string) {
+const nextCount = Math.max(
+0,
+(terminalMountCounts.get(sessionId) ?? 1) - 1,
+);
+if (nextCount > 0) {
+terminalMountCounts.set(sessionId, nextCount);
+return;
+}
+terminalMountCounts.delete(sessionId);
+
+const existingTimer = terminalCloseTimers.get(sessionId);
+if (existingTimer !== undefined) {
+window.clearTimeout(existingTimer);
+}
+
+const timer = window.setTimeout(() => {
+terminalCloseTimers.delete(sessionId);
+if ((terminalMountCounts.get(sessionId) ?? 0) > 0) return;
+void invoke("terminal_close", { sessionId }).catch(() => undefined);
+}, 500);
+terminalCloseTimers.set(sessionId, timer);
+}
 export function LocalTerminalPanel({
 api,
 params,
@@ -87,6 +126,8 @@ terminalRef.current = null;
 };
 }
 
+retainTerminalSession(sessionId);
+
 let cancelled = false;
 let unlistenOutput: UnlistenFn | undefined;
 let unlistenExit: UnlistenFn | undefined;
@@ -119,6 +160,11 @@ terminal.write(event.payload.data);
 },
 );
 
+if (cancelled) {
+unlistenOutput?.();
+return;
+}
+
 unlistenExit = await listen<TerminalExitEvent>(
 "terminal-exit",
 (event) => {
@@ -127,6 +173,12 @@ terminal.writeln("\r\n[RemoteHand] shell exited.");
 setStatus("Exited");
 },
 );
+
+if (cancelled) {
+unlistenOutput?.();
+unlistenExit?.();
+return;
+}
 
 const size = terminalSize(host);
 terminal.resize(size.cols, size.rows);
@@ -139,7 +191,8 @@ cols: size.cols,
 });
 
 if (cancelled) {
-await invoke("terminal_close", { sessionId }).catch(() => undefined);
+unlistenOutput?.();
+unlistenExit?.();
 return;
 }
 
@@ -174,7 +227,7 @@ inputDisposable.dispose();
 selectionDisposable.dispose();
 unlistenOutput?.();
 unlistenExit?.();
-void invoke("terminal_close", { sessionId }).catch(() => undefined);
+releaseTerminalSession(sessionId);
 terminal.dispose();
 terminalRef.current = null;
 };
