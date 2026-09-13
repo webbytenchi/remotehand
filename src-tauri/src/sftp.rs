@@ -1,11 +1,9 @@
 use crate::vault::{self, VaultState};
 use serde::Serialize;
 use std::{
-    collections::{HashMap, VecDeque},
     env,
-    io::{BufRead, BufReader, Write},
-    process::{Child, ChildStdin, ChildStdout, Command, Stdio},
-    sync::{Arc, Mutex},
+    io::Write,
+    process::{Command, Stdio},
 };
 use tauri::State;
 
@@ -24,27 +22,6 @@ pub struct SftpEntry {
 pub struct SftpListing {
     path: String,
     entries: Vec<SftpEntry>,
-}
-
-#[derive(Default)]
-pub struct SftpState {
-    sessions: Arc<Mutex<HashMap<String, Arc<Mutex<SftpSession>>>>>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct SftpSessionConfig {
-    host: String,
-    port: u16,
-    user: String,
-    credential_ref: Option<String>,
-}
-
-struct SftpSession {
-    config: SftpSessionConfig,
-    child: Child,
-    stdin: ChildStdin,
-    stdout: BufReader<ChildStdout>,
-    stderr: Arc<Mutex<VecDeque<String>>>,
 }
 
 fn quote_batch_path(path: &str) -> Result<String, String> {
@@ -104,20 +81,62 @@ fn parse_listing_line(line: &str, base: &str) -> Option<SftpEntry> {
     })
 }
 
-fn start_session(
-    config: SftpSessionConfig,
+#[tauri::command]
+pub async fn sftp_list(
+    host: String,
+    port: u16,
+    user: String,
+    path: String,
+    credential_ref: Option<String>,
+    vault_state: State<'_, VaultState>,
+) -> Result<SftpListing, String> {
+    let password = credential_ref
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .map(|credential_ref| vault::get_secret(&vault_state, credential_ref))
+        .transpose()?
+        .flatten();
+
+    tauri::async_runtime::spawn_blocking(move || run_sftp_list(host, port, user, path, password))
+        .await
+        .map_err(|error| format!("SFTP task failed: {error}"))?
+}
+
+fn run_sftp_list(
+    host: String,
+    port: u16,
+    user: String,
+    path: String,
     password: Option<String>,
-) -> Result<SftpSession, String> {
+) -> Result<SftpListing, String> {
+    let host = host.trim();
+    let user = user.trim();
+    let requested_path = if path.trim().is_empty() {
+        "."
+    } else {
+        path.trim()
+    };
+
+    if host.is_empty() {
+        return Err("SFTP host is required".to_string());
+    }
+    if user.is_empty() {
+        return Err("SFTP user is required".to_string());
+    }
+
+    let quoted_path = quote_batch_path(requested_path)?;
+
     let mut command = Command::new("sftp");
     command
         .arg("-q")
         .arg("-o")
         .arg("ConnectTimeout=10")
         .arg("-P")
-        .arg(config.port.max(1).to_string())
+        .arg(port.max(1).to_string())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+
     if let Some(password) = password {
         let askpass = env::current_exe().map_err(|error| error.to_string())?;
         command
@@ -133,129 +152,48 @@ fn start_session(
             .env("REMOTEHAND_ASKPASS", "1")
             .env("REMOTEHAND_ASKPASS_SECRET", password);
     } else {
+        command.arg("-b").arg("-");
         command.arg("-o").arg("BatchMode=yes");
     }
 
-    command.arg(format!("{}@{}", config.user, config.host));
+    command.arg(format!("{user}@{host}"));
 
     let mut child = command
         .spawn()
         .map_err(|error| format!("failed to start sftp: {error}"))?;
-    let stdin = child
+
+    let batch = format!("cd {quoted_path}\npwd\nls -la\n");
+    child
         .stdin
-        .take()
-        .ok_or_else(|| "failed to open sftp input".to_string())?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| "failed to open sftp output".to_string())?;
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or_else(|| "failed to open sftp error output".to_string())?;
-
-    let stderr_buffer = Arc::new(Mutex::new(VecDeque::new()));
-    let stderr_sink = stderr_buffer.clone();
-    std::thread::spawn(move || {
-        let mut reader = BufReader::new(stderr);
-        let mut line = String::new();
-        loop {
-            line.clear();
-            match reader.read_line(&mut line) {
-                Ok(0) | Err(_) => break,
-                Ok(_) => {
-                    let text = line.trim();
-                    if text.is_empty() {
-                        continue;
-                    }
-                    if let Ok(mut lines) = stderr_sink.lock() {
-                        lines.push_back(text.to_string());
-                        while lines.len() > 8 {
-                            lines.pop_front();
-                        }
-                    }
-                }
-            }
-        }
-    });
-
-    Ok(SftpSession {
-        config,
-        child,
-        stdin,
-        stdout: BufReader::new(stdout),
-        stderr: stderr_buffer,
-    })
-}
-fn session_stderr(session: &SftpSession) -> String {
-    session
-        .stderr
-        .lock()
-        .map(|lines| lines.iter().cloned().collect::<Vec<_>>().join(" | "))
-        .unwrap_or_default()
-}
-
-fn run_session_list(session: &mut SftpSession, path: String) -> Result<SftpListing, String> {
-    if let Some(status) = session
-        .child
-        .try_wait()
-        .map_err(|error| format!("failed to inspect sftp session: {error}"))?
-    {
-        let detail = session_stderr(session);
-        return Err(if detail.is_empty() {
-            format!("SFTP session exited with status {status}")
-        } else {
-            format!("SFTP session exited with status {status}: {detail}")
-        });
-    }
-    let requested_path = if path.trim().is_empty() {
-        "."
-    } else {
-        path.trim()
-    };
-    let quoted_path = quote_batch_path(requested_path)?;
-    let batch = format!("cd {quoted_path}\npwd\nls -la\npwd\n");
-
-    session
-        .stdin
+        .as_mut()
+        .ok_or_else(|| "failed to open sftp input".to_string())?
         .write_all(batch.as_bytes())
-        .and_then(|_| session.stdin.flush())
         .map_err(|error| format!("failed to send sftp command: {error}"))?;
 
-    let mut current_path = None;
-    let mut listing_lines = Vec::new();
-    loop {
-        let mut line = String::new();
-        let count = session
-            .stdout
-            .read_line(&mut line)
-            .map_err(|error| format!("failed to read sftp output: {error}"))?;
-        if count == 0 {
-            std::thread::sleep(std::time::Duration::from_millis(20));
-            let detail = session_stderr(session);
-            return Err(if detail.is_empty() {
-                "SFTP session closed unexpectedly".to_string()
-            } else {
-                format!("SFTP session closed unexpectedly: {detail}")
-            });
-        }
+    let output = child
+        .wait_with_output()
+        .map_err(|error| format!("failed to wait for sftp: {error}"))?;
 
-        let trimmed = line.trim_end_matches(['\r', '\n']);
-        if let Some(path) = trimmed.strip_prefix("Remote working directory: ") {
-            if current_path.is_some() {
-                break;
-            }
-            current_path = Some(path.trim().to_string());
-            continue;
-        }
-        if current_path.is_some() {
-            listing_lines.push(trimmed.to_string());
-        }
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let message = stderr.trim();
+        return Err(if message.is_empty() {
+            "SFTP connection failed".to_string()
+        } else {
+            format!("SFTP connection failed: {message}")
+        });
     }
 
-    let current_path = current_path.unwrap_or_else(|| requested_path.to_string());
-    let mut entries = listing_lines
-        .iter()
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let current_path = stdout
+        .lines()
+        .find_map(|line| line.strip_prefix("Remote working directory: "))
+        .unwrap_or(requested_path)
+        .trim()
+        .to_string();
+
+    let mut entries = stdout
+        .lines()
         .filter_map(|line| parse_listing_line(line, &current_path))
         .collect::<Vec<_>>();
 
@@ -271,130 +209,6 @@ fn run_session_list(session: &mut SftpSession, path: String) -> Result<SftpListi
         path: current_path,
         entries,
     })
-}
-#[tauri::command]
-pub async fn sftp_list(
-    session_id: String,
-    host: String,
-    port: u16,
-    user: String,
-    path: String,
-    credential_ref: Option<String>,
-    vault_state: State<'_, VaultState>,
-    sftp_state: State<'_, SftpState>,
-) -> Result<SftpListing, String> {
-    let session_id = session_id.trim().to_string();
-    let config = SftpSessionConfig {
-        host: host.trim().to_string(),
-        port: port.max(1),
-        user: user.trim().to_string(),
-        credential_ref: credential_ref
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_string),
-    };
-    if session_id.is_empty() {
-        return Err("SFTP session id is required".to_string());
-    }
-    if config.host.is_empty() {
-        return Err("SFTP host is required".to_string());
-    }
-    if config.user.is_empty() {
-        return Err("SFTP user is required".to_string());
-    }
-
-    let existing_matches = {
-        let sessions = sftp_state
-            .sessions
-            .lock()
-            .map_err(|_| "SFTP session store is unavailable".to_string())?;
-        sessions
-            .get(&session_id)
-            .map(|session| {
-                session
-                    .lock()
-                    .map(|session| session.config == config)
-                    .unwrap_or(false)
-            })
-            .unwrap_or(false)
-    };
-    let password = if existing_matches {
-        None
-    } else {
-        config
-            .credential_ref
-            .as_deref()
-            .map(|credential_ref| vault::get_secret(&vault_state, credential_ref))
-            .transpose()?
-            .flatten()
-    };
-    let sessions = sftp_state.sessions.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        let session = {
-            let mut sessions = sessions
-                .lock()
-                .map_err(|_| "SFTP session store is unavailable".to_string())?;
-            if let Some(existing) = sessions.get(&session_id) {
-                let matches = existing
-                    .lock()
-                    .map_err(|_| "SFTP session is unavailable".to_string())?
-                    .config
-                    == config;
-                if !matches {
-                    if let Some(old) = sessions.remove(&session_id) {
-                        if let Ok(mut old) = old.lock() {
-                            let _ = old.child.kill();
-                        }
-                    }
-                }
-            }
-
-            if let Some(existing) = sessions.get(&session_id) {
-                existing.clone()
-            } else {
-                let session = Arc::new(Mutex::new(start_session(config.clone(), password)?));
-                sessions.insert(session_id.clone(), session.clone());
-                log::info!("SFTP session started");
-                session
-            }
-        };
-
-        let mut session = session
-            .lock()
-            .map_err(|_| "SFTP session is unavailable".to_string())?;
-        match run_session_list(&mut session, path.clone()) {
-            Ok(listing) => Ok(listing),
-            Err(error) => {
-                let should_retry = session.child.try_wait().ok().flatten().is_some();
-                drop(session);
-                if should_retry {
-                    if let Ok(mut sessions) = sessions.lock() {
-                        sessions.remove(&session_id);
-                    }
-                }
-                Err(error)
-            }
-        }
-    })
-    .await
-    .map_err(|error| format!("SFTP task failed: {error}"))?
-}
-#[tauri::command]
-pub fn sftp_close(session_id: String, sftp_state: State<'_, SftpState>) -> Result<(), String> {
-    let mut sessions = sftp_state
-        .sessions
-        .lock()
-        .map_err(|_| "SFTP session store is unavailable".to_string())?;
-    if let Some(session) = sessions.remove(session_id.trim()) {
-        if let Ok(mut session) = session.lock() {
-            let _ = session.stdin.write_all(b"quit\n");
-            let _ = session.stdin.flush();
-            let _ = session.child.kill();
-        }
-        log::info!("SFTP session closed");
-    }
-    Ok(())
 }
 
 #[cfg(test)]

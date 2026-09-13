@@ -11,7 +11,6 @@ pub fn run() {
     tauri::Builder::default()
         .manage(TerminalState::default())
         .manage(vault::VaultState::default())
-        .manage(sftp::SftpState::default())
         .invoke_handler(tauri::generate_handler![
             storage::load_settings,
             storage::save_settings,
@@ -21,7 +20,6 @@ pub fn run() {
             storage::save_workspace,
             storage::clear_workspace,
             sftp::sftp_list,
-            sftp::sftp_close,
             vault::vault_status,
             vault::vault_initialize,
             vault::vault_unlock,
