@@ -96,6 +96,20 @@ fn validate_credential_ref(credential_ref: &str) -> Result<(), String> {
     }
     Ok(())
 }
+pub(crate) fn get_secret(
+    state: &VaultState,
+    credential_ref: &str,
+) -> Result<Option<String>, String> {
+    validate_credential_ref(credential_ref)?;
+    let guard = state
+        .unlocked
+        .lock()
+        .map_err(|_| "vault state is unavailable".to_string())?;
+    let vault = guard
+        .as_ref()
+        .ok_or_else(|| "credential vault is locked".to_string())?;
+    Ok(vault.document.entries.get(credential_ref).cloned())
+}
 #[tauri::command]
 pub fn vault_status<'a>(state: State<'a, VaultState>) -> Result<VaultStatus, String> {
     let exists = vault_path()?.exists();

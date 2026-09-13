@@ -1,8 +1,11 @@
+use crate::vault::{self, VaultState};
 use serde::Serialize;
 use std::{
+    env,
     io::Write,
     process::{Command, Stdio},
 };
+use tauri::State;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -84,6 +87,8 @@ pub fn sftp_list(
     port: u16,
     user: String,
     path: String,
+    credential_ref: Option<String>,
+    vault_state: State<'_, VaultState>,
 ) -> Result<SftpListing, String> {
     let host = host.trim();
     let user = user.trim();
@@ -101,12 +106,18 @@ pub fn sftp_list(
     }
 
     let quoted_path = quote_batch_path(requested_path)?;
-    let mut child = Command::new("sftp")
+    let password = credential_ref
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .map(|credential_ref| vault::get_secret(&vault_state, credential_ref))
+        .transpose()?
+        .flatten();
+
+    let mut command = Command::new("sftp");
+    command
         .arg("-q")
         .arg("-b")
         .arg("-")
-        .arg("-o")
-        .arg("BatchMode=yes")
         .arg("-o")
         .arg("ConnectTimeout=10")
         .arg("-P")
@@ -114,7 +125,27 @@ pub fn sftp_list(
         .arg(format!("{user}@{host}"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    if let Some(password) = password {
+        let askpass = env::current_exe().map_err(|error| error.to_string())?;
+        command
+            .arg("-o")
+            .arg("BatchMode=no")
+            .arg("-o")
+            .arg("PreferredAuthentications=password")
+            .arg("-o")
+            .arg("NumberOfPasswordPrompts=1")
+            .env("SSH_ASKPASS", askpass)
+            .env("SSH_ASKPASS_REQUIRE", "force")
+            .env("DISPLAY", "remotehand")
+            .env("REMOTEHAND_ASKPASS", "1")
+            .env("REMOTEHAND_ASKPASS_SECRET", password);
+    } else {
+        command.arg("-o").arg("BatchMode=yes");
+    }
+
+    let mut child = command
         .spawn()
         .map_err(|error| format!("failed to start sftp: {error}"))?;
 

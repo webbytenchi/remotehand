@@ -7,6 +7,7 @@ type SftpConnection = {
   port: number;
   user: string;
   name: string;
+  credentialRef?: string;
 };
 
 type SftpEntry = {
@@ -47,6 +48,9 @@ export function SftpPanel(props: IDockviewPanelProps<SftpPanelParams>) {
   const [requestedPath, setRequestedPath] = useState(".");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [needsVaultUnlock, setNeedsVaultUnlock] = useState(false);
+  const [vaultPassphrase, setVaultPassphrase] = useState("");
+  const [unlocking, setUnlocking] = useState(false);
 
   const loadPath = useCallback(
     async (path: string) => {
@@ -67,17 +71,41 @@ export function SftpPanel(props: IDockviewPanelProps<SftpPanelParams>) {
           port: connection.port,
           user: connection.user,
           path,
+          credentialRef: connection.credentialRef,
         });
         setListing(next);
         setRequestedPath(next.path);
+        setNeedsVaultUnlock(false);
       } catch (reason) {
-        setError(String(reason));
+        const message = String(reason);
+        if (connection.credentialRef && message.includes("credential vault is locked")) {
+          setNeedsVaultUnlock(true);
+          setError("Credential vault is locked. Enter the vault passphrase to continue.");
+        } else {
+          setError(message);
+        }
       } finally {
         setLoading(false);
       }
     },
     [connection],
   );
+
+  const unlockVault = useCallback(async () => {
+    if (!vaultPassphrase || unlocking) return;
+    setUnlocking(true);
+    setError("");
+    try {
+      await invoke("vault_unlock", { passphrase: vaultPassphrase });
+      setVaultPassphrase("");
+      setNeedsVaultUnlock(false);
+      await loadPath(requestedPath);
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setUnlocking(false);
+    }
+  }, [loadPath, requestedPath, unlocking, vaultPassphrase]);
 
   useEffect(() => {
     void loadPath(".");
@@ -117,6 +145,31 @@ export function SftpPanel(props: IDockviewPanelProps<SftpPanelParams>) {
       </div>
 
       <div className="sftp-path" title={currentPath}>{currentPath}</div>
+
+      {needsVaultUnlock ? (
+        <div className="sftp-unlock">
+          <label>
+            <span>Vault passphrase</span>
+            <input
+              type="password"
+              value={vaultPassphrase}
+              onChange={(event) => setVaultPassphrase(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") void unlockVault();
+              }}
+              autoComplete="current-password"
+              autoFocus
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => void unlockVault()}
+            disabled={!vaultPassphrase || unlocking}
+          >
+            {unlocking ? "Unlocking…" : "Unlock"}
+          </button>
+        </div>
+      ) : null}
 
       {error ? <div className="sftp-error">{error}</div> : null}
       {loading ? <div className="sftp-state">Loading remote directory…</div> : null}

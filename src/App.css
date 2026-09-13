@@ -941,3 +941,46 @@ background: #edf2f7;
 html[data-theme="light"] .sftp-entry:not(:disabled):hover {
 background: #f1f5f9;
 }
+
+.sftp-unlock {
+display: flex;
+align-items: flex-end;
+gap: 8px;
+padding: 12px;
+border: 1px solid #222c39;
+border-radius: 8px;
+background: #090d13;
+}
+.sftp-unlock label {
+display: flex;
+flex: 1;
+flex-direction: column;
+gap: 6px;
+}
+.sftp-unlock span {
+color: #8391a3;
+font-size: 11px;
+}
+.sftp-unlock input {
+border: 1px solid #2e3c4f;
+border-radius: 7px;
+background: #111925;
+color: #c5cfdb;
+padding: 7px 9px;
+}
+.sftp-unlock button {
+border: 1px solid #354a61;
+border-radius: 7px;
+background: #132033;
+color: #9ec7ef;
+padding: 7px 11px;
+cursor: pointer;
+}
+html[data-theme="light"] .sftp-unlock {
+background: #ffffff;
+border-color: #c7ced8;
+}
+html[data-theme="light"] .sftp-unlock input {
+background: #ffffff;
+color: #29313d;
+}

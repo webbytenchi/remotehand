@@ -117,7 +117,7 @@ onConnect,
 onSftp,
 }: {
 connections: Connection[];
-onAdd: (connection: Omit<Connection, "id">) => void;
+onAdd: (connection: Connection) => void;
 onUpdate: (connection: Connection) => void;
 onRemove: (connection: Connection) => void;
 onConnect: (connection: Connection) => void;
@@ -129,6 +129,9 @@ const [name, setName] = useState("");
 const [host, setHost] = useState("");
 const [port, setPort] = useState("22");
 const [user, setUser] = useState("");
+const [password, setPassword] = useState("");
+const [vaultPassphrase, setVaultPassphrase] = useState("");
+const [saving, setSaving] = useState(false);
 const [pendingRemove, setPendingRemove] = useState<Connection | null>(null);
 const [notice, setNotice] = useState<{ title: string; message: string } | null>(null);
 const resetForm = () => {
@@ -137,6 +140,8 @@ setName("");
 setHost("");
 setPort("22");
 setUser("");
+setPassword("");
+setVaultPassphrase("");
 setShowForm(false);
 };
 const editConnection = (connection: Connection) => {
@@ -145,14 +150,16 @@ setName(connection.name);
 setHost(connection.host);
 setPort(String(connection.port));
 setUser(connection.user);
+setPassword("");
+setVaultPassphrase("");
 setShowForm(true);
 };
-const saveConnection = () => {
+const saveConnection = async () => {
 const parsedPort = Number(port);
 const trimmedName = name.trim();
 const trimmedHost = host.trim();
 const trimmedUser = user.trim();
-if (!trimmedName || !trimmedHost || !trimmedUser) return;
+if (!trimmedName || !trimmedHost || !trimmedUser || saving) return;
 if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65535) return;
 if (connections.some((connection) => connection.name.toLowerCase() === trimmedName.toLowerCase() && connection.id !== editingId)) {
 setNotice({
@@ -161,18 +168,53 @@ message: "Choose a different name for this saved connection.",
 });
 return;
 }
-const next = {
+const existing = editingId ? connections.find((connection) => connection.id === editingId) : undefined;
+const id = editingId ?? "connection-" + Date.now();
+let credentialRef = existing?.credentialRef;
+setSaving(true);
+try {
+if (password) {
+if (!isTauri()) {
+throw new Error("Password storage is available in the RemoteHand desktop app.");
+}
+const status = await invoke<{ exists: boolean; unlocked: boolean }>("vault_status");
+if (!status.unlocked) {
+if (!vaultPassphrase) {
+throw new Error(status.exists
+? "Vault passphrase is required to unlock the credential vault."
+: "Vault passphrase is required to create the credential vault.");
+}
+if (status.exists) {
+await invoke("vault_unlock", { passphrase: vaultPassphrase });
+} else {
+await invoke("vault_initialize", { passphrase: vaultPassphrase });
+}
+}
+credentialRef = credentialRef ?? "connection:" + id;
+await invoke("vault_store_secret", { credentialRef, secret: password });
+}
+const next: Connection = {
+id,
 name: trimmedName,
 host: trimmedHost,
 port: parsedPort,
 user: trimmedUser,
+...(credentialRef ? { credentialRef } : {}),
 };
 if (editingId) {
-onUpdate({ ...next, id: editingId });
+onUpdate(next);
 } else {
 onAdd(next);
 }
 resetForm();
+} catch (reason) {
+setNotice({
+title: "Could not save credential",
+message: String(reason),
+});
+} finally {
+setSaving(false);
+}
 };
 const removeConnection = (connection: Connection) => {
 setPendingRemove(connection);
@@ -210,8 +252,10 @@ setShowForm(true);
 <label><span>Host</span><input value={host} onChange={(event) => setHost(event.target.value)} placeholder="server.example.com" /></label>
 <label><span>Port</span><input value={port} onChange={(event) => setPort(event.target.value)} inputMode="numeric" placeholder="22" /></label>
 <label><span>User</span><input value={user} onChange={(event) => setUser(event.target.value)} placeholder="username" /></label>
-<button type="button" className="primary-button" onClick={saveConnection}>
-{editingId ? "Save changes" : "Save connection"}
+<label><span>Password (optional)</span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder={editingId ? "Leave blank to keep current password" : "Saved securely in the credential vault"} autoComplete="new-password" /></label>
+{password ? <label><span>Vault passphrase</span><input type="password" value={vaultPassphrase} onChange={(event) => setVaultPassphrase(event.target.value)} placeholder="Required if the vault is locked or new" autoComplete="current-password" /></label> : null}
+<button type="button" className="primary-button" onClick={() => void saveConnection()} disabled={saving}>
+{saving ? "Saving…" : editingId ? "Save changes" : "Save connection"}
 </button>
 </div>
 ) : null}
@@ -358,11 +402,8 @@ const nextIndex = index + 1;
 applyHistorySnapshot(history[nextIndex], nextIndex);
 }, [applyHistorySnapshot]);
 
-const addConnection = useCallback((connection: Omit<Connection, "id">) => {
-setConnections((current) => [
-...current,
-{ ...connection, id: "connection-" + Date.now() },
-]);
+const addConnection = useCallback((connection: Connection) => {
+setConnections((current) => [...current, connection]);
 }, []);
 const updateConnection = useCallback((connection: Connection) => {
 setConnections((current) => current.map((item) => item.id === connection.id ? connection : item));
@@ -400,6 +441,7 @@ host: connection.host,
 port: connection.port,
 user: connection.user,
 name: connection.name,
+credentialRef: connection.credentialRef,
 },
 },
 });
