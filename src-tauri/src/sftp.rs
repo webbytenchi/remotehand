@@ -122,7 +122,6 @@ pub fn sftp_list(
         .arg("ConnectTimeout=10")
         .arg("-P")
         .arg(port.max(1).to_string())
-        .arg(format!("{user}@{host}"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -144,6 +143,8 @@ pub fn sftp_list(
     } else {
         command.arg("-o").arg("BatchMode=yes");
     }
+
+    command.arg(format!("{user}@{host}"));
 
     let mut child = command
         .spawn()
