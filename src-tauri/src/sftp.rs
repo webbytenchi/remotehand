@@ -1,7 +1,7 @@
 use crate::vault::{self, VaultState};
 use serde::Serialize;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     env,
     io::{BufRead, BufReader, Write},
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
@@ -44,6 +44,7 @@ struct SftpSession {
     child: Child,
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
+    stderr: Arc<Mutex<VecDeque<String>>>,
 }
 
 fn quote_batch_path(path: &str) -> Result<String, String> {
@@ -153,6 +154,8 @@ fn start_session(
         .take()
         .ok_or_else(|| "failed to open sftp error output".to_string())?;
 
+    let stderr_buffer = Arc::new(Mutex::new(VecDeque::new()));
+    let stderr_sink = stderr_buffer.clone();
     std::thread::spawn(move || {
         let mut reader = BufReader::new(stderr);
         let mut line = String::new();
@@ -160,7 +163,18 @@ fn start_session(
             line.clear();
             match reader.read_line(&mut line) {
                 Ok(0) | Err(_) => break,
-                Ok(_) => log::debug!("SFTP process reported an error line"),
+                Ok(_) => {
+                    let text = line.trim();
+                    if text.is_empty() {
+                        continue;
+                    }
+                    if let Ok(mut lines) = stderr_sink.lock() {
+                        lines.push_back(text.to_string());
+                        while lines.len() > 8 {
+                            lines.pop_front();
+                        }
+                    }
+                }
             }
         }
     });
@@ -170,15 +184,29 @@ fn start_session(
         child,
         stdin,
         stdout: BufReader::new(stdout),
+        stderr: stderr_buffer,
     })
 }
+fn session_stderr(session: &SftpSession) -> String {
+    session
+        .stderr
+        .lock()
+        .map(|lines| lines.iter().cloned().collect::<Vec<_>>().join(" | "))
+        .unwrap_or_default()
+}
+
 fn run_session_list(session: &mut SftpSession, path: String) -> Result<SftpListing, String> {
     if let Some(status) = session
         .child
         .try_wait()
         .map_err(|error| format!("failed to inspect sftp session: {error}"))?
     {
-        return Err(format!("SFTP session exited with status {status}"));
+        let detail = session_stderr(session);
+        return Err(if detail.is_empty() {
+            format!("SFTP session exited with status {status}")
+        } else {
+            format!("SFTP session exited with status {status}: {detail}")
+        });
     }
     let requested_path = if path.trim().is_empty() {
         "."
@@ -203,7 +231,13 @@ fn run_session_list(session: &mut SftpSession, path: String) -> Result<SftpListi
             .read_line(&mut line)
             .map_err(|error| format!("failed to read sftp output: {error}"))?;
         if count == 0 {
-            return Err("SFTP session closed unexpectedly".to_string());
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            let detail = session_stderr(session);
+            return Err(if detail.is_empty() {
+                "SFTP session closed unexpectedly".to_string()
+            } else {
+                format!("SFTP session closed unexpectedly: {detail}")
+            });
         }
 
         let trimmed = line.trim_end_matches(['\r', '\n']);
