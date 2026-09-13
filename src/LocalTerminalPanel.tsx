@@ -8,6 +8,12 @@ import "@xterm/xterm/css/xterm.css";
 type LocalShell = "default" | "powershell" | "cmd" | "wsl";
 type TerminalParams = {
 shell?: LocalShell;
+ssh?: {
+host: string;
+port: number;
+user: string;
+name: string;
+};
 };
 type TerminalOutputEvent = {
 sessionId: string;
@@ -46,11 +52,12 @@ const terminalRef = useRef<Terminal | null>(null);
 const outputRef = useRef("");
 const [searchOpen, setSearchOpen] = useState(false);
 const [searchQuery, setSearchQuery] = useState("");
-const [status, setStatus] = useState("Starting local shell...");
+const [status, setStatus] = useState(params?.ssh ? "Connecting SSH..." : "Starting local shell...");
 const [rightClickPaste, setRightClickPaste] = useState(true);
 const [confirmMultiline, setConfirmMultiline] = useState(true);
 const sessionId = api.id;
 const shell = params?.shell ?? "default";
+const ssh = params?.ssh;
 useEffect(() => {
 const host = hostRef.current;
 if (!host) return;
@@ -72,10 +79,10 @@ fitAddon.fit();
 terminal.focus();
 
 if (!isTauri()) {
-terminal.writeln("RemoteHand Local Terminal");
+terminal.writeln("RemoteHand Terminal");
 terminal.writeln("");
 terminal.writeln(
-"A Tauri desktop runtime is required for local PTY sessions.",
+"A Tauri desktop runtime is required for terminal sessions.",
 );
 terminal.writeln("Run: npm run tauri dev");
 setStatus("Desktop runtime required");
@@ -140,12 +147,23 @@ return;
 
 fitAddon.fit();
 
+if (ssh) {
+await invoke("ssh_start", {
+sessionId,
+host: ssh.host,
+port: ssh.port,
+user: ssh.user,
+rows: terminal.rows,
+cols: terminal.cols,
+});
+} else {
 await invoke("terminal_start", {
 sessionId,
 shell,
 rows: terminal.rows,
 cols: terminal.cols,
 });
+}
 
 if (cancelled) {
 unlistenOutput?.();
@@ -153,7 +171,13 @@ unlistenExit?.();
 return;
 }
 
-setStatus(shell === "default" ? "Local shell" : shell);
+setStatus(
+ssh
+? "SSH " + ssh.user + "@" + ssh.host + ":" + ssh.port
+: shell === "default"
+? "Local shell"
+: shell,
+);
 
 resizeObserver = new ResizeObserver(() => {
 const previousCols = terminal.cols;
@@ -188,7 +212,7 @@ unlistenExit?.();
 terminal.dispose();
 terminalRef.current = null;
 };
-}, [sessionId, shell]);
+}, [sessionId, shell, ssh]);
 useEffect(() => {
 const observer = new MutationObserver(() => {
 if (terminalRef.current) {
@@ -300,7 +324,7 @@ return (
 <section className="local-terminal-panel">
 <div className="terminal-toolbar">
 <span className="terminal-status">{status}</span>
-<span className="terminal-shell">{shell}</span>
+<span className="terminal-shell">{ssh ? "ssh" : shell}</span>
 <label className="terminal-option" title="Toggle right-click paste behavior">
 <input
 type="checkbox"

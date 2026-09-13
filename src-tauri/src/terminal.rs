@@ -199,3 +199,100 @@ pub fn terminal_close(state: State<'_, TerminalState>, session_id: String) -> Re
     }
     Ok(())
 }
+
+#[tauri::command]
+pub fn ssh_start(
+    app: AppHandle,
+    state: State<'_, TerminalState>,
+    session_id: String,
+    host: String,
+    port: u16,
+    user: String,
+    rows: u16,
+    cols: u16,
+) -> Result<(), String> {
+    let host = host.trim();
+    let user = user.trim();
+    if host.is_empty() {
+        return Err("SSH host is required".to_string());
+    }
+    if user.is_empty() {
+        return Err("SSH user is required".to_string());
+    }
+
+    let mut sessions = state
+        .sessions
+        .lock()
+        .map_err(|_| "terminal session store is unavailable".to_string())?;
+
+    if sessions.contains_key(&session_id) {
+        return Ok(());
+    }
+
+    let pty_system = native_pty_system();
+    let pair = pty_system
+        .openpty(PtySize {
+            rows: rows.max(1),
+            cols: cols.max(2),
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .map_err(|error| format!("failed to create SSH PTY: {error}"))?;
+
+    let mut command = CommandBuilder::new("ssh");
+    command.arg("-p");
+    command.arg(port.max(1).to_string());
+    command.arg(format!("{user}@{host}"));
+
+    let child = pair
+        .slave
+        .spawn_command(command)
+        .map_err(|error| format!("failed to start ssh: {error}"))?;
+
+    let mut reader = pair
+        .master
+        .try_clone_reader()
+        .map_err(|error| format!("failed to read SSH PTY : {error}"))?;
+    let writer = pair
+        .master
+        .take_writer()
+        .map_err(|error| format!("failed to write SSH PTY: {error}"))?;
+    let writer = Arc::new(Mutex::new(writer));
+
+    let output_app = app.clone();
+    let output_session_id = session_id.clone();
+    std::thread::spawn(move || {
+        let mut buffer = [0_u8; 8192];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(count) => {
+                    let payload = TerminalOutput {
+                        session_id: output_session_id.clone(),
+                        data: String::from_utf8_lossy(&buffer[..count]).into_owned(),
+                    };
+                    let _ = output_app.emit("terminal-output", payload);
+                }
+                Err(_) => break,
+            }
+        }
+        let _ = output_app.emit(
+            "terminal-exit",
+            TerminalExit {
+                session_id: output_session_id,
+            },
+        );
+    });
+
+    drop(pair.slave);
+    sessions.insert(
+        session_id,
+        TerminalSession {
+            master: pair.master,
+            writer,
+            child,
+        },
+    );
+
+    Ok(())
+}

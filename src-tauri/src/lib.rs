@@ -8,6 +8,7 @@ pub fn run() {
         .manage(TerminalState::default())
         .invoke_handler(tauri::generate_handler![
             terminal::terminal_start,
+            terminal::ssh_start,
             terminal::terminal_write,
             terminal::terminal_resize,
             terminal::terminal_close,

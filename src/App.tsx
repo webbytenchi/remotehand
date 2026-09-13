@@ -14,14 +14,13 @@ type Connection = {
 id: string;
 name: string;
 host: string;
+port: number;
 user: string;
 };
 type ThemeMode = "dark" | "light";
 const WORKSPACE_KEY = "remotehand.workspace";
 const THEME_KEY = "remotehand.theme";
-const initialConnections: Connection[] = [
-{ id: "local", name: "Local machine", host: "localhost", user: "local" },
-];
+const initialConnections: Connection[] = [];
 function WelcomePanel() {
 return (
 <section className="panel-content welcome-panel">
@@ -42,28 +41,68 @@ keyboard navigation, layout history, and local persistence.
 function ConnectionsPanel({
 connections,
 onAdd,
+onConnect,
 }: {
 connections: Connection[];
-onAdd: () => void;
+onAdd: (connection: Omit<Connection, "id">) => void;
+onConnect: (connection: Connection) => void;
 }) {
+const [showForm, setShowForm] = useState(false);
+const [name, setName] = useState("");
+const [host, setHost] = useState("");
+const [port, setPort] = useState("22");
+const [user, setUser] = useState("");
+const saveConnection = () => {
+const parsedPort = Number(port);
+if (!name.trim() || !host.trim() || !user.trim()) return;
+if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65535) return;
+onAdd({
+name: name.trim(),
+host: host.trim(),
+port: parsedPort,
+user: user.trim(),
+});
+setName("");
+setHost("");
+setPort("22");
+setUser("");
+setShowForm(false);
+};
 return (
 <section className="panel-content connections-panel">
 <div className="panel-heading">
 <div>
-<p className="eyebrow">Workspace</p>
-<h2>Connections</h2>
+<p className="eyebrow">Milestone 3</p>
+<h2>SSH Connections</h2>
 </div>
-<button type="button" className="primary-button" onClick={onAdd}>+ New connection</button>
+<button type="button" className="primary-button" onClick={() => setShowForm((value) => !value)}>
+{showForm ? "Cancel" : "+ New connection"}
+</button>
 </div>
+{showForm ? (
+<div className="connection-form">
+<label><span>Name</span><input value={name} onChange={(event) => setName(event.target.value)} placeholder="My server" /></label>
+<label><span>Host</span><input value={host} onChange={(event) => setHost(event.target.value)} placeholder="server.example.com" /></label>
+<label><span>Port</span><input value={port} onChange={(event) => setPort(event.target.value)} inputMode="numeric" placeholder="22" /></label>
+<label><span>User</span><input value={user} onChange={(event) => setUser(event.target.value)} placeholder="username" /></label>
+<button type="button" className="primary-button" onClick={saveConnection}>Save connection</button>
+</div>
+) : null}
 <div className="connection-list">
+{connections.length === 0 ? (
+<div className="connection-empty">
+<strong>No SSH connections yet</strong>
+<span>Add a host above, then connect to open it in a terminal panel.</span>
+</div>
+) : null}
 {connections.map((connection) => (
 <article className="connection-card" key={connection.id}>
 <div className="connection-icon">●</div>
 <div>
 <strong>{connection.name}</strong>
-<span>{connection.user}@{connection.host}</span>
+<span>{connection.user}@{connection.host}:{connection.port}</span>
 </div>
-<span className="connection-status">Ready</span>
+<button type="button" className="connection-connect" onClick={() => onConnect(connection)}>Connect</button>
 </article>
 ))}
 </div>
@@ -128,26 +167,42 @@ const nextIndex = index + 1;
 applyHistorySnapshot(history[nextIndex], nextIndex);
 }, [applyHistorySnapshot]);
 
-const addConnection = useCallback(() => {
+const addConnection = useCallback((connection: Omit<Connection, "id">) => {
 setConnections((current) => [
 ...current,
-{
-id: `connection-${Date.now()}`,
-name: `New connection ${current.length}`,
-host: "example.local",
-user: "user",
-},
+{ ...connection, id: "connection-" + Date.now() },
 ]);
+}, []);
+const connectSsh = useCallback((connection: Connection) => {
+const api = apiRef.current;
+if (!api) return;
+api.addPanel({
+id: "ssh-" + connection.id + "-" + Date.now(),
+component: "terminal",
+title: connection.name,
+params: {
+ssh: {
+host: connection.host,
+port: connection.port,
+user: connection.user,
+name: connection.name,
+},
+},
+});
 }, []);
 const components = useMemo(
 () => ({
 welcome: WelcomePanel,
 terminal: LocalTerminalPanel,
 connections: () => (
-<ConnectionsPanel connections={connections} onAdd={addConnection} />
+<ConnectionsPanel
+connections={connections}
+onAdd={addConnection}
+onConnect={connectSsh}
+/>
 ),
 }),
-[connections, addConnection],
+[connections, addConnection, connectSsh],
 );
 const addTerminal = useCallback((position?: "right" | "below", shell: "default" | "powershell" | "cmd" | "wsl" = "default") => {
 const api = apiRef.current;
@@ -309,7 +364,7 @@ title="Toggle theme"
 >
 {themeMode === "dark" ? "☀" : "☾"}
 </button>
-<span className="phase-badge">Milestone 2</span>
+<span className="phase-badge">Milestone 3</span>
 </div>
 </header>
 <section className="workspace">
@@ -350,7 +405,7 @@ title="Toggle theme"
 </div>
 </div>
 ))}
-<button className="new-connection" type="button" onClick={addConnection}>+ New connection</button>
+<button className="new-connection" type="button" onClick={addConnections}>+ New SSH connection</button>
 </aside>
 
 <section className="canvas">
