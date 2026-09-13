@@ -186,8 +186,7 @@ fn run_session_list(session: &mut SftpSession, path: String) -> Result<SftpListi
         path.trim()
     };
     let quoted_path = quote_batch_path(requested_path)?;
-    let marker = format!("__REMOTEHAND_SFTP_DONE_{}__", std::process::id());
-    let batch = format!("cd {quoted_path}\npwd\nls -la\n!echo {marker}\n");
+    let batch = format!("cd {quoted_path}\npwd\nls -la\npwd\n");
 
     session
         .stdin
@@ -195,7 +194,8 @@ fn run_session_list(session: &mut SftpSession, path: String) -> Result<SftpListi
         .and_then(|_| session.stdin.flush())
         .map_err(|error| format!("failed to send sftp command: {error}"))?;
 
-    let mut output = String::new();
+    let mut current_path = None;
+    let mut listing_lines = Vec::new();
     loop {
         let mut line = String::new();
         let count = session
@@ -205,21 +205,23 @@ fn run_session_list(session: &mut SftpSession, path: String) -> Result<SftpListi
         if count == 0 {
             return Err("SFTP session closed unexpectedly".to_string());
         }
-        if line.contains(&marker) {
-            break;
+
+        let trimmed = line.trim_end_matches(['\r', '\n']);
+        if let Some(path) = trimmed.strip_prefix("Remote working directory: ") {
+            if current_path.is_some() {
+                break;
+            }
+            current_path = Some(path.trim().to_string());
+            continue;
         }
-        output.push_str(&line);
+        if current_path.is_some() {
+            listing_lines.push(trimmed.to_string());
+        }
     }
 
-    let current_path = output
-        .lines()
-        .find_map(|line| line.strip_prefix("Remote working directory: "))
-        .unwrap_or(requested_path)
-        .trim()
-        .to_string();
-
-    let mut entries = output
-        .lines()
+    let current_path = current_path.unwrap_or_else(|| requested_path.to_string());
+    let mut entries = listing_lines
+        .iter()
         .filter_map(|line| parse_listing_line(line, &current_path))
         .collect::<Vec<_>>();
 
