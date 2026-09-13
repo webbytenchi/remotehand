@@ -10,6 +10,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             storage::load_connections,
             storage::save_connections,
+            storage::load_workspace,
+            storage::save_workspace,
+            storage::clear_workspace,
             terminal::terminal_start,
             terminal::ssh_start,
             terminal::terminal_write,

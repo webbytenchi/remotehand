@@ -19,6 +19,7 @@ port: number;
 user: string;
 };
 type ThemeMode = "dark" | "light";
+type WorkspaceLayout = Parameters<DockviewApi["fromJSON"]>[0];
 const WORKSPACE_KEY = "remotehand.workspace";
 const THEME_KEY = "remotehand.theme";
 const initialConnections: Connection[] = [];
@@ -276,6 +277,34 @@ const restoredRef = useRef(false);
 const layoutHistoryRef = useRef<string[]>([]);
 const layoutHistoryIndexRef = useRef(-1);
 const applyingHistoryRef = useRef(false);
+const workspaceSaveTimerRef = useRef<number | null>(null);
+const workspacePersistenceEnabledRef = useRef(true);
+const persistWorkspaceSnapshot = useCallback((snapshot: string, immediate = false) => {
+const save = () => {
+if (!workspacePersistenceEnabledRef.current) return;
+if (isTauri()) {
+void invoke("save_workspace", { workspace: JSON.parse(snapshot) as WorkspaceLayout })
+.catch((error) => console.error("Failed to save workspace", error));
+} else {
+localStorage.setItem(WORKSPACE_KEY, snapshot);
+}
+};
+if (immediate) {
+if (workspaceSaveTimerRef.current !== null) {
+window.clearTimeout(workspaceSaveTimerRef.current);
+workspaceSaveTimerRef.current = null;
+}
+save();
+return;
+}
+if (workspaceSaveTimerRef.current !== null) {
+window.clearTimeout(workspaceSaveTimerRef.current);
+}
+workspaceSaveTimerRef.current = window.setTimeout(() => {
+workspaceSaveTimerRef.current = null;
+save();
+}, 150);
+}, []);
 
 const captureLayout = useCallback((api: DockviewApi) => {
 const snapshot = JSON.stringify(api.toJSON());
@@ -288,23 +317,23 @@ next.push(snapshot);
 if (next.length > 50) next.shift();
 layoutHistoryRef.current = next;
 layoutHistoryIndexRef.current = next.length - 1;
-localStorage.setItem(WORKSPACE_KEY, snapshot);
-}, []);
+persistWorkspaceSnapshot(snapshot);
+}, [persistWorkspaceSnapshot]);
 
 const applyHistorySnapshot = useCallback((snapshot: string, index: number) => {
 const api = apiRef.current;
 if (!api) return;
 applyingHistoryRef.current = true;
 try {
-api.fromJSON(JSON.parse(snapshot));
+api.fromJSON(JSON.parse(snapshot) as WorkspaceLayout);
 layoutHistoryIndexRef.current = index;
-localStorage.setItem(WORKSPACE_KEY, snapshot);
+persistWorkspaceSnapshot(snapshot, true);
 } finally {
 queueMicrotask(() => {
 applyingHistoryRef.current = false;
 });
 }
-}, []);
+}, [persistWorkspaceSnapshot]);
 
 const undoLayout = useCallback(() => {
 const index = layoutHistoryIndexRef.current;
@@ -394,10 +423,20 @@ const panel = api?.activePanel;
 if (!api || !panel) return;
 await api.addPopoutGroup(panel, { popoutUrl: "popout.html" });
 }, []);
-const resetLayout = useCallback(() => {
+const resetLayout = useCallback(async () => {
 const api = apiRef.current;
 if (!api) return;
+if (isTauri()) {
+try {
+await invoke("clear_workspace");
+workspacePersistenceEnabledRef.current = true;
+} catch (error) {
+console.error("Failed to clear workspace", error);
+return;
+}
+} else {
 localStorage.removeItem(WORKSPACE_KEY);
+}
 api.clear();
 api.addPanel({ id: "welcome", component: "welcome", title: "Welcome" });
 api.addPanel({
@@ -458,15 +497,28 @@ redoLayout();
 window.addEventListener("keydown", onKeyDown);
 return () => window.removeEventListener("keydown", onKeyDown);
 }, [redoLayout, undoLayout]);
-const handleReady = (event: DockviewReadyEvent) => {
+const handleReady = async (event: DockviewReadyEvent) => {
 apiRef.current = event.api;
+if (isTauri()) {
+try {
+const saved = await invoke<WorkspaceLayout | null>("load_workspace");
+if (saved) {
+event.api.fromJSON(saved);
+restoredRef.current = true;
+}
+} catch (error) {
+workspacePersistenceEnabledRef.current = false;
+console.error("Failed to load workspace", error);
+}
+} else {
 const saved = localStorage.getItem(WORKSPACE_KEY);
 if (saved) {
 try {
-event.api.fromJSON(JSON.parse(saved));
+event.api.fromJSON(JSON.parse(saved) as WorkspaceLayout);
 restoredRef.current = true;
 } catch {
 localStorage.removeItem(WORKSPACE_KEY);
+}
 }
 }
 if (!restoredRef.current) {

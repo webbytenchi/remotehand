@@ -19,6 +19,9 @@ fn data_root() -> Result<PathBuf, String> {
 fn connections_path() -> Result<PathBuf, String> {
     Ok(data_root()?.join("connections").join("connections.json"))
 }
+fn workspace_path() -> Result<PathBuf, String> {
+    Ok(data_root()?.join("workspaces").join("default.json"))
+}
 #[tauri::command]
 pub fn load_connections() -> Result<Vec<SavedConnection>, String> {
     let path = connections_path()?;
@@ -37,4 +40,32 @@ pub fn save_connections(connections: Vec<SavedConnection>) -> Result<(), String>
     fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     let contents = serde_json::to_string_pretty(&connections).map_err(|error| error.to_string())?;
     fs::write(path, contents).map_err(|error| error.to_string())
+}
+#[tauri::command]
+pub fn load_workspace() -> Result<Option<serde_json::Value>, String> {
+    let path = workspace_path()?;
+    if !path.exists() {
+        return Ok(None);
+    }
+    let contents = fs::read_to_string(&path).map_err(|error| error.to_string())?;
+    let workspace = serde_json::from_str(&contents).map_err(|error| error.to_string())?;
+    Ok(Some(workspace))
+}
+#[tauri::command]
+pub fn save_workspace(workspace: serde_json::Value) -> Result<(), String> {
+    let path = workspace_path()?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| "failed to resolve workspace directory".to_string())?;
+    fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    let contents = serde_json::to_string_pretty(&workspace).map_err(|error| error.to_string())?;
+    fs::write(path, contents).map_err(|error| error.to_string())
+}
+#[tauri::command]
+pub fn clear_workspace() -> Result<(), String> {
+    let path = workspace_path()?;
+    if path.exists() {
+        fs::remove_file(path).map_err(|error| error.to_string())?;
+    }
+    Ok(())
 }
