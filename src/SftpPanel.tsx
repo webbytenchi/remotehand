@@ -44,6 +44,7 @@ function formatSize(size: number) {
 
 export function SftpPanel(props: IDockviewPanelProps<SftpPanelParams>) {
   const connection = props.params?.connection;
+  const sessionId = props.api.id;
   const [listing, setListing] = useState<SftpListing | null>(null);
   const [requestedPath, setRequestedPath] = useState(".");
   const [loading, setLoading] = useState(false);
@@ -68,6 +69,7 @@ export function SftpPanel(props: IDockviewPanelProps<SftpPanelParams>) {
       setError("");
       try {
         const next = await invoke<SftpListing>("sftp_list", {
+          sessionId,
           host: connection.host,
           port: connection.port,
           user: connection.user,
@@ -111,7 +113,12 @@ export function SftpPanel(props: IDockviewPanelProps<SftpPanelParams>) {
 
   useEffect(() => {
     void loadPath(".");
-  }, [loadPath]);
+    return () => {
+      if (connection && isTauri()) {
+        void invoke("sftp_close", { sessionId }).catch(() => undefined);
+      }
+    };
+  }, [connection, loadPath, sessionId]);
 
   if (!connection) {
     return <section className="panel-content sftp-panel">Missing SFTP connection.</section>;
