@@ -82,13 +82,32 @@ fn parse_listing_line(line: &str, base: &str) -> Option<SftpEntry> {
 }
 
 #[tauri::command]
-pub fn sftp_list(
+pub async fn sftp_list(
     host: String,
     port: u16,
     user: String,
     path: String,
     credential_ref: Option<String>,
     vault_state: State<'_, VaultState>,
+) -> Result<SftpListing, String> {
+    let password = credential_ref
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .map(|credential_ref| vault::get_secret(&vault_state, credential_ref))
+        .transpose()?
+        .flatten();
+
+    tauri::async_runtime::spawn_blocking(move || run_sftp_list(host, port, user, path, password))
+        .await
+        .map_err(|error| format!("SFTP task failed: {error}"))?
+}
+
+fn run_sftp_list(
+    host: String,
+    port: u16,
+    user: String,
+    path: String,
+    password: Option<String>,
 ) -> Result<SftpListing, String> {
     let host = host.trim();
     let user = user.trim();
@@ -106,12 +125,6 @@ pub fn sftp_list(
     }
 
     let quoted_path = quote_batch_path(requested_path)?;
-    let password = credential_ref
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-        .map(|credential_ref| vault::get_secret(&vault_state, credential_ref))
-        .transpose()?
-        .flatten();
 
     let mut command = Command::new("sftp");
     command
