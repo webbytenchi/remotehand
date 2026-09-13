@@ -42,44 +42,6 @@ async function writeTerminal(sessionId: string, data: string) {
 await invoke("terminal_write", { sessionId, data });
 }
 
-const terminalMountCounts = new Map<string, number>();
-const terminalCloseTimers = new Map<string, number>();
-
-function retainTerminalSession(sessionId: string) {
-terminalMountCounts.set(
-sessionId,
-(terminalMountCounts.get(sessionId) ?? 0) + 1,
-);
-const timer = terminalCloseTimers.get(sessionId);
-if (timer !== undefined) {
-window.clearTimeout(timer);
-terminalCloseTimers.delete(sessionId);
-}
-}
-
-function releaseTerminalSession(sessionId: string) {
-const nextCount = Math.max(
-0,
-(terminalMountCounts.get(sessionId) ?? 1) - 1,
-);
-if (nextCount > 0) {
-terminalMountCounts.set(sessionId, nextCount);
-return;
-}
-terminalMountCounts.delete(sessionId);
-
-const existingTimer = terminalCloseTimers.get(sessionId);
-if (existingTimer !== undefined) {
-window.clearTimeout(existingTimer);
-}
-
-const timer = window.setTimeout(() => {
-terminalCloseTimers.delete(sessionId);
-if ((terminalMountCounts.get(sessionId) ?? 0) > 0) return;
-void invoke("terminal_close", { sessionId }).catch(() => undefined);
-}, 500);
-terminalCloseTimers.set(sessionId, timer);
-}
 export function LocalTerminalPanel({
 api,
 params,
@@ -125,8 +87,6 @@ terminal.dispose();
 terminalRef.current = null;
 };
 }
-
-retainTerminalSession(sessionId);
 
 let cancelled = false;
 let unlistenOutput: UnlistenFn | undefined;
@@ -227,7 +187,6 @@ inputDisposable.dispose();
 selectionDisposable.dispose();
 unlistenOutput?.();
 unlistenExit?.();
-releaseTerminalSession(sessionId);
 terminal.dispose();
 terminalRef.current = null;
 };

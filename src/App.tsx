@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import {
 DockviewReact,
 type DockviewApi,
@@ -248,6 +249,15 @@ position: { referencePanel: "welcome", direction: "right" },
 captureLayout(event.api);
 event.api.onDidMutateLayout(() => {
 captureLayout(event.api);
+});
+event.api.onDidRemovePanel((panel) => {
+if (panel.api.component !== "terminal") return;
+const sessionId = panel.id;
+window.setTimeout(() => {
+if (event.api.panels.some((current) => current.id === sessionId)) return;
+if (!isTauri()) return;
+void invoke("terminal_close", { sessionId }).catch(() => undefined);
+}, 0);
 });
 setWorkspaceReady(true);
 };
