@@ -822,9 +822,11 @@ background: #182b42;
 }
 .sftp-panel {
 display: grid;
-grid-template-rows: auto auto 1fr;
+grid-template-rows: auto auto minmax(0, 1fr);
 gap: 12px;
+height: 100%;
 min-height: 0;
+overflow: hidden;
 }
 .sftp-heading {
 display: flex;
@@ -869,10 +871,24 @@ white-space: nowrap;
 }
 .sftp-list {
 min-height: 0;
-overflow: auto;
+overflow-x: auto;
+overflow-y: scroll;
+scrollbar-width: thin;
 border: 1px solid #222c39;
 border-radius: 9px;
 background: #090d13;
+}
+.sftp-list::-webkit-scrollbar {
+width: 10px;
+height: 10px;
+}
+.sftp-list::-webkit-scrollbar-thumb {
+border: 2px solid #090d13;
+border-radius: 999px;
+background: #344255;
+}
+.sftp-list::-webkit-scrollbar-track {
+background: #0d131c;
 }
 .sftp-row {
 display: grid;
