@@ -1012,3 +1012,72 @@ html[data-theme="light"] .sftp-unlock input {
 background: #ffffff;
 color: #29313d;
 }
+.sftp-transfer-bar {
+display: grid;
+grid-template-columns: repeat(2, minmax(0, 1fr));
+gap: 10px;
+}
+.sftp-transfer-group {
+display: grid;
+grid-template-columns: auto minmax(0, 1fr) auto;
+align-items: center;
+gap: 8px;
+padding: 8px;
+border: 1px solid #222c39;
+border-radius: 8px;
+background: #090d13;
+}
+.sftp-transfer-group > span {
+color: #8391a3;
+font-size: 11px;
+white-space: nowrap;
+}
+.sftp-transfer-group input {
+min-width: 0;
+border: 1px solid #2e3c4f;
+border-radius: 7px;
+background: #111925;
+color: #c5cfdb;
+padding: 7px 9px;
+}
+.sftp-transfer-group button {
+border: 1px solid #354a61;
+border-radius: 7px;
+background: #132033;
+color: #9ec7ef;
+padding: 7px 11px;
+cursor: pointer;
+}
+.sftp-transfer-group button:disabled {
+opacity: 0.45;
+cursor: default;
+}
+.sftp-transfer-status {
+padding: 9px 11px;
+border: 1px solid #2d5139;
+border-radius: 8px;
+background: #102319;
+color: #8ed0a3;
+font-size: 12px;
+}
+.sftp-entry[aria-pressed="true"] {
+background: #152235;
+outline: 1px solid #35506f;
+}
+html[data-theme="light"] .sftp-transfer-group {
+background: #ffffff;
+border-color: #c7ced8;
+}
+html[data-theme="light"] .sftp-transfer-group input {
+background: #ffffff;
+color: #29313d;
+border-color: #c7ced8;
+}
+@media (max-width: 900px) {
+.sftp-transfer-bar {
+grid-template-columns: 1fr;
+}
+.sftp-transfer-group {
+grid-template-columns: 1fr;
+}
+}

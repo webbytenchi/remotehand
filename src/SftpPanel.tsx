@@ -52,6 +52,11 @@ export function SftpPanel(props: IDockviewPanelProps<SftpPanelParams>) {
   const [needsVaultUnlock, setNeedsVaultUnlock] = useState(false);
   const [vaultPassphrase, setVaultPassphrase] = useState("");
   const [unlocking, setUnlocking] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<SftpEntry | null>(null);
+  const [downloadPath, setDownloadPath] = useState(String());
+  const [uploadPath, setUploadPath] = useState(String());
+  const [transferring, setTransferring] = useState(false);
+  const [transferStatus, setTransferStatus] = useState(String());
 
   const loadPath = useCallback(
     async (path: string) => {
@@ -77,6 +82,8 @@ export function SftpPanel(props: IDockviewPanelProps<SftpPanelParams>) {
         setListing(next);
         setRequestedPath(next.path);
         setPathInput(next.path);
+        setSelectedFile(null);
+        setDownloadPath(String());
         setNeedsVaultUnlock(false);
       } catch (reason) {
         const message = String(reason);
@@ -120,6 +127,81 @@ export function SftpPanel(props: IDockviewPanelProps<SftpPanelParams>) {
   const currentPath = listing?.path ?? requestedPath;
   const canGoUp = Boolean(currentPath && currentPath !== "/" && currentPath !== ".");
 
+  async function selectFile(entry: SftpEntry) {
+    if (entry.isDir) return;
+    setSelectedFile(entry);
+    setTransferStatus(String());
+    try {
+      const suggested = await invoke<string>("sftp_default_download_path", {
+        fileName: entry.name,
+      });
+      setDownloadPath(suggested);
+    } catch {
+      setDownloadPath(entry.name);
+    }
+  }
+
+  async function downloadSelected() {
+    if (!connection || !selectedFile || !downloadPath.trim() || transferring) return;
+
+    setTransferring(true);
+    setError(String());
+    setTransferStatus(String());
+    try {
+      await invoke("sftp_download", {
+        host: connection.host,
+        port: connection.port,
+        user: connection.user,
+        remotePath: selectedFile.path,
+        localPath: downloadPath.trim(),
+        credentialRef: connection.credentialRef,
+      });
+      setTransferStatus(`Downloaded ${selectedFile.name}`);
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setTransferring(false);
+    }
+  }
+
+  async function uploadFile() {
+    if (!connection || !uploadPath.trim() || transferring) return;
+
+    const normalized = uploadPath.trim().split(String.fromCharCode(92)).join(String.fromCharCode(47));
+    const fileName = normalized.split("/").pop() || normalized;
+    if (!fileName) return;
+    if (listing?.entries.some((entry) => entry.name === fileName)) {
+      setError(`A remote entry named "${fileName}" already exists.`);
+      return;
+    }
+
+    const remotePath = currentPath === "/"
+      ? `/${fileName}`
+      : `${currentPath.replace(/\/+$/, "")}/${fileName}`;
+
+    setTransferring(true);
+    setError(String());
+    setTransferStatus(String());
+    try {
+      await invoke("sftp_upload", {
+        host: connection.host,
+        port: connection.port,
+        user: connection.user,
+        localPath: uploadPath.trim(),
+        remotePath,
+        credentialRef: connection.credentialRef,
+      });
+      setTransferStatus(`Uploaded ${fileName}`);
+      setUploadPath(String());
+      await loadPath(currentPath);
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setTransferring(false);
+    }
+  }
+
+
   return (
     <section className={"panel-content sftp-panel" + (needsVaultUnlock ? " sftp-panel-unlock" : "")}>
       <div className="sftp-heading">
@@ -142,6 +224,46 @@ export function SftpPanel(props: IDockviewPanelProps<SftpPanelParams>) {
             onClick={() => void loadPath(currentPath)}
           >
             Refresh
+          </button>
+        </div>
+      </div>
+
+
+      <div className="sftp-transfer-bar">
+        <div className="sftp-transfer-group">
+          <span>Upload local file</span>
+          <input
+            type="text"
+            value={uploadPath}
+            onChange={(event) => setUploadPath(event.target.value)}
+            placeholder="Local file path"
+            disabled={loading || transferring}
+            aria-label="Local file to upload"
+          />
+          <button
+            type="button"
+            onClick={() => void uploadFile()}
+            disabled={!uploadPath.trim() || loading || transferring}
+          >
+            {transferring ? "Working…" : "Upload"}
+          </button>
+        </div>
+        <div className="sftp-transfer-group">
+          <span>Download selected file</span>
+          <input
+            type="text"
+            value={downloadPath}
+            onChange={(event) => setDownloadPath(event.target.value)}
+            placeholder="Local destination path"
+            disabled={!selectedFile || loading || transferring}
+            aria-label="Local download destination"
+          />
+          <button
+            type="button"
+            onClick={() => void downloadSelected()}
+            disabled={!selectedFile || !downloadPath.trim() || loading || transferring}
+          >
+            {transferring ? "Working…" : "Download"}
           </button>
         </div>
       </div>
@@ -187,6 +309,7 @@ export function SftpPanel(props: IDockviewPanelProps<SftpPanelParams>) {
       ) : null}
 
       {error ? <div className="sftp-error">{error}</div> : null}
+      {transferStatus ? <div className="sftp-transfer-status">{transferStatus}</div> : null}
       {loading ? <div className="sftp-state">Loading remote directory…</div> : null}
 
       {!loading && !error && !needsVaultUnlock && !unlocking ? (
@@ -204,9 +327,10 @@ export function SftpPanel(props: IDockviewPanelProps<SftpPanelParams>) {
               type="button"
               className="sftp-row sftp-entry"
               key={`${entry.path}-${entry.name}`}
-              disabled={!entry.isDir}
+              disabled={false}
               onDoubleClick={() => entry.isDir && void loadPath(entry.path)}
-              onClick={() => entry.isDir && void loadPath(entry.path)}
+              onClick={() => entry.isDir ? void loadPath(entry.path) : void selectFile(entry)}
+              aria-pressed={!entry.isDir && selectedFile?.path === entry.path}
               title={entry.isDir ? `Open ${entry.name}` : entry.name}
             >
               <span className="sftp-name">

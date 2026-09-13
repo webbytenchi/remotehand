@@ -81,6 +81,94 @@ fn parse_listing_line(line: &str, base: &str) -> Option<SftpEntry> {
     })
 }
 
+fn password_for_credential(
+    vault_state: &State<'_, VaultState>,
+    credential_ref: Option<&str>,
+) -> Result<Option<String>, String> {
+    credential_ref
+        .filter(|value| !value.trim().is_empty())
+        .map(|credential_ref| vault::get_secret(vault_state, credential_ref))
+        .transpose()
+        .map(|value| value.flatten())
+}
+
+fn run_sftp_batch(
+    host: String,
+    port: u16,
+    user: String,
+    password: Option<String>,
+    batch: String,
+    activity: &str,
+) -> Result<String, String> {
+    let host = host.trim();
+    let user = user.trim();
+
+    if host.is_empty() {
+        return Err("SFTP host is required".to_string());
+    }
+    if user.is_empty() {
+        return Err("SFTP user is required".to_string());
+    }
+
+    let mut command = Command::new("sftp");
+    command
+        .arg("-q")
+        .arg("-o")
+        .arg("ConnectTimeout=10")
+        .arg("-P")
+        .arg(port.max(1).to_string())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    if let Some(password) = password {
+        let askpass = env::current_exe().map_err(|error| error.to_string())?;
+        command
+            .arg("-o")
+            .arg("BatchMode=no")
+            .arg("-o")
+            .arg("PreferredAuthentications=password")
+            .arg("-o")
+            .arg("NumberOfPasswordPrompts=1")
+            .env("SSH_ASKPASS", askpass)
+            .env("SSH_ASKPASS_REQUIRE", "force")
+            .env("DISPLAY", "remotehand")
+            .env("REMOTEHAND_ASKPASS", "1")
+            .env("REMOTEHAND_ASKPASS_SECRET", password);
+    } else {
+        command.arg("-b").arg("-").arg("-o").arg("BatchMode=yes");
+    }
+
+    command.arg(format!("{user}@{host}"));
+
+    let mut child = command
+        .spawn()
+        .map_err(|error| format!("failed to start sftp: {error}"))?;
+
+    child
+        .stdin
+        .as_mut()
+        .ok_or_else(|| "failed to open sftp input".to_string())?
+        .write_all(batch.as_bytes())
+        .map_err(|error| format!("failed to send sftp command: {error}"))?;
+
+    let output = child
+        .wait_with_output()
+        .map_err(|error| format!("failed to wait for sftp: {error}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let message = stderr.trim();
+        return Err(if message.is_empty() {
+            format!("SFTP {activity} failed")
+        } else {
+            format!("SFTP {activity} failed: {message}")
+        });
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
 #[tauri::command]
 pub async fn sftp_list(
     host: String,
@@ -90,12 +178,7 @@ pub async fn sftp_list(
     credential_ref: Option<String>,
     vault_state: State<'_, VaultState>,
 ) -> Result<SftpListing, String> {
-    let password = credential_ref
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-        .map(|credential_ref| vault::get_secret(&vault_state, credential_ref))
-        .transpose()?
-        .flatten();
+    let password = password_for_credential(&vault_state, credential_ref.as_deref())?;
 
     tauri::async_runtime::spawn_blocking(move || run_sftp_list(host, port, user, path, password))
         .await
@@ -209,6 +292,108 @@ fn run_sftp_list(
         path: current_path,
         entries,
     })
+}
+
+#[tauri::command]
+pub async fn sftp_download(
+    host: String,
+    port: u16,
+    user: String,
+    remote_path: String,
+    local_path: String,
+    credential_ref: Option<String>,
+    vault_state: State<'_, VaultState>,
+) -> Result<(), String> {
+    let remote_path = remote_path.trim().to_string();
+    let local_path = local_path.trim().to_string();
+
+    if remote_path.is_empty() {
+        return Err("remote file path is required".to_string());
+    }
+    if local_path.is_empty() {
+        return Err("local destination path is required".to_string());
+    }
+    if std::path::Path::new(&local_path).exists() {
+        return Err("local destination already exists".to_string());
+    }
+
+    let password = password_for_credential(&vault_state, credential_ref.as_deref())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let remote = quote_batch_path(&remote_path)?;
+        let local = quote_batch_path(&local_path)?;
+        run_sftp_batch(
+            host,
+            port,
+            user,
+            password,
+            format!("get {remote} {local}\n"),
+            "download",
+        )?;
+        log::info!("SFTP download completed");
+        Ok(())
+    })
+    .await
+    .map_err(|error| format!("SFTP task failed: {error}"))?
+}
+
+#[tauri::command]
+pub async fn sftp_upload(
+    host: String,
+    port: u16,
+    user: String,
+    local_path: String,
+    remote_path: String,
+    credential_ref: Option<String>,
+    vault_state: State<'_, VaultState>,
+) -> Result<(), String> {
+    let local_path = local_path.trim().to_string();
+    let remote_path = remote_path.trim().to_string();
+
+    if local_path.is_empty() {
+        return Err("local source path is required".to_string());
+    }
+    if remote_path.is_empty() {
+        return Err("remote destination path is required".to_string());
+    }
+    if !std::path::Path::new(&local_path).is_file() {
+        return Err("local source file does not exist".to_string());
+    }
+
+    let password = password_for_credential(&vault_state, credential_ref.as_deref())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let local = quote_batch_path(&local_path)?;
+        let remote = quote_batch_path(&remote_path)?;
+        run_sftp_batch(
+            host,
+            port,
+            user,
+            password,
+            format!("put {local} {remote}\n"),
+            "upload",
+        )?;
+        log::info!("SFTP upload completed");
+        Ok(())
+    })
+    .await
+    .map_err(|error| format!("SFTP task failed: {error}"))?
+}
+
+#[tauri::command]
+pub fn sftp_default_download_path(file_name: String) -> String {
+    let home = if cfg!(windows) {
+        env::var("USERPROFILE").ok()
+    } else {
+        env::var("HOME").ok()
+    };
+
+    home.map(|home| {
+        std::path::PathBuf::from(home)
+            .join("Downloads")
+            .join(file_name)
+            .to_string_lossy()
+            .into_owned()
+    })
+    .unwrap_or(file_name)
 }
 
 #[cfg(test)]
