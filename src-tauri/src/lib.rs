@@ -1,6 +1,17 @@
+mod terminal;
+
+use terminal::TerminalState;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(TerminalState::default())
+        .invoke_handler(tauri::generate_handler![
+            terminal::terminal_start,
+            terminal::terminal_write,
+            terminal::terminal_resize,
+            terminal::terminal_close,
+        ])
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(

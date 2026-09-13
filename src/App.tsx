@@ -7,6 +7,7 @@ themeDark,
 themeLight,
 } from "dockview-react";
 import "dockview-react/dist/styles/dockview.css";
+import { LocalTerminalPanel } from "./LocalTerminalPanel";
 import "./App.css";
 type Connection = {
 id: string;
@@ -33,47 +34,6 @@ keyboard navigation, layout history, and local persistence.
 <div><strong>Dockable panels</strong><span>Arrange tools into tabs, splits, floating windows, or popouts.</span></div>
 <div><strong>Persistent layout</strong><span>Your workspace arrangement and theme restore locally.</span></div>
 <div><strong>Keyboard friendly</strong><span>Use Dockview navigation plus Ctrl/Cmd+K for the command palette.</span></div>
-</div>
-</section>
-);
-}
-function TerminalPanel() {
-const [lines, setLines] = useState<string[]>([
-"RemoteHand local terminal",
-"Milestone 1 shell is ready.",
-"Terminal execution arrives in Milestone 2.",
-]);
-const [command, setCommand] = useState("");
-const inputRef = useRef<HTMLInputElement>(null);
-const run = () => {
-const value = command.trim();
-if (!value) return;
-setLines((current) => [
-...current,
-"$ " + value,
-"Local terminal backend pending (Milestone 2).",
-]);
-setCommand("");
-inputRef.current?.focus();
-};
-return (
-<section className="terminal-panel">
-<div className="terminal-output">
-{lines.map((line, index) => <div key={line + "-" + index}>{line}</div>)}
-</div>
-<div className="terminal-input">
-<span>$</span>
-<input
-ref={inputRef}
-aria-label="Terminal command"
-value={command}
-onChange={(event) => setCommand(event.target.value)}
-onKeyDown={(event) => {
-if (event.key === "Enter") run();
-}}
-placeholder="Command..."
-/>
-<button type="button" onClick={run}>Run</button>
 </div>
 </section>
 );
@@ -181,14 +141,14 @@ user: "user",
 const components = useMemo(
 () => ({
 welcome: WelcomePanel,
-terminal: TerminalPanel,
+terminal: LocalTerminalPanel,
 connections: () => (
 <ConnectionsPanel connections={connections} onAdd={addConnection} />
 ),
 }),
 [connections, addConnection],
 );
-const addTerminal = useCallback((position?: "right" | "below") => {
+const addTerminal = useCallback((position?: "right" | "below", shell: "default" | "powershell" | "cmd" | "wsl" = "default") => {
 const api = apiRef.current;
 if (!api) return;
 const id = `terminal-${Date.now()}`;
@@ -196,7 +156,8 @@ const activePanel = api.activePanel;
 api.addPanel({
 id,
 component: "terminal",
-title: "Terminal",
+title: shell === "default" ? "Terminal" : shell === "powershell" ? "PowerShell" : shell === "cmd" ? "Command Prompt" : "WSL",
+params: { shell },
 ...(position && activePanel
 ? { position: { referencePanel: activePanel.id, direction: position } }
 : {}),
@@ -292,6 +253,9 @@ setWorkspaceReady(true);
 };
 const commands = [
 { label: "New terminal", hint: "Open tab", run: () => addTerminal() },
+{ label: "New PowerShell", hint: "Local", run: () => addTerminal(undefined, "powershell") },
+{ label: "New Command Prompt", hint: "Local", run: () => addTerminal(undefined, "cmd") },
+{ label: "New WSL terminal", hint: "Local", run: () => addTerminal(undefined, "wsl") },
 { label: "Split terminal right", hint: "Split", run: () => addTerminal("right") },
 { label: "Split terminal below", hint: "Split", run: () => addTerminal("below") },
 { label: "Open connections", hint: "Panel", run: addConnections },
@@ -335,7 +299,7 @@ title="Toggle theme"
 >
 {themeMode === "dark" ? "☀" : "☾"}
 </button>
-<span className="phase-badge">Milestone 1</span>
+<span className="phase-badge">Milestone 2</span>
 </div>
 </header>
 <section className="workspace">
