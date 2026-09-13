@@ -20,6 +20,8 @@ pub struct SavedConnection {
     pub host: String,
     pub port: u16,
     pub user: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credential_ref: Option<String>,
 }
 fn data_root() -> Result<PathBuf, String> {
     let executable = env::current_exe().map_err(|error| error.to_string())?;

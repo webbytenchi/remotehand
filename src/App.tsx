@@ -17,6 +17,7 @@ name: string;
 host: string;
 port: number;
 user: string;
+credentialRef?: string;
 };
 type ThemeMode = "dark" | "light";
 type Settings = { theme: ThemeMode };

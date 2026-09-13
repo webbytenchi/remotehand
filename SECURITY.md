@@ -49,3 +49,19 @@ Reporting Vulnerabilities
 Until a dedicated security-reporting channel is configured, please avoid publishing exploitable details in a public issue.
 For private deployments of this repository, contact the repository owner directly.
 This policy will be updated before the first public production release.
+## Portable Credential Vault Threat Model
+RemoteHand's portable vault is designed to protect persisted credentials when the application directory is copied, lost, backed up, or inspected while RemoteHand is not unlocked.
+
+Vault data is stored separately from connection profiles in data/vault/credentials.enc.
+
+The vault uses the established age file format with passphrase-based encryption rather than custom cryptographic primitives.
+
+Connection profiles may contain only an opaque credentialRef; they must not contain the corresponding secret.
+
+The master passphrase and decrypted secrets exist in process memory only while the vault is unlocked and are never written to logs.
+
+Locking the vault drops RemoteHand's in-memory unlocked vault state.
+
+This design does not protect secrets from a process or user that can inspect RemoteHand's memory while the vault is unlocked.
+
+RemoteHand does not automatically persist SSH passwords in this foundation slice. Credential capture and user-visible persistence controls must be implemented separately.

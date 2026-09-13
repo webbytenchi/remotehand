@@ -1,6 +1,7 @@
 mod logging;
 mod storage;
 mod terminal;
+mod vault;
 
 use terminal::TerminalState;
 
@@ -8,6 +9,7 @@ use terminal::TerminalState;
 pub fn run() {
     tauri::Builder::default()
         .manage(TerminalState::default())
+        .manage(vault::VaultState::default())
         .invoke_handler(tauri::generate_handler![
             storage::load_settings,
             storage::save_settings,
@@ -16,6 +18,13 @@ pub fn run() {
             storage::load_workspace,
             storage::save_workspace,
             storage::clear_workspace,
+            vault::vault_status,
+            vault::vault_initialize,
+            vault::vault_unlock,
+            vault::vault_lock,
+            vault::vault_store_secret,
+            vault::vault_get_secret,
+            vault::vault_delete_secret,
             terminal::terminal_start,
             terminal::ssh_start,
             terminal::terminal_write,
