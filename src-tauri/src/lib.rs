@@ -1,3 +1,4 @@
+mod logging;
 mod storage;
 mod terminal;
 
@@ -22,13 +23,9 @@ pub fn run() {
             terminal::terminal_close,
         ])
         .setup(|app| {
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
+            app.handle()
+                .plugin(logging::builder().map_err(std::io::Error::other)?.build())?;
+            log::info!("RemoteHand started");
             Ok(())
         })
         .run(tauri::generate_context!())

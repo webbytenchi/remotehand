@@ -131,6 +131,7 @@ pub fn terminal_start(
             child,
         },
     );
+    log::info!("Local terminal session started");
 
     Ok(())
 }
@@ -196,6 +197,7 @@ pub fn terminal_close(state: State<'_, TerminalState>, session_id: String) -> Re
             .child
             .kill()
             .map_err(|error| format!("failed to stop terminal: {error}"))?;
+        log::info!("Terminal session closed");
     }
     Ok(())
 }
@@ -293,6 +295,7 @@ pub fn ssh_start(
             child,
         },
     );
+    log::info!("SSH session started");
 
     Ok(())
 }
