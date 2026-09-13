@@ -42,6 +42,68 @@ keyboard navigation, layout history, and local persistence.
 </section>
 );
 }
+type AppModalProps = {
+open: boolean;
+title: string;
+children: React.ReactNode;
+confirmLabel?: string;
+cancelLabel?: string;
+danger?: boolean;
+onConfirm: () => void;
+onCancel: () => void;
+};
+function AppModal({
+open,
+title,
+children,
+confirmLabel = "OK",
+cancelLabel,
+danger = false,
+onConfirm,
+onCancel,
+}: AppModalProps) {
+useEffect(() => {
+if (!open) return;
+const handleKeyDown = (event: KeyboardEvent) => {
+if (event.key === "Escape") onCancel();
+};
+window.addEventListener("keydown", handleKeyDown);
+return () => window.removeEventListener("keydown", handleKeyDown);
+}, [open, onCancel]);
+if (!open) return null;
+return (
+<div className="app-modal-backdrop" onMouseDown={onCancel}>
+<div
+className="app-modal"
+role="dialog"
+aria-modal="true"
+aria-labelledby="app-modal-title"
+onMouseDown={(event) => event.stopPropagation()}
+>
+<div className="app-modal-header">
+<p className="eyebrow">RemoteHand</p>
+<h3 id="app-modal-title">{title}</h3>
+</div>
+<div className="app-modal-body">{children}</div>
+<div className="app-modal-actions">
+{cancelLabel ? (
+<button type="button" className="modal-button" onClick={onCancel} autoFocus>
+{cancelLabel}
+</button>
+) : null}
+<button
+type="button"
+className={danger ? "modal-button danger" : "modal-button primary"}
+onClick={onConfirm}
+autoFocus={!cancelLabel}
+>
+{confirmLabel}
+</button>
+</div>
+</div>
+</div>
+);
+}
 function ConnectionsPanel({
 connections,
 onAdd,
@@ -61,6 +123,8 @@ const [name, setName] = useState("");
 const [host, setHost] = useState("");
 const [port, setPort] = useState("22");
 const [user, setUser] = useState("");
+const [pendingRemove, setPendingRemove] = useState<Connection | null>(null);
+const [notice, setNotice] = useState<{ title: string; message: string } | null>(null);
 const resetForm = () => {
 setEditingId(null);
 setName("");
@@ -85,7 +149,10 @@ const trimmedUser = user.trim();
 if (!trimmedName || !trimmedHost || !trimmedUser) return;
 if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65535) return;
 if (connections.some((connection) => connection.name.toLowerCase() === trimmedName.toLowerCase() && connection.id !== editingId)) {
-window.alert("A connection with that name already exists.");
+setNotice({
+title: "Connection name already exists",
+message: "Choose a different name for this saved connection.",
+});
 return;
 }
 const next = {
@@ -102,9 +169,13 @@ onAdd(next);
 resetForm();
 };
 const removeConnection = (connection: Connection) => {
-if (!window.confirm("Remove saved connection " + connection.name + "?")) return;
-onRemove(connection);
-if (editingId === connection.id) resetForm();
+setPendingRemove(connection);
+};
+const confirmRemoveConnection = () => {
+if (!pendingRemove) return;
+onRemove(pendingRemove);
+if (editingId === pendingRemove.id) resetForm();
+setPendingRemove(null);
 };
 return (
 <section className="panel-content connections-panel">
@@ -165,6 +236,29 @@ setShowForm(true);
 </article>
 ))}
 </div>
+<AppModal
+open={pendingRemove !== null}
+title="Remove connection?"
+confirmLabel="Remove"
+cancelLabel="Cancel"
+danger
+onConfirm={confirmRemoveConnection}
+onCancel={() => setPendingRemove(null)}
+>
+<p>
+This will remove <strong>{pendingRemove?.name}</strong> from your saved SSH connections.
+</p>
+<p className="app-modal-muted">You can add it again later if needed.</p>
+</AppModal>
+<AppModal
+open={notice !== null}
+title={notice?.title ?? ""}
+confirmLabel="OK"
+onConfirm={() => setNotice(null)}
+onCancel={() => setNotice(null)}
+>
+<p>{notice?.message}</p>
+</AppModal>
 </section>
 );
 }
