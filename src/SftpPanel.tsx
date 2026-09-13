@@ -47,6 +47,7 @@ export function SftpPanel(props: IDockviewPanelProps<SftpPanelParams>) {
   const [listing, setListing] = useState<SftpListing | null>(null);
   const [requestedPath, setRequestedPath] = useState(".");
   const [loading, setLoading] = useState(false);
+  const [pathInput, setPathInput] = useState(".");
   const [error, setError] = useState("");
   const [needsVaultUnlock, setNeedsVaultUnlock] = useState(false);
   const [vaultPassphrase, setVaultPassphrase] = useState("");
@@ -75,6 +76,7 @@ export function SftpPanel(props: IDockviewPanelProps<SftpPanelParams>) {
         });
         setListing(next);
         setRequestedPath(next.path);
+        setPathInput(next.path);
         setNeedsVaultUnlock(false);
       } catch (reason) {
         const message = String(reason);
@@ -144,7 +146,20 @@ export function SftpPanel(props: IDockviewPanelProps<SftpPanelParams>) {
         </div>
       </div>
 
-      <div className="sftp-path" title={currentPath}>{currentPath}</div>
+      <input
+        className="sftp-path"
+        type="text"
+        value={pathInput}
+        onChange={(event) => setPathInput(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && !loading) {
+            void loadPath(pathInput.trim() || ".");
+          }
+        }}
+        disabled={loading}
+        aria-label="Remote path"
+        title="Type a remote path and press Enter"
+      />
 
       {needsVaultUnlock ? (
         <div className="sftp-unlock">

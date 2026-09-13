@@ -858,6 +858,7 @@ opacity: 0.45;
 cursor: default;
 }
 .sftp-path {
+width: 100%;
 overflow: hidden;
 border: 1px solid #222c39;
 border-radius: 7px;
@@ -868,6 +869,13 @@ font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
 font-size: 12px;
 text-overflow: ellipsis;
 white-space: nowrap;
+outline: none;
+}
+.sftp-path:focus {
+border-color: #53657d;
+}
+.sftp-path:disabled {
+opacity: 0.7;
 }
 .sftp-list {
 min-height: 0;
