@@ -1,330 +1,380 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  DockviewReact,
-  type DockviewReadyEvent,
-  themeDark,
+DockviewReact,
+type DockviewApi,
+type DockviewReadyEvent,
+themeDark,
+themeLight,
 } from "dockview-react";
 import "dockview-react/dist/styles/dockview.css";
 import "./App.css";
 type Connection = {
-  id: string;
-  name: string;
-  host: string;
-  user: string;
+id: string;
+name: string;
+host: string;
+user: string;
 };
+type ThemeMode = "dark" | "light";
+const WORKSPACE_KEY = "remotehand.workspace";
+const THEME_KEY = "remotehand.theme";
 const initialConnections: Connection[] = [
-  {
-    id: "local",
-    name: "Local machine",
-    host: "localhost",
-    user: "local",
-  },
+{ id: "local", name: "Local machine", host: "localhost", user: "local" },
 ];
 function WelcomePanel() {
-  return (
-    <section className="panel-content welcome-panel">
-      <p className="eyebrow">Milestone 1</p>
-      <h1>Workspace Shell</h1>
-      <p>
-        RemoteHand now has a real dockable workspace. Panels can be opened,
-        closed, resized, split, tabbed, and rearranged.
-      </p>
-      <div className="feature-list">
-        <div>
-          <strong>Dockable panels</strong>
-          <span>Arrange tools into tabs and split groups.</span>
-        </div>
-        <div>
-          <strong>Persistent layout</strong>
-          <span>Your workspace arrangement is restored locally.</span>
-        </div>
-        <div>
-          <strong>Tool palette</strong>
-          <span>Open the terminal and connection manager on demand.</span>
-        </div>
-      </div>
-    </section>
-  );
+return (
+<section className="panel-content welcome-panel">
+<p className="eyebrow">Milestone 1</p>
+<h1>Workspace Shell</h1>
+<p>
+RemoteHand now has a dockable workspace with tabs, splits, popouts,
+keyboard navigation, layout history, and local persistence.
+</p>
+<div className="feature-list">
+<div><strong>Dockable panels</strong><span>Arrange tools into tabs, splits, floating windows, or popouts.</span></div>
+<div><strong>Persistent layout</strong><span>Your workspace arrangement and theme restore locally.</span></div>
+<div><strong>Keyboard friendly</strong><span>Use Dockview navigation plus Ctrl/Cmd+K for the command palette.</span></div>
+</div>
+</section>
+);
 }
 function TerminalPanel() {
-  const [lines, setLines] = useState<string[]>([
-    "RemoteHand local terminal",
-    "Milestone 1 shell is ready.",
-    "Terminal execution arrives in Milestone 2.",
-  ]);
-  const [command, setCommand] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-  const run = () => {
-    const value = command.trim();
-    if (!value) return;
-    setLines((current) => [
-      ...current,
-      "$ " + value,
-      "Local terminal backend pending (Milestone 2).",
-    ]);
-    setCommand("");
-    inputRef.current?.focus();
-  };
-  return (
-    <section className="terminal-panel">
-      <div className="terminal-output">
-        {lines.map((line, index) => (
-          <div key={line + "-" + index}>{line}</div>
-        ))}
-      </div>
-      <div className="terminal-input">
-        <span>$</span>
-        <input
-          ref={inputRef}
-          aria-label="Terminal command"
-          value={command}
-          onChange={(event) => setCommand(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") run();
-          }}
-          placeholder="Command..."
-        />
-        <button type="button" onClick={run}>
-          Run
-        </button>
-      </div>
-    </section>
-  );
+const [lines, setLines] = useState<string[]>([
+"RemoteHand local terminal",
+"Milestone 1 shell is ready.",
+"Terminal execution arrives in Milestone 2.",
+]);
+const [command, setCommand] = useState("");
+const inputRef = useRef<HTMLInputElement>(null);
+const run = () => {
+const value = command.trim();
+if (!value) return;
+setLines((current) => [
+...current,
+"$ " + value,
+"Local terminal backend pending (Milestone 2).",
+]);
+setCommand("");
+inputRef.current?.focus();
+};
+return (
+<section className="terminal-panel">
+<div className="terminal-output">
+{lines.map((line, index) => <div key={line + "-" + index}>{line}</div>)}
+</div>
+<div className="terminal-input">
+<span>$</span>
+<input
+ref={inputRef}
+aria-label="Terminal command"
+value={command}
+onChange={(event) => setCommand(event.target.value)}
+onKeyDown={(event) => {
+if (event.key === "Enter") run();
+}}
+placeholder="Command..."
+/>
+<button type="button" onClick={run}>Run</button>
+</div>
+</section>
+);
 }
 function ConnectionsPanel({
-  connections,
-  onAdd,
+connections,
+onAdd,
 }: {
-  connections: Connection[];
-  onAdd: () => void;
+connections: Connection[];
+onAdd: () => void;
 }) {
-  return (
-    <section className="panel-content connections-panel">
-      <div className="panel-heading">
-        <div>
-          <p className="eyebrow">Workspace</p>
-          <h2>Connections</h2>
-        </div>
-        <button type="button" className="primary-button" onClick={onAdd}>
-          + New connection
-        </button>
-      </div>
-      <div className="connection-list">
-        {connections.map((connection) => (
-          <article className="connection-card" key={connection.id}>
-            <div className="connection-icon">●</div>
-            <div>
-              <strong>{connection.name}</strong>
-              <span>
-                {connection.user}@{connection.host}
-              </span>
-            </div>
-            <span className="connection-status">Ready</span>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
+return (
+<section className="panel-content connections-panel">
+<div className="panel-heading">
+<div>
+<p className="eyebrow">Workspace</p>
+<h2>Connections</h2>
+</div>
+<button type="button" className="primary-button" onClick={onAdd}>+ New connection</button>
+</div>
+<div className="connection-list">
+{connections.map((connection) => (
+<article className="connection-card" key={connection.id}>
+<div className="connection-icon">●</div>
+<div>
+<strong>{connection.name}</strong>
+<span>{connection.user}@{connection.host}</span>
+</div>
+<span className="connection-status">Ready</span>
+</article>
+))}
+</div>
+</section>
+);
 }
 function App() {
-  const [connections, setConnections] = useState(initialConnections);
-  const [ready, setReady] = useState(false);
-  const dockviewRef = useRef<HTMLDivElement>(null);
-  const components = useMemo(
-    () => ({
-      welcome: WelcomePanel,
-      terminal: TerminalPanel,
-      connections: () => (
-        <ConnectionsPanel
-          connections={connections}
-          onAdd={() =>
-            setConnections((current) => [
-              ...current,
-              {
-                id: "connection-" + (current.length + 1),
-                name: "New connection " + current.length,
-                host: "example.local",
-                user: "user",
-              },
-            ])
-          }
-        />
-      ),
-    }),
-    [connections],
-  );
-  useEffect(() => {
-    if (!ready) return;
-    const saved = localStorage.getItem("remotehand.workspace");
-    if (!saved) return;
-    try {
-      const layout = JSON.parse(saved);
-      const element = dockviewRef.current;
-      if (element) {
-        const api = (
-          element as HTMLDivElement & {
-            __remotehandApi?: { fromJSON: (value: unknown) => void };
-          }
-        ).__remotehandApi;
-        api?.fromJSON(layout);
-      }
-    } catch {
-      localStorage.removeItem("remotehand.workspace");
-    }
-  }, [ready]);
-  const handleReady = (event: DockviewReadyEvent) => {
-    setReady(true);
-    event.api.addPanel({
-      id: "welcome",
-      component: "welcome",
-      title: "Welcome",
-    });
+const [connections, setConnections] = useState(initialConnections);
+const [themeMode, setThemeMode] = useState<ThemeMode>(() =>
+localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark",
+);
+const [paletteOpen, setPaletteOpen] = useState(false);
+const [paletteQuery, setPaletteQuery] = useState("");
+const [workspaceReady, setWorkspaceReady] = useState(false);
+const apiRef = useRef<DockviewApi | null>(null);
+const restoredRef = useRef(false);
+const addConnection = useCallback(() => {
+setConnections((current) => [
+...current,
+{
+id: connection-${Date.now()},
+name: New connection ${current.length},
+host: "example.local",
+user: "user",
+},
+]);
+}, []);
+const components = useMemo(
+() => ({
+welcome: WelcomePanel,
+terminal: TerminalPanel,
+connections: () => (
+<ConnectionsPanel connections={connections} onAdd={addConnection} />
+),
+}),
+[connections, addConnection],
+);
+const addTerminal = useCallback((position?: "right" | "below") => {
+const api = apiRef.current;
+if (!api) return;
+const id = terminal-${Date.now()};
+const activePanel = api.activePanel;
+api.addPanel({
+id,
+component: "terminal",
+title: "Terminal",
+...(position && activePanel
+? { position: { referencePanel: activePanel.id, direction: position } }
+: {}),
+});
+}, []);
+const addConnections = useCallback(() => {
+apiRef.current?.addPanel({
+id: connections-${Date.now()},
+component: "connections",
+title: "Connections",
+});
+}, []);
+const popoutActive = useCallback(async () => {
+const api = apiRef.current;
+const panel = api?.activePanel;
+if (!api || !panel) return;
+await api.addPopoutGroup(panel, { popoutUrl: "popout.html" });
+}, []);
+const resetLayout = useCallback(() => {
+const api = apiRef.current;
+if (!api) return;
+localStorage.removeItem(WORKSPACE_KEY);
+api.clear();
+api.addPanel({ id: "welcome", component: "welcome", title: "Welcome" });
+api.addPanel({
+id: "terminal",
+component: "terminal",
+title: "Terminal",
+position: { referencePanel: "welcome", direction: "below" },
+});
+api.addPanel({
+id: "connections",
+component: "connections",
+title: "Connections",
+position: { referencePanel: "welcome", direction: "right" },
+});
+}, []);
+useEffect(() => {
+localStorage.setItem(THEME_KEY, themeMode);
+document.documentElement.dataset.theme = themeMode;
+}, [themeMode]);
+useEffect(() => {
+const onKeyDown = (event: KeyboardEvent) => {
+if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+event.preventDefault();
+setPaletteOpen((open) => !open);
+}
+if (event.key === "Escape") setPaletteOpen(false);
+if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+event.preventDefault();
+if (event.shiftKey) apiRef.current?.redo();
+else apiRef.current?.undo();
+}
+if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
+event.preventDefault();
+apiRef.current?.redo();
+}
+};
+window.addEventListener("keydown", onKeyDown);
+return () => window.removeEventListener("keydown", onKeyDown);
+}, []);
+const handleReady = (event: DockviewReadyEvent) => {
+apiRef.current = event.api;
+const saved = localStorage.getItem(WORKSPACE_KEY);
+if (saved) {
+try {
+event.api.fromJSON(JSON.parse(saved));
+restoredRef.current = true;
+} catch {
+localStorage.removeItem(WORKSPACE_KEY);
+}
+}
+if (!restoredRef.current) {
+event.api.addPanel({ id: "welcome", component: "welcome", title: "Welcome" });
+event.api.addPanel({
+id: "terminal",
+component: "terminal",
+title: "Terminal",
+position: { referencePanel: "welcome", direction: "below" },
+});
+event.api.addPanel({
+id: "connections",
+component: "connections",
+title: "Connections",
+position: { referencePanel: "welcome", direction: "right" },
+});
+}
+event.api.onDidMutateLayout(() => {
+localStorage.setItem(WORKSPACE_KEY, JSON.stringify(event.api.toJSON()));
+});
+setWorkspaceReady(true);
+};
+const commands = [
+{ label: "New terminal", hint: "Open tab", run: () => addTerminal() },
+{ label: "Split terminal right", hint: "Split", run: () => addTerminal("right") },
+{ label: "Split terminal below", hint: "Split", run: () => addTerminal("below") },
+{ label: "Open connections", hint: "Panel", run: addConnections },
+{ label: "Pop out active panel", hint: "Window", run: popoutActive },
+{ label: "Undo layout change", hint: "Ctrl/Cmd+Z", run: () => apiRef.current?.undo() },
+{ label: "Redo layout change", hint: "Ctrl/Cmd+Y", run: () => apiRef.current?.redo() },
+{
+label: themeMode === "dark" ? "Switch to light theme" : "Switch to dark theme",
+hint: "Theme",
+run: () => setThemeMode((value) => (value === "dark" ? "light" : "dark")),
+},
+{ label: "Reset workspace layout", hint: "Reset", run: resetLayout },
+];
+const filteredCommands = commands.filter((command) =>
+command.label.toLowerCase().includes(paletteQuery.toLowerCase()),
+);
+return (
+<main className="app-shell">
+<header className="topbar">
+<div className="brand">
+<span className="brand-mark">RH</span>
+<div>
+<strong>RemoteHand</strong>
+<span>Portable workstation manager</span>
+</div>
+</div>
+<div className="topbar-actions">
+<button
+className="topbar-button"
+type="button"
+onClick={() => setPaletteOpen(true)}
+title="Command palette (Ctrl/Cmd+K)"
+>
+Command Palette
+</button>
+<button
+className="topbar-button icon-button"
+type="button"
+onClick={() => setThemeMode((value) => (value === "dark" ? "light" : "dark"))}
+title="Toggle theme"
+>
+{themeMode === "dark" ? "☀" : "☾"}
+</button>
+<span className="phase-badge">Milestone 1</span>
+</div>
+</header>
+<section className="workspace">
+<aside className="sidebar">
+<div className="sidebar-heading">Workspace</div>
+<button className="sidebar-action" type="button" onClick={() => addTerminal()}>
+<span>⌘</span>Terminal
+</button>
+<button className="sidebar-action" type="button" onClick={addConnections}>
+<span>◈</span>Connections
+</button>
+<button className="sidebar-action" type="button" onClick={() => addTerminal("right")}>
+<span>⇥</span>Split right
+</button>
+<button className="sidebar-action" type="button" onClick={() => addTerminal("below")}>
+<span>⇣</span>Split below
+</button>
+<button className="sidebar-action" type="button" onClick={popoutActive}>
+<span>↗</span>Pop out active
+</button>
 
-    event.api.addPanel({
-      id: "terminal",
-      component: "terminal",
-      title: "Terminal",
-      position: { referencePanel: "welcome", direction: "below" },
-    });
+<div className="sidebar-divider" />
+<div className="sidebar-heading">Layout</div>
+<div className="sidebar-row">
+<button className="mini-action" type="button" onClick={() => apiRef.current?.undo()}>Undo</button>
+<button className="mini-action" type="button" onClick={() => apiRef.current?.redo()}>Redo</button>
+</div>
+<button className="new-connection" type="button" onClick={resetLayout}>Reset layout</button>
 
-    event.api.addPanel({
-      id: "connections",
-      component: "connections",
-      title: "Connections",
-      position: { referencePanel: "welcome", direction: "right" },
-    });
+<div className="sidebar-divider" />
+<div className="sidebar-heading">Connections</div>
+{connections.map((connection) => (
+<div className="sidebar-connection" key={connection.id}>
+<span className="status-dot" />
+<div>
+<strong>{connection.name}</strong>
+<small>{connection.host}</small>
+</div>
+</div>
+))}
+<button className="new-connection" type="button" onClick={addConnection}>+ New connection</button>
+</aside>
 
-    const element = dockviewRef.current;
-    if (element) {
-      (
-        element as HTMLDivElement & {
-          __remotehandApi?: typeof event.api;
-        }
-      ).__remotehandApi = event.api;
+<section className="canvas">
+<div className="dockview-host">
+<DockviewReact
+className="remotehand-dockview"
+theme={themeMode === "dark" ? themeDark : themeLight}
+components={components}
+onReady={handleReady}
+keyboardNavigation
+layoutHistory={{ enabled: true }}
+popoutUrl="popout.html"
+/>
+</div>
+{!workspaceReady && <div className="workspace-loading">Preparing workspace…</div>}
+</section>
+</section>
 
-      event.api.onDidMutateLayout(() => {
-        localStorage.setItem(
-          "remotehand.workspace",
-          JSON.stringify(event.api.toJSON()),
-        );
-      });
-    }
-  };
-  return (
-    <main className="app-shell">
-      <header className="topbar">
-        <div className="brand">
-          <span className="brand-mark">RH</span>
-          <div>
-            <strong>RemoteHand</strong>
-            <span>Portable workstation manager</span>
-          </div>
-        </div>
-        <div className="topbar-actions">
-          <span className="phase-badge">Milestone 1</span>
-        </div>
-      </header>
-      <section className="workspace">
-        <aside className="sidebar">
-          <div className="sidebar-heading">Workspace</div>
-          <button
-            className="sidebar-action"
-            type="button"
-            onClick={() => {
-              const element = dockviewRef.current;
-              const api = (
-                element as
-                  | (HTMLDivElement & {
-                      __remotehandApi?: {
-                        addPanel: (options: {
-                          id: string;
-                          component: string;
-                          title: string;
-                        }) => void;
-                      };
-                    })
-                  | null
-              )?.__remotehandApi;
-              api?.addPanel({
-                id: `terminal-${Date.now()}`,
-                component: "terminal",
-                title: "Terminal",
-              });
-            }}
-          >
-            <span>⌘</span>
-            Terminal
-          </button>
-          <button
-            className="sidebar-action"
-            type="button"
-            onClick={() => {
-              const element = dockviewRef.current;
-              const api = (
-                element as
-                  | (HTMLDivElement & {
-                      __remotehandApi?: {
-                        addPanel: (options: {
-                          id: string;
-                          component: string;
-                          title: string;
-                        }) => void;
-                      };
-                    })
-                  | null
-              )?.__remotehandApi;
-              api?.addPanel({
-                id: `connections-${Date.now()}`,
-                component: "connections",
-                title: "Connections",
-              });
-            }}
-          >
-            <span>◈</span>
-            Connections
-          </button>
-          <div className="sidebar-divider" />
-          <div className="sidebar-heading">Connections</div>
-          {connections.map((connection) => (
-            <div className="sidebar-connection" key={connection.id}>
-              <span className="status-dot" />
-              <div>
-                <strong>{connection.name}</strong>
-                <small>{connection.host}</small>
-              </div>
-            </div>
-          ))}
-          <button
-            className="new-connection"
-            type="button"
-            onClick={() =>
-              setConnections((current) => [
-                ...current,
-                {
-                  id: `connection-${current.length + 1}`,
-                  name: `New connection ${current.length}`,
-                  host: "example.local",
-                  user: "user",
-                },
-              ])
-            }
-          >
-            + New connection
-          </button>
-        </aside>
-
-        <section className="canvas">
-          <div className="dockview-host" ref={dockviewRef}>
-            <DockviewReact
-              className="remotehand-dockview"
-              theme={themeDark}
-              components={components}
-              onReady={handleReady}
-            />
-          </div>
-        </section>
-      </section>
-    </main>
-  );
+{paletteOpen && (
+<div className="palette-backdrop" role="presentation" onMouseDown={() => setPaletteOpen(false)}>
+<div className="command-palette" role="dialog" aria-modal="true" aria-label="Command palette" onMouseDown={(event) => event.stopPropagation()}>
+<input
+autoFocus
+value={paletteQuery}
+onChange={(event) => setPaletteQuery(event.target.value)}
+placeholder="Type a command…"
+aria-label="Filter commands"
+/>
+<div className="command-list">
+{filteredCommands.length ? filteredCommands.map((command) => (
+<button
+key={command.label}
+type="button"
+onClick={() => {
+command.run();
+setPaletteOpen(false);
+setPaletteQuery("");
+}}
+>
+<span>{command.label}</span><small>{command.hint}</small>
+</button>
+)) : <div className="empty-command">No matching command</div>}
+</div>
+</div>
+</div>
+)}
+</main>
+);
 }
 export default App;
