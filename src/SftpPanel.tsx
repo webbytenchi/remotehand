@@ -44,7 +44,9 @@ files: number;
 folders: number;
 bytes: number;
 };
-type LiveTransfer = SftpTransferProgressEvent;
+type LiveTransfer = SftpTransferProgressEvent & {
+  speedBytesPerSecond: number;
+};
 type TransferState =
 | "idle"
 | "uploading"
@@ -105,6 +107,7 @@ const [transferState, setTransferState] = useState<TransferState>("idle");
 const [transferStatus, setTransferStatus] = useState("");
 const [liveTransfer, setLiveTransfer] = useState<LiveTransfer | null>(null);
 const [cancelRequested, setCancelRequested] = useState(false);
+const transferSampleRef = useRef<{ transferId: string; bytes: number; time: number } | null>(null);
 const nativeSessionId = useRef(crypto.randomUUID()).current;
 const useNativeSftp = Boolean(connection?.credentialRef);
 const transferring = transferState !== "idle";
@@ -184,7 +187,22 @@ let unlisten: UnlistenFn | undefined;
 void listen<SftpTransferProgressEvent>("sftp-transfer-progress", (event) => {
 setLiveTransfer((current) => {
 if (!current || current.transferId !== event.payload.transferId) return current;
-return event.payload;
+const now = performance.now();
+const previous = transferSampleRef.current;
+let speedBytesPerSecond = current.speedBytesPerSecond;
+if (previous && previous.transferId === event.payload.transferId) {
+const elapsedSeconds = (now - previous.time) / 1000;
+const byteDelta = event.payload.transferredBytes - previous.bytes;
+if (elapsedSeconds > 0 && byteDelta >= 0) {
+speedBytesPerSecond = byteDelta / elapsedSeconds;
+}
+}
+transferSampleRef.current = {
+transferId: event.payload.transferId,
+bytes: event.payload.transferredBytes,
+time: now,
+};
+return { ...event.payload, speedBytesPerSecond };
 });
 }).then((stop) => {
 unlisten = stop;
@@ -286,7 +304,9 @@ totalFiles: items.length,
 totalFolders: 0,
 transferredBytes: 0,
 totalBytes: 0,
+speedBytesPerSecond: 0,
 });
+transferSampleRef.current = { transferId, bytes: 0, time: performance.now() };
 try {
 const result = await invoke<SftpTransferResult>(
 useNativeSftp ? "sftp_native_upload_many" : "sftp_upload_many",
@@ -353,7 +373,9 @@ totalFiles: 0,
 totalFolders: 0,
 transferredBytes: 0,
 totalBytes: 0,
+speedBytesPerSecond: 0,
 });
+transferSampleRef.current = { transferId, bytes: 0, time: performance.now() };
 try {
 const result = await invoke<SftpTransferResult>(
 useNativeSftp ? "sftp_native_download_entries" : "sftp_download_entries",
@@ -502,6 +524,7 @@ Refresh
 </button>
 </div>
 </div>
+{listing && !needsVaultUnlock ? (
 <div className="sftp-action-toolbar" role="toolbar" aria-label="SFTP file actions">
 <button type="button" title="Choose files to upload" aria-label="Choose files to upload" onClick={() => void chooseUploadFiles()} disabled={!listing || needsVaultUnlock || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0-5 5m5-5 5 5M5 20h14"/></svg><span>{transferState === "uploading" ? "Working…" : "Upload"}</span></button>
 <button type="button" title="Download selected files and folders" aria-label="Download selected files and folders" onClick={() => void downloadFiles()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12m0 0 5-5m-5 5-5-5M5 20h14"/></svg><span>{transferState === "downloading" ? "Working…" : "Download"}</span></button>
@@ -509,6 +532,7 @@ Refresh
 <button type="button" title="Change permissions" aria-label="Change permissions" onClick={() => void chmodSelected()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 11V8a4 4 0 0 1 8 0v3M6 11h12v9H6z"/></svg><span>{transferState === "chmodding" ? "Working…" : "CHMOD"}</span></button>
 <button type="button" className="sftp-danger-action" title="Delete selected items" aria-label="Delete selected items" onClick={() => void deleteSelected()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg><span>{transferState === "deleting" ? "Working…" : "Delete"}</span></button>
 </div>
+) : null}
 {liveTransfer ? (() => {
 const progressPercent = liveTransfer.totalBytes > 0
 ? Math.min(100, (liveTransfer.transferredBytes / liveTransfer.totalBytes) * 100)
@@ -543,7 +567,12 @@ disabled={cancelRequested}
 <div className="sftp-transfer-progress-detail">
 <span>
 {liveTransfer.totalBytes > 0
-? formatSize(liveTransfer.transferredBytes) + " / " + formatSize(liveTransfer.totalBytes)
+? formatSize(liveTransfer.transferredBytes) +
+" / " +
+formatSize(liveTransfer.totalBytes) +
+(liveTransfer.speedBytesPerSecond > 0
+? " · " + formatSize(liveTransfer.speedBytesPerSecond) + "/s"
+: "")
 : liveTransfer.totalFolders > 0
 ? String(liveTransfer.totalFolders) + (liveTransfer.totalFolders === 1 ? " folder" : " folders")
 : "Calculating transfer size…"}
@@ -562,22 +591,6 @@ aria-valuenow={Math.round(progressPercent)}
 </div>
 );
 })() : null}
-
-{selectedEntries.length > 0 ? (
-<div className="sftp-selected-summary">
-<span>Selected remote items</span>
-<strong>
-{String(selectedEntries.length) +
-(selectedEntries.length === 1 ? " item" : " items") +
-" · " +
-String(selectedFileCount) +
-(selectedFileCount === 1 ? " file" : " files") +
-" · " +
-String(selectedFolderCount) +
-(selectedFolderCount === 1 ? " folder" : " folders")}
-</strong>
-</div>
-) : null}
 
 <input
 className="sftp-path"
@@ -661,6 +674,22 @@ aria-label="Dismiss transfer status"
 <span>{entry.isDir ? "—" : formatSize(entry.size)}</span><span>{entry.permissions}</span>
 </div>
 ))}
+</div>
+) : null}
+
+{selectedEntries.length > 0 && listing && !needsVaultUnlock ? (
+<div className="sftp-selected-summary">
+<span>Selected remote items</span>
+<strong>
+{String(selectedEntries.length) +
+(selectedEntries.length === 1 ? " item" : " items") +
+" · " +
+String(selectedFileCount) +
+(selectedFileCount === 1 ? " file" : " files") +
+" · " +
+String(selectedFolderCount) +
+(selectedFolderCount === 1 ? " folder" : " folders")}
+</strong>
 </div>
 ) : null}
 </section>
