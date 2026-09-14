@@ -170,7 +170,7 @@ return (
 <section className="panel-content connections-panel">
 <div className="panel-heading">
 <div>
-<h2>SSH Connections</h2>
+<h2>Connections</h2>
 </div>
 <button
 type="button"
