@@ -617,27 +617,12 @@ return (
 {connection.user}@{connection.host}:{connection.port}
 </span>
 </div>
-{listing && !needsVaultUnlock ? (
-<div className="sftp-toolbar">
-<button
-type="button"
-disabled={!canGoUp || loading || transferring}
-onClick={() => void loadPath(parentPath(currentPath))}
->
-Up
-</button>
-<button
-type="button"
-disabled={loading || transferring}
-onClick={() => void loadPath(currentPath)}
->
-Refresh
-</button>
-</div>
-) : null}
 </div>
 {listing && !needsVaultUnlock ? (
 <div className="sftp-action-toolbar" role="toolbar" aria-label="SFTP file actions">
+<button className="sftp-icon-action" type="button" title="Up" aria-label="Up" onClick={() => void loadPath(parentPath(currentPath))} disabled={!canGoUp || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m0 0-5 5m5-5 5 5"/></svg></button>
+<button className="sftp-icon-action" type="button" title="Refresh" aria-label="Refresh" onClick={() => void loadPath(currentPath)} disabled={loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5M4 18v-5h5M6.2 9a7 7 0 0 1 11.5-2.3L20 11M4 13l2.3 4.3A7 7 0 0 0 17.8 15"/></svg></button>
+<span className="sftp-toolbar-separator" aria-hidden="true" />
 <button className="sftp-icon-action" type="button" title="Upload" aria-label="Upload" onClick={() => void chooseUploadFiles()} disabled={!listing || needsVaultUnlock || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0-5 5m5-5 5 5M5 20h14"/></svg></button>
 <button className="sftp-icon-action" type="button" title="Download" aria-label="Download" onClick={() => void downloadFiles()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12m0 0 5-5m-5 5-5-5M5 20h14"/></svg></button>
 <span className="sftp-toolbar-separator" aria-hidden="true" />

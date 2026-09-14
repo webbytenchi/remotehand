@@ -61,7 +61,6 @@ pub fn terminal_start(
     shell: String,
     rows: u16,
     cols: u16,
-    initial_command: Option<String>,
 ) -> Result<(), String> {
     let mut sessions = state
         .sessions
