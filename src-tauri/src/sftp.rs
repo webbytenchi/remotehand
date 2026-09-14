@@ -1,5 +1,5 @@
 use crate::vault::{self, VaultState};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     env,
     io::Write,
@@ -15,6 +15,12 @@ pub struct SftpEntry {
     is_dir: bool,
     size: u64,
     permissions: String,
+}
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SftpTransferItem {
+    local_path: String,
+    remote_path: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -292,6 +298,106 @@ fn run_sftp_list(
         path: current_path,
         entries,
     })
+}
+
+#[tauri::command]
+pub async fn sftp_pick_upload_files() -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        Ok(rfd::FileDialog::new()
+            .set_title("Select files to upload")
+            .pick_files()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect())
+    })
+    .await
+    .map_err(|error| format!("File picker failed: {error}"))?
+}
+#[tauri::command]
+pub async fn sftp_pick_download_folder() -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        Ok(rfd::FileDialog::new()
+            .set_title("Choose download folder")
+            .pick_folder()
+            .map(|path| path.to_string_lossy().into_owned()))
+    })
+    .await
+    .map_err(|error| format!("Folder picker failed: {error}"))?
+}
+#[tauri::command]
+pub async fn sftp_upload_many(
+    host: String,
+    port: u16,
+    user: String,
+    items: Vec<SftpTransferItem>,
+    credential_ref: Option<String>,
+    vault_state: State<'_, VaultState>,
+) -> Result<usize, String> {
+    if items.is_empty() {
+        return Err("at least one upload file is required".to_string());
+    }
+    for item in &items {
+        if item.local_path.trim().is_empty() || item.remote_path.trim().is_empty() {
+            return Err("upload paths cannot be empty".to_string());
+        }
+        if !std::path::Path::new(item.local_path.trim()).is_file() {
+            return Err("one or more local source files do not exist".to_string());
+        }
+    }
+
+    let count = items.len();
+    let password = password_for_credential(&vault_state, credential_ref.as_deref())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut batch = String::new();
+        for item in items {
+            let local = quote_batch_path(item.local_path.trim())?;
+            let remote = quote_batch_path(item.remote_path.trim())?;
+            batch.push_str(&format!("put {local} {remote}\n"));
+        }
+        run_sftp_batch(host, port, user, password, batch, "upload")?;
+        log::info!("SFTP upload batch completed");
+        Ok(count)
+    })
+    .await
+    .map_err(|error| format!("SFTP task failed: {error}"))?
+}
+#[tauri::command]
+pub async fn sftp_download_many(
+    host: String,
+    port: u16,
+    user: String,
+    items: Vec<SftpTransferItem>,
+    credential_ref: Option<String>,
+    vault_state: State<'_, VaultState>,
+) -> Result<usize, String> {
+    if items.is_empty() {
+        return Err("at least one download file is required".to_string());
+    }
+    for item in &items {
+        if item.local_path.trim().is_empty() || item.remote_path.trim().is_empty() {
+            return Err("download paths cannot be empty".to_string());
+        }
+        if std::path::Path::new(item.local_path.trim()).exists() {
+            return Err("one or more local destinations already exist".to_string());
+        }
+    }
+
+    let count = items.len();
+    let password = password_for_credential(&vault_state, credential_ref.as_deref())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut batch = String::new();
+        for item in items {
+            let remote = quote_batch_path(item.remote_path.trim())?;
+            let local = quote_batch_path(item.local_path.trim())?;
+            batch.push_str(&format!("get {remote} {local}\n"));
+        }
+        run_sftp_batch(host, port, user, password, batch, "download")?;
+        log::info!("SFTP download batch completed");
+        Ok(count)
+    })
+    .await
+    .map_err(|error| format!("SFTP task failed: {error}"))?
 }
 
 #[tauri::command]

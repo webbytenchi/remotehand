@@ -1118,3 +1118,59 @@ grid-template-columns: 1fr auto;
 grid-column: 1 / -1;
 }
 }
+/* SFTP batch transfer controls */
+.sftp-transfer-group {
+grid-template-columns: 140px auto minmax(0, 1fr) auto;
+}
+.sftp-transfer-summary {
+min-width: 0;
+overflow: hidden;
+text-overflow: ellipsis;
+white-space: nowrap;
+color: #9aa8ba;
+font-size: 12px;
+}
+.sftp-picker-button {
+white-space: nowrap;
+}
+.sftp-message {
+display: flex;
+align-items: center;
+gap: 10px;
+}
+.sftp-message > span {
+min-width: 0;
+flex: 1;
+}
+.sftp-message > button {
+border: 0;
+background: transparent;
+color: inherit;
+font: inherit;
+font-size: 18px;
+line-height: 1;
+cursor: pointer;
+opacity: 0.75;
+}
+.sftp-message > button:hover {
+opacity: 1;
+}
+@media (max-width: 900px) {
+.sftp-transfer-group {
+grid-template-columns: 1fr auto;
+}
+.sftp-transfer-group > span {
+grid-column: 1 / -1;
+}
+.sftp-transfer-summary {
+grid-column: 1 / -1;
+}
+}
+.sftp-download-group {
+grid-template-columns: 140px minmax(0, 1fr) auto;
+}
+@media (max-width: 900px) {
+.sftp-download-group {
+grid-template-columns: 1fr auto;
+}
+}
