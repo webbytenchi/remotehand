@@ -1174,3 +1174,94 @@ grid-template-columns: 140px minmax(0, 1fr) auto;
 grid-template-columns: 1fr auto;
 }
 }
+/* SFTP file-manager actions and multi-selection */
+.sftp-action-toolbar {
+display: flex;
+align-items: center;
+gap: 6px;
+padding: 7px;
+border: 1px solid #222c39;
+border-radius: 8px;
+background: #090d13;
+}
+.sftp-action-toolbar button {
+display: inline-flex;
+align-items: center;
+gap: 6px;
+border: 1px solid #2e3c4f;
+border-radius: 7px;
+background: #111925;
+color: #c5cfdb;
+padding: 6px 9px;
+cursor: pointer;
+}
+.sftp-action-toolbar button:hover:not(:disabled) {
+background: #182536;
+}
+.sftp-action-toolbar button:disabled {
+opacity: 0.42;
+cursor: default;
+}
+.sftp-action-toolbar svg {
+width: 16px;
+height: 16px;
+fill: none;
+stroke: currentColor;
+stroke-width: 1.8;
+stroke-linecap: round;
+stroke-linejoin: round;
+}
+.sftp-action-toolbar .sftp-danger-action {
+color: #efaaaa;
+}
+.sftp-selection-summary {
+margin-left: auto;
+color: #8391a3;
+font-size: 11px;
+white-space: nowrap;
+}
+.sftp-row {
+grid-template-columns: 32px minmax(220px, 1fr) 110px 120px;
+}
+.sftp-checkbox-cell {
+display: flex;
+align-items: center;
+justify-content: center;
+min-width: 24px;
+}
+.sftp-checkbox-cell input {
+width: 15px;
+height: 15px;
+margin: 0;
+cursor: pointer;
+accent-color: #5a8fc7;
+}
+.sftp-entry[aria-selected="true"] {
+background: #152235;
+outline: 1px solid #35506f;
+}
+.sftp-entry:focus-visible {
+outline: 1px solid #5d7fa6;
+outline-offset: -1px;
+}
+html[data-theme="light"] .sftp-action-toolbar {
+background: #ffffff;
+border-color: #c7ced8;
+}
+html[data-theme="light"] .sftp-action-toolbar button {
+background: #f5f7fa;
+color: #29313d;
+border-color: #c7ced8;
+}
+@media (max-width: 760px) {
+.sftp-action-toolbar {
+flex-wrap: wrap;
+}
+.sftp-action-toolbar button span {
+display: none;
+}
+.sftp-selection-summary {
+width: 100%;
+margin-left: 0;
+}
+}

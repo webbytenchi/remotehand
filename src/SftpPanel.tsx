@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { MouseEvent } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import type { IDockviewPanelProps } from "dockview-react";
 type SftpConnection = {
@@ -26,7 +27,13 @@ type TransferItem = {
 localPath: string;
 remotePath: string;
 };
-type TransferState = "idle" | "uploading" | "downloading";
+type TransferState =
+| "idle"
+| "uploading"
+| "downloading"
+| "moving"
+| "chmodding"
+| "deleting";
 function stripTrailingSlashes(path: string) {
 let result = path;
 while (result.length > 1 && result.endsWith("/")) {
@@ -75,6 +82,7 @@ const [needsVaultUnlock, setNeedsVaultUnlock] = useState(false);
 const [vaultPassphrase, setVaultPassphrase] = useState("");
 const [unlocking, setUnlocking] = useState(false);
 const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
+const [lastSelectedPath, setLastSelectedPath] = useState<string | null>(null);
 const [uploadPaths, setUploadPaths] = useState<string[]>([]);
 const [transferState, setTransferState] = useState<TransferState>("idle");
 const [transferStatus, setTransferStatus] = useState("");
@@ -103,6 +111,7 @@ setListing(next);
 setRequestedPath(next.path);
 setPathInput(next.path);
 setSelectedPaths([]);
+setLastSelectedPath(null);
 setNeedsVaultUnlock(false);
 } catch (reason) {
 const message = String(reason);
@@ -136,25 +145,59 @@ setUnlocking(false);
 useEffect(() => {
 void loadPath(".");
 }, [loadPath]);
-const selectedFiles = useMemo(
-() =>
-listing?.entries.filter((entry) => !entry.isDir && selectedPaths.includes(entry.path)) ?? [],
+const selectedEntries = useMemo(
+() => listing?.entries.filter((entry) => selectedPaths.includes(entry.path)) ?? [],
 [listing, selectedPaths],
 );
+const selectedFileCount = selectedEntries.filter((entry) => !entry.isDir).length;
+const selectedFolderCount = selectedEntries.filter((entry) => entry.isDir).length;
 if (!connection) {
 return <section className="panel-content sftp-panel">Missing SFTP connection.</section>;
 }
 const currentPath = listing?.path ?? requestedPath;
 const canGoUp = Boolean(currentPath && currentPath !== "/" && currentPath !== ".");
-function toggleFile(entry: SftpEntry) {
-if (entry.isDir || transferring) return;
+function toggleEntry(entry: SftpEntry) {
+if (transferring) return;
 setTransferStatus("");
 setError("");
+setLastSelectedPath(entry.path);
 setSelectedPaths((current) =>
 current.includes(entry.path)
 ? current.filter((path) => path !== entry.path)
 : [...current, entry.path],
 );
+}
+function selectEntry(entry: SftpEntry, event: MouseEvent) {
+if (transferring) return;
+setTransferStatus("");
+setError("");
+const entries = listing?.entries ?? [];
+if (event.shiftKey && lastSelectedPath) {
+const anchor = entries.findIndex((item) => item.path === lastSelectedPath);
+const target = entries.findIndex((item) => item.path === entry.path);
+if (anchor >= 0 && target >= 0) {
+const [from, to] = anchor < target ? [anchor, target] : [target, anchor];
+const range = entries.slice(from, to + 1).map((item) => item.path);
+setSelectedPaths((current) =>
+event.ctrlKey || event.metaKey ? Array.from(new Set([...current, ...range])) : range,
+);
+return;
+}
+}
+if (event.ctrlKey || event.metaKey) {
+toggleEntry(entry);
+return;
+}
+setSelectedPaths([entry.path]);
+setLastSelectedPath(entry.path);
+}
+function toggleAllEntries() {
+if (transferring || !listing) return;
+const allPaths = listing.entries.map((entry) => entry.path);
+setSelectedPaths(selectedPaths.length === allPaths.length ? [] : allPaths);
+setLastSelectedPath(null);
+setTransferStatus("");
+setError("");
 }
 async function chooseUploadFiles() {
 if (transferring || loading) return;
@@ -215,7 +258,7 @@ setTransferState("idle");
 }
 }
 async function downloadFiles() {
-if (selectedFiles.length === 0 || transferring || loading) return;
+if (selectedEntries.length === 0 || transferring || loading) return;
 setError("");
 let folder: string | null;
 try {
@@ -226,28 +269,103 @@ return;
 }
 if (!folder) return;
 
-const items: TransferItem[] = selectedFiles.map((entry) => ({
-localPath: joinLocalPath(folder, entry.name),
-remotePath: entry.path,
+const items = selectedEntries.map((entry) => ({
+path: entry.path,
+name: entry.name,
+isDir: entry.isDir,
 }));
-
 setTransferState("downloading");
 setTransferStatus("");
 try {
-const count = await invoke<number>("sftp_download_many", {
+const count = await invoke<number>("sftp_download_entries", {
 host: connection.host,
 port: connection.port,
 user: connection.user,
+folder,
 items,
 credentialRef: connection.credentialRef,
 });
-setTransferStatus("Downloaded " + String(count) + (count === 1 ? " file" : " files"));
+setTransferStatus("Downloaded " + String(count) + (count === 1 ? " item" : " items"));
 } catch (reason) {
 setError(String(reason));
 } finally {
 setTransferState("idle");
 }
 }
+async function moveSelected() {
+if (selectedEntries.length === 0 || transferring || loading) return;
+const destination = window.prompt("Move selected items to remote directory:", currentPath);
+if (!destination?.trim()) return;
+setTransferState("moving");
+setError("");
+setTransferStatus("");
+try {
+const count = await invoke<number>("sftp_move_entries", {
+host: connection.host,
+port: connection.port,
+user: connection.user,
+destination: destination.trim(),
+items: selectedEntries.map(({ path, name, isDir }) => ({ path, name, isDir })),
+credentialRef: connection.credentialRef,
+});
+setTransferStatus("Moved " + String(count) + (count === 1 ? " item" : " items"));
+await loadPath(currentPath);
+} catch (reason) {
+setError(String(reason));
+} finally {
+setTransferState("idle");
+}
+}
+async function chmodSelected() {
+if (selectedEntries.length === 0 || transferring || loading) return;
+const mode = window.prompt("CHMOD selected items (octal mode):", "755");
+if (!mode?.trim()) return;
+setTransferState("chmodding");
+setError("");
+setTransferStatus("");
+try {
+const count = await invoke<number>("sftp_chmod_entries", {
+host: connection.host,
+port: connection.port,
+user: connection.user,
+mode: mode.trim(),
+items: selectedEntries.map(({ path, name, isDir }) => ({ path, name, isDir })),
+credentialRef: connection.credentialRef,
+});
+setTransferStatus("Changed permissions on " + String(count) + (count === 1 ? " item" : " items"));
+await loadPath(currentPath);
+} catch (reason) {
+setError(String(reason));
+} finally {
+setTransferState("idle");
+}
+}
+async function deleteSelected() {
+if (selectedEntries.length === 0 || transferring || loading) return;
+const description = selectedEntries.length === 1
+? selectedEntries[0].name
+: String(selectedEntries.length) + " selected items";
+if (!window.confirm("Delete " + description + "? Non-empty directories will be refused.")) return;
+setTransferState("deleting");
+setError("");
+setTransferStatus("");
+try {
+const count = await invoke<number>("sftp_delete_entries", {
+host: connection.host,
+port: connection.port,
+user: connection.user,
+items: selectedEntries.map(({ path, name, isDir }) => ({ path, name, isDir })),
+credentialRef: connection.credentialRef,
+});
+setTransferStatus("Deleted " + String(count) + (count === 1 ? " item" : " items"));
+await loadPath(currentPath);
+} catch (reason) {
+setError(String(reason));
+} finally {
+setTransferState("idle");
+}
+}
+
 return (
 <section className={"panel-content sftp-panel" + (needsVaultUnlock ? " sftp-panel-unlock" : "")}>
 <div className="sftp-heading">
@@ -303,21 +421,29 @@ disabled={uploadPaths.length === 0 || loading || transferring}
 </div>
 
 <div className="sftp-transfer-group sftp-download-group">
-<span>Download selected files</span>
+<span>Selected remote items</span>
 <div className="sftp-transfer-summary">
-{selectedFiles.length === 0
-? "No remote files selected"
-: String(selectedFiles.length) +
-(selectedFiles.length === 1 ? " file selected" : " files selected")}
+{selectedEntries.length === 0
+? "No remote items selected"
+: String(selectedEntries.length) +
+(selectedEntries.length === 1 ? " item" : " items") +
+" selected · " +
+String(selectedFileCount) +
+(selectedFileCount === 1 ? " file" : " files") +
+" · " +
+String(selectedFolderCount) +
+(selectedFolderCount === 1 ? " folder" : " folders")}
 </div>
-<button
-type="button"
-onClick={() => void downloadFiles()}
-disabled={selectedFiles.length === 0 || loading || transferring}
->
-{transferState === "downloading" ? "Working…" : "Download"}
-</button>
 </div>
+
+
+<div className="sftp-action-toolbar" role="toolbar" aria-label="SFTP file actions">
+<button type="button" title="Choose files to upload" aria-label="Choose files to upload" onClick={() => void chooseUploadFiles()} disabled={loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0-5 5m5-5 5 5M5 20h14"/></svg><span>Upload</span></button>
+<button type="button" title="Download selected files and folders" aria-label="Download selected files and folders" onClick={() => void downloadFiles()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12m0 0 5-5m-5 5-5-5M5 20h14"/></svg><span>{transferState === "downloading" ? "Working…" : "Download"}</span></button>
+<button type="button" title="Move selected items" aria-label="Move selected items" onClick={() => void moveSelected()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-4-4 4 4-4 4M9 8 5 12l4 4"/></svg><span>{transferState === "moving" ? "Working…" : "Move"}</span></button>
+<button type="button" title="Change permissions" aria-label="Change permissions" onClick={() => void chmodSelected()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 11V8a4 4 0 0 1 8 0v3M6 11h12v9H6z"/></svg><span>{transferState === "chmodding" ? "Working…" : "CHMOD"}</span></button>
+<button type="button" className="sftp-danger-action" title="Delete selected items" aria-label="Delete selected items" onClick={() => void deleteSelected()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg><span>{transferState === "deleting" ? "Working…" : "Delete"}</span></button>
+<div className="sftp-selection-summary">{selectedEntries.length === 0 ? "No selection" : String(selectedEntries.length) + (selectedEntries.length === 1 ? " item selected" : " items selected")}</div>
 </div>
 
 <input
@@ -387,9 +513,8 @@ aria-label="Dismiss transfer status"
 {!loading && !error && !needsVaultUnlock && !unlocking ? (
 <div className="sftp-list" role="table" aria-label="Remote files">
 <div className="sftp-row sftp-row-header" role="row">
-<span>Name</span>
-<span>Size</span>
-<span>Permissions</span>
+<label className="sftp-checkbox-cell" title="Select all items"><input type="checkbox" checked={Boolean(listing?.entries.length) && selectedPaths.length === listing?.entries.length} onChange={toggleAllEntries} disabled={transferring || !listing?.entries.length} aria-label="Select all remote items"/></label>
+<span>Name</span><span>Size</span><span>Permissions</span>
 </div>
 
 {listing?.entries.length === 0 ? (
@@ -397,23 +522,11 @@ aria-label="Dismiss transfer status"
 ) : null}
 
 {listing?.entries.map((entry) => (
-<button
-type="button"
-className="sftp-row sftp-entry"
-key={entry.path + "-" + entry.name}
-disabled={transferring}
-onDoubleClick={() => entry.isDir && !transferring && void loadPath(entry.path)}
-onClick={() => (entry.isDir ? void loadPath(entry.path) : toggleFile(entry))}
-aria-pressed={!entry.isDir && selectedPaths.includes(entry.path)}
-title={entry.isDir ? "Open " + entry.name : entry.name}
->
-<span className="sftp-name">
-<span aria-hidden="true">{entry.isDir ? "▸" : "·"}</span>
-{entry.name}
-</span>
-<span>{entry.isDir ? "—" : formatSize(entry.size)}</span>
-<span>{entry.permissions}</span>
-</button>
+<div className="sftp-row sftp-entry" key={entry.path + "-" + entry.name} role="row" tabIndex={transferring ? -1 : 0} aria-selected={selectedPaths.includes(entry.path)} onClick={(event) => selectEntry(entry, event)} onDoubleClick={() => entry.isDir && !transferring && void loadPath(entry.path)} onKeyDown={(event) => { if (event.key === "Enter" && entry.isDir && !transferring) void loadPath(entry.path); }} title={entry.isDir ? "Double-click to open " + entry.name : entry.name}>
+<label className="sftp-checkbox-cell" onClick={(event) => event.stopPropagation()} title={"Select " + entry.name}><input type="checkbox" checked={selectedPaths.includes(entry.path)} onChange={() => toggleEntry(entry)} disabled={transferring} aria-label={"Select " + entry.name}/></label>
+<span className="sftp-name"><span aria-hidden="true">{entry.isDir ? "▸" : "·"}</span>{entry.name}</span>
+<span>{entry.isDir ? "—" : formatSize(entry.size)}</span><span>{entry.permissions}</span>
+</div>
 ))}
 </div>
 ) : null}

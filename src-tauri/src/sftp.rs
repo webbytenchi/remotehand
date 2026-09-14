@@ -23,6 +23,14 @@ pub struct SftpTransferItem {
     remote_path: String,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SftpRemoteItem {
+    path: String,
+    name: String,
+    is_dir: bool,
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SftpListing {
@@ -394,6 +402,190 @@ pub async fn sftp_download_many(
         }
         run_sftp_batch(host, port, user, password, batch, "download")?;
         log::info!("SFTP download batch completed");
+        Ok(count)
+    })
+    .await
+    .map_err(|error| format!("SFTP task failed: {error}"))?
+}
+
+fn remote_directory_is_empty(
+    host: String,
+    port: u16,
+    user: String,
+    password: Option<String>,
+    path: &str,
+) -> Result<bool, String> {
+    let quoted = quote_batch_path(path)?;
+    let output = run_sftp_batch(
+        host,
+        port,
+        user,
+        password,
+        format!("cd {quoted}\nls -la\n"),
+        "directory check",
+    )?;
+    Ok(output
+        .lines()
+        .filter_map(|line| parse_listing_line(line, path))
+        .next()
+        .is_none())
+}
+#[tauri::command]
+pub async fn sftp_download_entries(
+    host: String,
+    port: u16,
+    user: String,
+    folder: String,
+    items: Vec<SftpRemoteItem>,
+    credential_ref: Option<String>,
+    vault_state: State<'_, VaultState>,
+) -> Result<usize, String> {
+    if items.is_empty() {
+        return Err("at least one remote item is required".to_string());
+    }
+    if folder.trim().is_empty() {
+        return Err("local destination folder is required".to_string());
+    }
+    let folder_path = std::path::PathBuf::from(folder.trim());
+    let mut destinations = Vec::with_capacity(items.len());
+    for item in &items {
+        let destination = folder_path.join(item.name.trim());
+        if destination.exists() {
+            return Err(format!(
+                "local destination already exists: {}",
+                destination.to_string_lossy()
+            ));
+        }
+        destinations.push(destination);
+    }
+
+    let count = items.len();
+    let password = password_for_credential(&vault_state, credential_ref.as_deref())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut batch = String::new();
+        for (item, destination) in items.into_iter().zip(destinations) {
+            let remote = quote_batch_path(item.path.trim())?;
+            let local = quote_batch_path(&destination.to_string_lossy())?;
+            if item.is_dir {
+                batch.push_str(&format!("get -R {remote} {local}\n"));
+            } else {
+                batch.push_str(&format!("get {remote} {local}\n"));
+            }
+        }
+        run_sftp_batch(host, port, user, password, batch, "download")?;
+        log::info!("SFTP recursive download batch completed");
+        Ok(count)
+    })
+    .await
+    .map_err(|error| format!("SFTP task failed: {error}"))?
+}
+#[tauri::command]
+pub async fn sftp_move_entries(
+    host: String,
+    port: u16,
+    user: String,
+    destination: String,
+    items: Vec<SftpRemoteItem>,
+    credential_ref: Option<String>,
+    vault_state: State<'_, VaultState>,
+) -> Result<usize, String> {
+    if items.is_empty() {
+        return Err("at least one remote item is required".to_string());
+    }
+    let destination = destination.trim().to_string();
+    if destination.is_empty() {
+        return Err("remote destination directory is required".to_string());
+    }
+    let count = items.len();
+    let password = password_for_credential(&vault_state, credential_ref.as_deref())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut batch = String::new();
+        for item in items {
+            let source = quote_batch_path(item.path.trim())?;
+            let target_path = join_remote_path(&destination, item.name.trim());
+            let target = quote_batch_path(&target_path)?;
+            batch.push_str(&format!("rename {source} {target}\n"));
+        }
+        run_sftp_batch(host, port, user, password, batch, "move")?;
+        log::info!("SFTP move batch completed");
+        Ok(count)
+    })
+    .await
+    .map_err(|error| format!("SFTP task failed: {error}"))?
+}
+#[tauri::command]
+pub async fn sftp_chmod_entries(
+    host: String,
+    port: u16,
+    user: String,
+    mode: String,
+    items: Vec<SftpRemoteItem>,
+    credential_ref: Option<String>,
+    vault_state: State<'_, VaultState>,
+) -> Result<usize, String> {
+    if items.is_empty() {
+        return Err("at least one remote item is required".to_string());
+    }
+    let mode = mode.trim().to_string();
+    if mode.len() < 3
+        || mode.len() > 4
+        || !mode.chars().all(|character| matches!(character, '0'..='7'))
+    {
+        return Err("CHMOD mode must be a 3 or 4 digit octal value".to_string());
+    }
+    let count = items.len();
+    let password = password_for_credential(&vault_state, credential_ref.as_deref())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut batch = String::new();
+        for item in items {
+            let remote = quote_batch_path(item.path.trim())?;
+            batch.push_str(&format!("chmod {mode} {remote}\n"));
+        }
+        run_sftp_batch(host, port, user, password, batch, "chmod")?;
+        log::info!("SFTP chmod batch completed");
+        Ok(count)
+    })
+    .await
+    .map_err(|error| format!("SFTP task failed: {error}"))?
+}
+#[tauri::command]
+pub async fn sftp_delete_entries(
+    host: String,
+    port: u16,
+    user: String,
+    items: Vec<SftpRemoteItem>,
+    credential_ref: Option<String>,
+    vault_state: State<'_, VaultState>,
+) -> Result<usize, String> {
+    if items.is_empty() {
+        return Err("at least one remote item is required".to_string());
+    }
+    let count = items.len();
+    let password = password_for_credential(&vault_state, credential_ref.as_deref())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        for item in items.iter().filter(|item| item.is_dir) {
+            if !remote_directory_is_empty(
+                host.clone(),
+                port,
+                user.clone(),
+                password.clone(),
+                item.path.trim(),
+            )? {
+                return Err(format!("Directory is not empty: {}", item.name));
+            }
+        }
+
+        let mut batch = String::new();
+        for item in items {
+            let remote = quote_batch_path(item.path.trim())?;
+            if item.is_dir {
+                batch.push_str(&format!("rmdir {remote}\n"));
+            } else {
+                batch.push_str(&format!("rm {remote}\n"));
+            }
+        }
+        run_sftp_batch(host, port, user, password, batch, "delete")?;
+        log::info!("SFTP delete batch completed");
         Ok(count)
     })
     .await
