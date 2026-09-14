@@ -75,6 +75,28 @@ const [vaultPassphrase, setVaultPassphrase] = useState("");
 const [saving, setSaving] = useState(false);
 const [pendingRemove, setPendingRemove] = useState<Connection | null>(null);
 const [notice, setNotice] = useState<{ title: string; message: string } | null>(null);
+useEffect(() => {
+const closeMenus = (except?: HTMLDetailsElement) => {
+document.querySelectorAll<HTMLDetailsElement>(".connection-menu[open]").forEach((menu) => {
+if (menu !== except) menu.open = false;
+});
+};
+const onPointerDown = (event: PointerEvent) => {
+const target = event.target as Node | null;
+if (!target) return;
+const menu = target instanceof Element ? target.closest<HTMLDetailsElement>(".connection-menu") : null;
+closeMenus(menu ?? undefined);
+};
+const onKeyDown = (event: KeyboardEvent) => {
+if (event.key === "Escape") closeMenus();
+};
+document.addEventListener("pointerdown", onPointerDown);
+document.addEventListener("keydown", onKeyDown);
+return () => {
+document.removeEventListener("pointerdown", onPointerDown);
+document.removeEventListener("keydown", onKeyDown);
+};
+}, []);
 const resetForm = () => {
 setEditingId(null);
 setName("");
@@ -216,11 +238,37 @@ setShowForm(true);
 <div className="connection-actions">
 <button type="button" className="connection-connect" onClick={() => onConnect(connection)}>Connect</button>
 <button type="button" className="connection-sftp" onClick={() => onSftp(connection)}>SFTP</button>
-<details className="connection-menu">
+<details
+className="connection-menu"
+onToggle={(event) => {
+const menu = event.currentTarget;
+if (!menu.open) return;
+document.querySelectorAll<HTMLDetailsElement>(".connection-menu[open]").forEach((other) => {
+if (other !== menu) other.open = false;
+});
+}}
+
 <summary aria-label={`Manage ${connection.name}`}>⋯</summary>
 <div className="connection-menu-popover">
-<button type="button" onClick={() => editConnection(connection)}>Edit</button>
-<button type="button" className="danger" onClick={() => removeConnection(connection)}>Remove</button>
+<button
+type="button"
+onClick={(event) => {
+event.currentTarget.closest<HTMLDetailsElement>(".connection-menu")!.open = false;
+editConnection(connection);
+}}
+>
+Edit
+</button>
+<button
+type="button"
+className="danger"
+onClick={(event) => {
+event.currentTarget.closest<HTMLDetailsElement>(".connection-menu")!.open = false;
+removeConnection(connection);
+}}
+>
+Remove
+</button>
 </div>
 </details>
 </div>
