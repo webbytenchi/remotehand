@@ -31,12 +31,8 @@ select {
 .brand-mark {
   width: 34px;
   height: 34px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  background: #c7d0dc;
-  color: #0b0f15;
-  font-weight: 800;
+  display: block;
+  object-fit: contain;
 }
 .brand div {
   display: grid;
@@ -495,10 +491,6 @@ select {
 :root[data-theme="light"] .sidebar {
   background: #e9edf2;
   border-color: #c8d0da;
-}
-:root[data-theme="light"] .brand-mark {
-  background: #263241;
-  color: #eef2f6;
 }
 :root[data-theme="light"] .canvas {
   background: #dfe4ea;

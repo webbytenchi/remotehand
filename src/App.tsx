@@ -12,6 +12,7 @@ import "dockview-react/dist/styles/dockview.css";
 import { LocalTerminalPanel } from "./LocalTerminalPanel";
 import { SftpPanel } from "./SftpPanel";
 import { AppModal } from "./AppModal";
+import appIcon from "../src-tauri/icons/icon.png";
 import "./App.css";
 type Connection = {
 id: string;
@@ -619,7 +620,7 @@ return (
 <main className="app-shell">
 <header className="topbar">
 <div className="brand">
-<span className="brand-mark">RH</span>
+<img className="brand-mark" src={appIcon} alt="RemoteHand" />
 <div>
 <strong>RemoteHand</strong>
 <span>v{APP_VERSION} · {BUILD_REVISION}</span>
