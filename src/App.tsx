@@ -463,18 +463,19 @@ onSftp={openSftp}
 const addTerminal = useCallback((position?: "right" | "below", shell: "default" | "powershell" | "cmd" | "wsl" = "default") => {
 const api = apiRef.current;
 if (!api) return;
+const resolvedShell = shell === "default" && localOs === "windows" ? "cmd" : shell;
 const id = `terminal-${Date.now()}`;
 const activePanel = api.activePanel;
 api.addPanel({
 id,
 component: "terminal",
-title: shell === "default" ? "Terminal" : shell === "powershell" ? "PowerShell" : shell === "cmd" ? "Command Prompt" : "WSL",
-params: { shell },
+title: resolvedShell === "default" ? "Terminal" : resolvedShell === "powershell" ? "PowerShell" : resolvedShell === "cmd" ? "Command Prompt" : "WSL",
+params: { shell: resolvedShell },
 ...(position && activePanel
 ? { position: { referencePanel: activePanel.id, direction: position } }
 : {}),
 });
-}, []);
+}, [localOs]);
 const addConnections = useCallback(() => {
 apiRef.current?.addPanel({
 id: `connections-${Date.now()}`,
@@ -483,11 +484,11 @@ title: "Connections",
 params: { connections },
 });
 }, [connections]);
-const popoutActive = useCallback(async () => {
+const popoutActive = useCallback(() => {
 const api = apiRef.current;
 const panel = api?.activePanel;
 if (!api || !panel) return;
-await api.addPopoutGroup(panel, { popoutUrl: "popout.html" });
+api.addFloatingGroup(panel);
 }, []);
 const resetLayout = useCallback(async () => {
 const api = apiRef.current;
@@ -662,7 +663,7 @@ const commands = [
 { label: "Split terminal right", hint: "Split", run: () => addTerminal("right") },
 { label: "Split terminal below", hint: "Split", run: () => addTerminal("below") },
 { label: "Open connections", hint: "Panel", run: addConnections },
-{ label: "Pop out active panel", hint: "Window", run: popoutActive },
+{ label: "Float active panel", hint: "Layout", run: popoutActive },
 { label: "Undo layout change", hint: "Ctrl/Cmd+Z", run: undoLayout },
 { label: "Redo layout change", hint: "Ctrl/Cmd+Y", run: redoLayout },
 {
@@ -745,8 +746,8 @@ title="Toggle theme"
 <button className="sidebar-action" type="button" onClick={() => addTerminal("below")} title="Split below">
 <span className="sidebar-icon">⇣</span><span className="sidebar-label">Split below</span>
 </button>
-<button className="sidebar-action" type="button" onClick={popoutActive} title="Pop out active">
-<span className="sidebar-icon">↗</span><span className="sidebar-label">Pop out active</span>
+<button className="sidebar-action" type="button" onClick={popoutActive} title="Float active panel">
+<span className="sidebar-icon">↗</span><span className="sidebar-label">Float active</span>
 </button>
 
 <div className="sidebar-divider" />
