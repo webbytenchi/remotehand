@@ -754,18 +754,6 @@ disabled={!vaultPassphrase || unlocking}
 </div>
 ) : null}
 
-{transferStatus ? (
-<div className="sftp-transfer-status sftp-message">
-<span>{transferStatus}</span>
-<button
-type="button"
-onClick={() => setTransferStatus("")}
-aria-label="Dismiss transfer status"
->
-×
-</button>
-</div>
-) : null}
 
 {loading ? <div className="sftp-state">Loading remote directory…</div> : null}
 
@@ -780,6 +768,8 @@ aria-label="Dismiss transfer status"
 <div className="sftp-state">This directory is empty.</div>
 ) : null}
 
+
+
 {listing?.entries.map((entry) => (
 <div className="sftp-row sftp-entry" key={entry.path + "-" + entry.name} role="row" tabIndex={transferring ? -1 : 0} aria-selected={selectedPaths.includes(entry.path)} onClick={(event) => selectEntry(entry, event)} onDoubleClick={() => entry.isDir && !transferring && void loadPath(entry.path)} onKeyDown={(event) => { if (event.key === "Enter" && entry.isDir && !transferring) void loadPath(entry.path); }} title={entry.isDir ? "Double-click to open " + entry.name : entry.name}>
 <label className="sftp-checkbox-cell" onClick={(event) => event.stopPropagation()} title={"Select " + entry.name}><input type="checkbox" checked={selectedPaths.includes(entry.path)} onChange={() => toggleEntry(entry)} disabled={transferring} aria-label={"Select " + entry.name}/></label>
@@ -787,6 +777,19 @@ aria-label="Dismiss transfer status"
 <span>{entry.isDir ? "—" : formatSize(entry.size)}</span><span>{entry.permissions}</span>
 </div>
 ))}
+</div>
+) : null}
+
+{transferStatus ? (
+<div className="sftp-transfer-status sftp-message">
+<span>{transferStatus}</span>
+<button
+type="button"
+onClick={() => setTransferStatus("")}
+aria-label="Dismiss transfer status"
+>
+×
+</button>
 </div>
 ) : null}
 
