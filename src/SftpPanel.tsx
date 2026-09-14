@@ -592,6 +592,7 @@ aria-valuenow={Math.round(progressPercent)}
 );
 })() : null}
 
+{listing && !needsVaultUnlock ? (
 <input
 className="sftp-path"
 type="text"
@@ -606,6 +607,7 @@ disabled={loading || transferring}
 aria-label="Remote path"
 title="Type a remote path and press Enter"
 />
+) : null}
 
 {needsVaultUnlock ? (
 <div className="sftp-unlock">
