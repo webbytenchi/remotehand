@@ -528,6 +528,7 @@ setError("");
 setTransferStatus("");
 if (modal === "new-folder") {
 setTransferState("creating");
+setTransferStatus("Creating folder " + String.fromCharCode(34) + value + String.fromCharCode(34) + "...");
 try {
 const path = remoteChildPath(currentPath, value);
 await invoke(useNativeSftp ? "sftp_native_mkdir" : "sftp_mkdir", {
@@ -538,8 +539,8 @@ path,
 credentialRef: connection.credentialRef,
 ...(useNativeSftp ? { sessionId: nativeSessionId } : {}),
 });
-setTransferStatus('Created folder "' + value + '"');
 await loadPath(currentPath);
+setTransferStatus('Created folder "' + value + '"');
 } catch (reason) {
 setError(String(reason));
 } finally {
@@ -551,6 +552,7 @@ if (modal === "rename") {
 if (selectedEntries.length !== 1) return;
 const entry = selectedEntries[0];
 setTransferState("renaming");
+setTransferStatus("Renaming " + String.fromCharCode(34) + entry.name + String.fromCharCode(34) + " to " + String.fromCharCode(34) + value + String.fromCharCode(34) + "...");
 try {
 const destination = remoteChildPath(parentPath(entry.path), value);
 await invoke(useNativeSftp ? "sftp_native_rename_entry" : "sftp_rename_entry", {
@@ -562,8 +564,8 @@ destination,
 credentialRef: connection.credentialRef,
 ...(useNativeSftp ? { sessionId: nativeSessionId } : {}),
 });
-setTransferStatus('Renamed "' + entry.name + '" to "' + value + '"');
 await loadPath(currentPath);
+setTransferStatus('Renamed "' + entry.name + '" to "' + value + '"');
 } catch (reason) {
 setError(String(reason));
 } finally {
@@ -573,6 +575,7 @@ return;
 }
 if (modal === "move") {
 setTransferState("moving");
+setTransferStatus(selectedEntries.length === 1 ? "Moving " + String.fromCharCode(34) + selectedEntries[0].name + String.fromCharCode(34) + " to " + String.fromCharCode(34) + value + String.fromCharCode(34) + "..." : "Moving " + String(selectedEntries.length) + " items to " + String.fromCharCode(34) + value + String.fromCharCode(34) + "...");
 try {
 const count = await invoke<number>("sftp_move_entries", {
 host: connection.host,
@@ -582,8 +585,8 @@ destination: value,
 items: selectedEntries.map(({ path, name, isDir }) => ({ path, name, isDir })),
 credentialRef: connection.credentialRef,
 });
-setTransferStatus("Moved " + String(count) + (count === 1 ? " item" : " items"));
 await loadPath(currentPath);
+setTransferStatus("Moved " + String(count) + (count === 1 ? " item" : " items"));
 } catch (reason) {
 setError(String(reason));
 } finally {
@@ -593,6 +596,7 @@ return;
 }
 if (modal === "chmod") {
 setTransferState("chmodding");
+setTransferStatus(selectedEntries.length === 1 ? "Changing permissions for " + String.fromCharCode(34) + selectedEntries[0].name + String.fromCharCode(34) + " to " + value + "..." : "Changing permissions for " + String(selectedEntries.length) + " items to " + value + "...");
 try {
 const count = await invoke<number>("sftp_chmod_entries", {
 host: connection.host,
@@ -602,8 +606,8 @@ mode: value,
 items: selectedEntries.map(({ path, name, isDir }) => ({ path, name, isDir })),
 credentialRef: connection.credentialRef,
 });
-setTransferStatus("Changed permissions on " + String(count) + (count === 1 ? " item" : " items"));
 await loadPath(currentPath);
+setTransferStatus("Changed permissions on " + String(count) + (count === 1 ? " item" : " items"));
 } catch (reason) {
 setError(String(reason));
 } finally {
@@ -613,6 +617,7 @@ return;
 }
 if (modal === "delete") {
 setTransferState("deleting");
+setTransferStatus(selectedEntries.length === 1 ? "Deleting " + String.fromCharCode(34) + selectedEntries[0].name + String.fromCharCode(34) + "..." : "Deleting " + String(selectedEntries.length) + " items...");
 try {
 const count = await invoke<number>("sftp_delete_entries", {
 host: connection.host,
@@ -621,8 +626,8 @@ user: connection.user,
 items: selectedEntries.map(({ path, name, isDir }) => ({ path, name, isDir })),
 credentialRef: connection.credentialRef,
 });
-setTransferStatus("Deleted " + String(count) + (count === 1 ? " item" : " items"));
 await loadPath(currentPath);
+setTransferStatus("Deleted " + String(count) + (count === 1 ? " item" : " items"));
 } catch (reason) {
 setError(String(reason));
 } finally {
