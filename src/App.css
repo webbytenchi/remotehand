@@ -19,7 +19,7 @@ select {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
+  padding: 0 20px 0 10px;
   border-bottom: 1px solid #1b212c;
   background: #0b0f15;
 }
@@ -29,8 +29,8 @@ select {
   gap: 12px;
 }
 .brand-mark {
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   display: block;
   object-fit: contain;
 }
