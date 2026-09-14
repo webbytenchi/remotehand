@@ -659,10 +659,22 @@ title="Toggle theme"
 {localOs === "windows" ? (
 <>
 <button className="sidebar-action" type="button" onClick={() => addTerminal(undefined, "powershell")} title="PowerShell">
-<span className="sidebar-icon">PS</span><span className="sidebar-label">PowerShell</span>
+<span className="sidebar-icon" aria-hidden="true">
+<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+<rect x="2.5" y="3.5" width="15" height="13" rx="2" />
+<path d="M6 7l3 3-3 3" />
+<path d="M11 13h3" />
+</svg>
+</span><span className="sidebar-label">PowerShell</span>
 </button>
 <button className="sidebar-action" type="button" onClick={() => addTerminal(undefined, "cmd")} title="Command Prompt">
-<span className="sidebar-icon">CMD</span><span className="sidebar-label">Command Prompt</span>
+<span className="sidebar-icon" aria-hidden="true">
+<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+<rect x="2.5" y="3.5" width="15" height="13" rx="2" />
+<path d="M6 8l2.5 2L6 12" />
+<path d="M10.5 12h3.5" />
+</svg>
+</span><span className="sidebar-label">Command Prompt</span>
 </button>
 </>
 ) : (
