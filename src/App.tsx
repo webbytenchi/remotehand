@@ -35,15 +35,16 @@ connections?: Connection[];
 function WelcomePanel() {
 return (
 <section className="panel-content welcome-panel">
-<h1>Workspace Shell</h1>
+<h1>RemoteHand</h1>
 <p>
-RemoteHand now has a dockable workspace with tabs, splits, popouts,
-keyboard navigation, layout history, and local persistence.
+Your portable remote workstation manager. Work with local terminals and remote systems
+from one dockable workspace, with SSH, SFTP, saved credentials, and persistent layouts.
 </p>
 <div className="feature-list">
-<div><strong>Dockable panels</strong><span>Arrange tools into tabs, splits, floating windows, or popouts.</span></div>
-<div><strong>Persistent layout</strong><span>Your workspace arrangement and theme restore locally.</span></div>
-<div><strong>Keyboard friendly</strong><span>Use Dockview navigation plus Ctrl/Cmd+K for the command palette.</span></div>
+<div><strong>Local terminals</strong><span>Launch the shells available on the computer running RemoteHand.</span></div>
+<div><strong>Remote connections</strong><span>Connect to remote systems over SSH and keep your hosts organized.</span></div>
+<div><strong>SFTP and credentials</strong><span>Browse and transfer remote files while keeping saved secrets in the local vault.</span></div>
+<div><strong>Flexible workspace</strong><span>Arrange tools into tabs, splits, floating windows, or popouts and restore your layout later.</span></div>
 </div>
 </section>
 );
