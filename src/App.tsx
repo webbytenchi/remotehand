@@ -906,6 +906,7 @@ value={settings.terminalTheme}
 onChange={(event) =>
 setSettings((current) => ({ ...current, terminalTheme: event.target.value as TerminalTheme }))
 }
+>
 
 <option value="comfort">RemoteHand Comfort</option>
 <option value="classic">RemoteHand Classic</option>
