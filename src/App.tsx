@@ -26,6 +26,7 @@ type Settings = { theme: ThemeMode };
 type WorkspaceLayout = Parameters<DockviewApi["fromJSON"]>[0];
 const WORKSPACE_KEY = "remotehand.workspace";
 const THEME_KEY = "remotehand.theme";
+const SIDEBAR_COLLAPSED_KEY = "remotehand.sidebarCollapsed";
 const initialConnections: Connection[] = [];
 type ConnectionsPanelParams = {
 connections?: Connection[];
@@ -261,6 +262,7 @@ const [themeMode, setThemeMode] = useState<ThemeMode>(() =>
 const [settingsLoaded, setSettingsLoaded] = useState(() => !isTauri());
 const settingsPersistenceEnabledRef = useRef(true);
 const [paletteOpen, setPaletteOpen] = useState(false);
+const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true");
 const [paletteQuery, setPaletteQuery] = useState("");
 const [workspaceReady, setWorkspaceReady] = useState(false);
 const apiRef = useRef<DockviewApi | null>(null);
@@ -423,8 +425,9 @@ apiRef.current?.addPanel({
 id: `connections-${Date.now()}`,
 component: "connections",
 title: "Connections",
+params: { connections },
 });
-}, []);
+}, [connections]);
 const popoutActive = useCallback(async () => {
 const api = apiRef.current;
 const panel = api?.activePanel;
@@ -457,9 +460,10 @@ api.addPanel({
 id: "connections",
 component: "connections",
 title: "Connections",
+params: { connections },
 position: { referencePanel: "welcome", direction: "right" },
 });
-}, []);
+}, [connections]);
 useEffect(() => {
 if (!isTauri()) return;
 void invoke<Connection[]>("load_connections")
@@ -498,6 +502,9 @@ void invoke("save_settings", { settings: { theme: themeMode } satisfies Settings
 console.error("Failed to save settings", error),
 );
 }, [themeMode, settingsLoaded]);
+useEffect(() => {
+localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(sidebarCollapsed));
+}, [sidebarCollapsed]);
 useEffect(() => {
 const api = apiRef.current;
 if (!api) return;
@@ -635,45 +642,41 @@ title="Toggle theme"
 <span className="phase-badge">Milestone 3</span>
 </div>
 </header>
-<section className="workspace">
-<aside className="sidebar">
+<section className={"workspace" + (sidebarCollapsed ? " sidebar-collapsed" : "")}>
+<aside className="sidebar" aria-label="Workspace tools">
+<div className="sidebar-title-row">
 <div className="sidebar-heading">Workspace</div>
-<button className="sidebar-action" type="button" onClick={() => addTerminal()}>
-<span>⌘</span>Terminal
+<button className="sidebar-toggle" type="button" onClick={() => setSidebarCollapsed((value) => !value)} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}>
+<span>{sidebarCollapsed ? "›" : "‹"}</span>
 </button>
-<button className="sidebar-action" type="button" onClick={addConnections}>
-<span>◈</span>Connections
+</div>
+<button className="sidebar-action" type="button" onClick={() => addTerminal()} title="Terminal">
+<span className="sidebar-icon">⌘</span><span className="sidebar-label">Terminal</span>
 </button>
-<button className="sidebar-action" type="button" onClick={() => addTerminal("right")}>
-<span>⇥</span>Split right
+<button className="sidebar-action" type="button" onClick={addConnections} title="Connections">
+<span className="sidebar-icon">◈</span><span className="sidebar-label">Connections</span>
 </button>
-<button className="sidebar-action" type="button" onClick={() => addTerminal("below")}>
-<span>⇣</span>Split below
+<button className="sidebar-action" type="button" onClick={() => addTerminal("right")} title="Split right">
+<span className="sidebar-icon">⇥</span><span className="sidebar-label">Split right</span>
 </button>
-<button className="sidebar-action" type="button" onClick={popoutActive}>
-<span>↗</span>Pop out active
+<button className="sidebar-action" type="button" onClick={() => addTerminal("below")} title="Split below">
+<span className="sidebar-icon">⇣</span><span className="sidebar-label">Split below</span>
+</button>
+<button className="sidebar-action" type="button" onClick={popoutActive} title="Pop out active">
+<span className="sidebar-icon">↗</span><span className="sidebar-label">Pop out active</span>
 </button>
 
 <div className="sidebar-divider" />
 <div className="sidebar-heading">Layout</div>
-<div className="sidebar-row">
-<button className="mini-action" type="button" onClick={undoLayout}>Undo</button>
-<button className="mini-action" type="button" onClick={redoLayout}>Redo</button>
-</div>
-<button className="new-connection" type="button" onClick={resetLayout}>Reset layout</button>
-
-<div className="sidebar-divider" />
-<div className="sidebar-heading">Connections</div>
-{connections.map((connection) => (
-<div className="sidebar-connection" key={connection.id}>
-<span className="status-dot" />
-<div>
-<strong>{connection.name}</strong>
-<small>{connection.host}</small>
-</div>
-</div>
-))}
-<button className="new-connection" type="button" onClick={addConnections}>+ New SSH connection</button>
+<button className="sidebar-action" type="button" onClick={undoLayout} title="Undo layout change">
+<span className="sidebar-icon">↶</span><span className="sidebar-label">Undo</span>
+</button>
+<button className="sidebar-action" type="button" onClick={redoLayout} title="Redo layout change">
+<span className="sidebar-icon">↷</span><span className="sidebar-label">Redo</span>
+</button>
+<button className="sidebar-action" type="button" onClick={resetLayout} title="Reset layout">
+<span className="sidebar-icon">⟳</span><span className="sidebar-label">Reset layout</span>
+</button>
 </aside>
 
 <section className="canvas">
