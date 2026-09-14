@@ -50,10 +50,6 @@ params,
 }: IDockviewPanelProps<TerminalParams>) {
 const hostRef = useRef<HTMLDivElement>(null);
 const terminalRef = useRef<Terminal | null>(null);
-const outputRef = useRef("");
-const [searchOpen, setSearchOpen] = useState(false);
-const [searchQuery, setSearchQuery] = useState("");
-const [status, setStatus] = useState(params?.ssh ? "Connecting SSH..." : "Starting local shell...");
 const [rightClickPaste, setRightClickPaste] = useState(true);
 const [confirmMultiline, setConfirmMultiline] = useState(true);
 const sessionId = api.id;
@@ -87,7 +83,6 @@ terminal.writeln(
 "A Tauri desktop runtime is required for terminal sessions.",
 );
 terminal.writeln("Run: npm run tauri dev");
-setStatus("Desktop runtime required");
 
 return () => {
 terminal.dispose();
@@ -119,10 +114,6 @@ unlistenOutput = await listen<TerminalOutputEvent>(
 "terminal-output",
 (event) => {
 if (event.payload.sessionId !== sessionId) return;
-outputRef.current += event.payload.data;
-if (outputRef.current.length > 2_000_000) {
-outputRef.current = outputRef.current.slice(-1_000_000);
-}
 terminal.write(event.payload.data);
 },
 );
@@ -137,7 +128,6 @@ unlistenExit = await listen<TerminalExitEvent>(
 (event) => {
 if (event.payload.sessionId !== sessionId) return;
 terminal.writeln("\r\n[RemoteHand] shell exited.");
-setStatus("Exited");
 },
 );
 
@@ -174,13 +164,6 @@ unlistenExit?.();
 return;
 }
 
-setStatus(
-ssh
-? "SSH " + ssh.user + "@" + ssh.host + ":" + ssh.port
-: shell === "default"
-? "Local shell"
-: shell,
-);
 
 resizeObserver = new ResizeObserver(() => {
 const previousCols = terminal.cols;
@@ -202,7 +185,6 @@ void start().catch((error) => {
 terminal.writeln(
 "\r\n[RemoteHand] failed to start local terminal: " + String(error),
 );
-setStatus("Start failed");
 });
 
 return () => {
@@ -261,30 +243,13 @@ terminalRef.current?.focus();
 .catch(() => undefined);
 };
 
-const onKeyDown = (event: KeyboardEvent) => {
-if (
-(event.ctrlKey || event.metaKey) &&
-event.key.toLowerCase() === "f"
-) {
-event.preventDefault();
-setSearchOpen(true);
-}
-
-if (event.key === "Escape" && searchOpen) {
-event.preventDefault();
-setSearchOpen(false);
-terminalRef.current?.focus();
-}
-};
 
 host.addEventListener("contextmenu", onContextMenu);
-window.addEventListener("keydown", onKeyDown);
 
 return () => {
 host.removeEventListener("contextmenu", onContextMenu);
-window.removeEventListener("keydown", onKeyDown);
 };
-}, [confirmMultiline, rightClickPaste, searchOpen, sessionId]);
+}, [confirmMultiline, rightClickPaste, sessionId]);
 const pasteClipboard = async () => {
 if (!isTauri()) return;
 const text = await navigator.clipboard.readText();
@@ -304,30 +269,9 @@ return;
 await writeTerminal(sessionId, text);
 terminalRef.current?.focus();
 };
-const search = () => {
-const query = searchQuery.trim();
-const terminal = terminalRef.current;
-if (!query || !terminal) return;
-const haystack = outputRef.current.toLocaleLowerCase();
-const index = haystack.lastIndexOf(query.toLocaleLowerCase());
-
-if (index < 0) {
-setStatus("No match for " + query);
-return;
-}
-
-const row = Math.max(
-0,
-outputRef.current.slice(0, index).split("\n").length - 1,
-);
-terminal.scrollToLine(row);
-setStatus("Found " + query);
-};
 return (
 <section className="local-terminal-panel">
 <div className="terminal-toolbar">
-<span className="terminal-status">{status}</span>
-<span className="terminal-shell">{ssh ? "ssh" : shell}</span>
 <label className="terminal-option" title="Toggle right-click paste behavior">
 <input
 type="checkbox"
@@ -354,42 +298,8 @@ title="Paste clipboard"
 Paste
 </button>
 
-<button
-type="button"
-onClick={() => setSearchOpen((open) => !open)}
-title="Search terminal output (Ctrl/Cmd+F)"
->
-Search
-</button>
 </div>
 
-{searchOpen ? (
-<form
-className="terminal-search"
-onSubmit={(event) => {
-event.preventDefault();
-search();
-}}
->
-<input
-autoFocus
-aria-label="Search terminal output"
-value={searchQuery}
-onChange={(event) => setSearchQuery(event.target.value)}
-placeholder="Find in terminal..."
-/>
-<button type="submit">Find</button>
-<button
-type="button"
-onClick={() => {
-setSearchOpen(false);
-terminalRef.current?.focus();
-}}
->
-Close
-</button>
-</form>
-) : null}
 
 <div
 ref={hostRef}
