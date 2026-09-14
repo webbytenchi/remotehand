@@ -602,10 +602,15 @@ void invoke("terminal_close", { sessionId }).catch(() => undefined);
 setWorkspaceReady(true);
 };
 const commands = [
-{ label: "New terminal", hint: "Open tab", run: () => addTerminal() },
+...(localOs === "windows"
+? [
 { label: "New PowerShell", hint: "Local", run: () => addTerminal(undefined, "powershell") },
 { label: "New Command Prompt", hint: "Local", run: () => addTerminal(undefined, "cmd") },
 { label: "New WSL terminal", hint: "Local", run: () => addTerminal(undefined, "wsl") },
+]
+: [
+{ label: "New terminal", hint: "Local", run: () => addTerminal() },
+]),
 { label: "Split terminal right", hint: "Split", run: () => addTerminal("right") },
 { label: "Split terminal below", hint: "Split", run: () => addTerminal("below") },
 { label: "Open connections", hint: "Panel", run: addConnections },
