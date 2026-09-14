@@ -1178,33 +1178,41 @@ grid-template-columns: 1fr auto;
 .sftp-action-toolbar {
 display: flex;
 align-items: center;
-gap: 6px;
-padding: 7px;
+gap: 3px;
+width: max-content;
+max-width: 100%;
+padding: 5px;
 border: 1px solid #222c39;
-border-radius: 8px;
+border-radius: 10px;
 background: #090d13;
+box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 }
-.sftp-action-toolbar button {
+.sftp-action-toolbar .sftp-icon-action {
 display: inline-flex;
 align-items: center;
-gap: 6px;
-border: 1px solid #2e3c4f;
+justify-content: center;
+width: 34px;
+height: 34px;
+padding: 0;
+border: 1px solid transparent;
 border-radius: 7px;
-background: #111925;
+background: transparent;
 color: #c5cfdb;
-padding: 6px 9px;
 cursor: pointer;
 }
-.sftp-action-toolbar button:hover:not(:disabled) {
+.sftp-action-toolbar .sftp-icon-action:hover:not(:disabled),
+.sftp-action-toolbar .sftp-icon-action[aria-expanded="true"] {
+border-color: #33465e;
 background: #182536;
+color: #eef4fb;
 }
 .sftp-action-toolbar button:disabled {
-opacity: 0.42;
+opacity: 0.38;
 cursor: default;
 }
 .sftp-action-toolbar svg {
-width: 16px;
-height: 16px;
+width: 17px;
+height: 17px;
 fill: none;
 stroke: currentColor;
 stroke-width: 1.8;
@@ -1213,6 +1221,62 @@ stroke-linejoin: round;
 }
 .sftp-action-toolbar .sftp-danger-action {
 color: #efaaaa;
+}
+.sftp-action-toolbar .sftp-danger-action:hover:not(:disabled) {
+border-color: #683b41;
+background: #2a171b;
+color: #ffb3b3;
+}
+.sftp-toolbar-separator {
+width: 1px;
+height: 22px;
+margin: 0 3px;
+background: #273442;
+}
+.sftp-more {
+position: relative;
+display: flex;
+}
+.sftp-more-menu {
+position: absolute;
+top: calc(100% + 7px);
+right: 0;
+z-index: 30;
+display: grid;
+gap: 2px;
+min-width: 184px;
+padding: 5px;
+border: 1px solid #2d3948;
+border-radius: 9px;
+background: #0d131c;
+box-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
+}
+.sftp-action-toolbar .sftp-more-menu button {
+display: flex;
+align-items: center;
+width: 100%;
+height: auto;
+padding: 8px 10px;
+border: 0;
+border-radius: 6px;
+background: transparent;
+color: #cbd4df;
+font: inherit;
+text-align: left;
+cursor: pointer;
+}
+.sftp-action-toolbar .sftp-more-menu button:hover {
+background: #182536;
+color: #f3f7fb;
+}
+html[data-theme="light"] .sftp-action-toolbar {
+background: #ffffff;
+box-shadow: 0 8px 24px rgba(44, 56, 72, 0.12);
+}
+html[data-theme="light"] .sftp-more-menu {
+border-color: #c9d2dc;
+background: #ffffff;
+box-shadow: 0 12px 28px rgba(44, 56, 72, 0.18);
 }
 .sftp-selection-summary {
 margin-left: auto;
@@ -1248,10 +1312,10 @@ html[data-theme="light"] .sftp-action-toolbar {
 background: #ffffff;
 border-color: #c7ced8;
 }
-html[data-theme="light"] .sftp-action-toolbar button {
-background: #f5f7fa;
+html[data-theme="light"] .sftp-action-toolbar .sftp-icon-action {
+background: transparent;
 color: #29313d;
-border-color: #c7ced8;
+border-color: transparent;
 }
 @media (max-width: 760px) {
 .sftp-action-toolbar {

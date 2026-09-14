@@ -61,6 +61,7 @@ pub fn terminal_start(
     shell: String,
     rows: u16,
     cols: u16,
+    initial_command: Option<String>,
 ) -> Result<(), String> {
     let mut sessions = state
         .sessions
@@ -212,6 +213,7 @@ pub fn ssh_start(
     user: String,
     rows: u16,
     cols: u16,
+    initial_command: Option<String>,
 ) -> Result<(), String> {
     let host = host.trim();
     let user = user.trim();
@@ -244,7 +246,17 @@ pub fn ssh_start(
     let mut command = CommandBuilder::new("ssh");
     command.arg("-p");
     command.arg(port.max(1).to_string());
+    let initial_command = initial_command
+        .as_deref()
+        .map(str::trim)
+        .filter(|command| !command.is_empty());
+    if initial_command.is_some() {
+        command.arg("-t");
+    }
     command.arg(format!("{user}@{host}"));
+    if let Some(initial_command) = initial_command {
+        command.arg(format!("{initial_command} && exec ${{SHELL:-/bin/sh}} -l"));
+    }
 
     let child = pair
         .slave

@@ -860,6 +860,77 @@ pub async fn sftp_download_entries(
     .map_err(|error| format!("SFTP task failed: {error}"))?
 }
 #[tauri::command]
+pub async fn sftp_mkdir(
+    host: String,
+    port: u16,
+    user: String,
+    path: String,
+    credential_ref: Option<String>,
+    vault_state: State<'_, VaultState>,
+) -> Result<(), String> {
+    let path = path.trim().to_string();
+    if path.is_empty() {
+        return Err("remote folder path is required".to_string());
+    }
+    let password = password_for_credential(&vault_state, credential_ref.as_deref())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let remote = quote_batch_path(&path)?;
+        run_sftp_batch(
+            host,
+            port,
+            user,
+            password,
+            format!(
+                "mkdir {remote}
+"
+            ),
+            "mkdir",
+        )?;
+        log::info!("SFTP mkdir completed");
+        Ok(())
+    })
+    .await
+    .map_err(|error| format!("SFTP task failed: {error}"))?
+}
+
+#[tauri::command]
+pub async fn sftp_rename_entry(
+    host: String,
+    port: u16,
+    user: String,
+    source: String,
+    destination: String,
+    credential_ref: Option<String>,
+    vault_state: State<'_, VaultState>,
+) -> Result<(), String> {
+    let source = source.trim().to_string();
+    let destination = destination.trim().to_string();
+    if source.is_empty() || destination.is_empty() {
+        return Err("remote source and destination are required".to_string());
+    }
+    let password = password_for_credential(&vault_state, credential_ref.as_deref())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let source = quote_batch_path(&source)?;
+        let destination = quote_batch_path(&destination)?;
+        run_sftp_batch(
+            host,
+            port,
+            user,
+            password,
+            format!(
+                "rename {source} {destination}
+"
+            ),
+            "rename",
+        )?;
+        log::info!("SFTP rename completed");
+        Ok(())
+    })
+    .await
+    .map_err(|error| format!("SFTP task failed: {error}"))?
+}
+
+#[tauri::command]
 pub async fn sftp_move_entries(
     host: String,
     port: u16,

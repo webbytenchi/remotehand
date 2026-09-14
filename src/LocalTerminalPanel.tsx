@@ -8,6 +8,7 @@ import "@xterm/xterm/css/xterm.css";
 type LocalShell = "default" | "powershell" | "cmd" | "wsl";
 type TerminalParams = {
 shell?: LocalShell;
+initialCommand?: string;
 ssh?: {
 host: string;
 port: number;
@@ -58,6 +59,7 @@ const [confirmMultiline, setConfirmMultiline] = useState(true);
 const sessionId = api.id;
 const shell = params?.shell ?? "default";
 const ssh = params?.ssh;
+const initialCommand = params?.initialCommand;
 useEffect(() => {
 const host = hostRef.current;
 if (!host) return;
@@ -155,6 +157,7 @@ port: ssh.port,
 user: ssh.user,
 rows: terminal.rows,
 cols: terminal.cols,
+initialCommand,
 });
 } else {
 await invoke("terminal_start", {
@@ -212,7 +215,7 @@ unlistenExit?.();
 terminal.dispose();
 terminalRef.current = null;
 };
-}, [sessionId, shell, ssh]);
+}, [initialCommand, sessionId, shell, ssh]);
 useEffect(() => {
 const observer = new MutationObserver(() => {
 if (terminalRef.current) {

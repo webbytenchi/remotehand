@@ -51,6 +51,8 @@ type TransferState =
 | "idle"
 | "uploading"
 | "downloading"
+| "creating"
+| "renaming"
 | "moving"
 | "chmodding"
 | "deleting";
@@ -107,6 +109,7 @@ const [transferState, setTransferState] = useState<TransferState>("idle");
 const [transferStatus, setTransferStatus] = useState("");
 const [liveTransfer, setLiveTransfer] = useState<LiveTransfer | null>(null);
 const [cancelRequested, setCancelRequested] = useState(false);
+const [moreOpen, setMoreOpen] = useState(false);
 const transferStartedAtRef = useRef<{ transferId: string; time: number } | null>(null);
 const nativeSessionId = useRef(crypto.randomUUID()).current;
 const useNativeSftp = Boolean(connection?.credentialRef);
@@ -416,6 +419,120 @@ setCancelRequested(false);
 setError(String(reason));
 }
 }
+async function createFolder() {
+if (!listing || needsVaultUnlock || transferring || loading) return;
+const name = window.prompt("New folder name:");
+if (!name?.trim()) return;
+const folderName = name.trim();
+if (folderName === "." || folderName === ".." || folderName.includes("/") || folderName.includes(String.fromCharCode(92))) {
+setError("Folder name cannot contain path separators.");
+return;
+}
+setTransferState("creating");
+setError("");
+setTransferStatus("");
+try {
+const path = remoteChildPath(currentPath, folderName);
+await invoke(useNativeSftp ? "sftp_native_mkdir" : "sftp_mkdir", {
+host: connection.host,
+port: connection.port,
+user: connection.user,
+path,
+credentialRef: connection.credentialRef,
+...(useNativeSftp ? { sessionId: nativeSessionId } : {}),
+});
+setTransferStatus('Created folder "' + folderName + '"');
+await loadPath(currentPath);
+} catch (reason) {
+setError(String(reason));
+} finally {
+setTransferState("idle");
+}
+}
+
+async function renameSelected() {
+if (selectedEntries.length !== 1 || transferring || loading) return;
+const entry = selectedEntries[0];
+const name = window.prompt("Rename item:", entry.name);
+if (!name?.trim() || name.trim() === entry.name) return;
+const nextName = name.trim();
+if (nextName === "." || nextName === ".." || nextName.includes("/") || nextName.includes(String.fromCharCode(92))) {
+setError("Name cannot contain path separators.");
+return;
+}
+setTransferState("renaming");
+setError("");
+setTransferStatus("");
+try {
+const destination = remoteChildPath(parentPath(entry.path), nextName);
+await invoke(useNativeSftp ? "sftp_native_rename_entry" : "sftp_rename_entry", {
+host: connection.host,
+port: connection.port,
+user: connection.user,
+source: entry.path,
+destination,
+credentialRef: connection.credentialRef,
+...(useNativeSftp ? { sessionId: nativeSessionId } : {}),
+});
+setTransferStatus('Renamed "' + entry.name + '" to "' + nextName + '"');
+await loadPath(currentPath);
+} catch (reason) {
+setError(String(reason));
+} finally {
+setTransferState("idle");
+}
+}
+
+function showProperties() {
+setMoreOpen(false);
+const entry = selectedEntries.length === 1 ? selectedEntries[0] : null;
+const details = entry
+? [
+"Name: " + entry.name,
+"Path: " + entry.path,
+"Type: " + (entry.isDir ? "Folder" : "File"),
+"Size: " + (entry.isDir ? "—" : formatSize(entry.size)),
+"Permissions: " + entry.permissions,
+].join("\n")
+: [
+"Path: " + currentPath,
+"Type: Folder",
+"Selected items: " + String(selectedEntries.length),
+].join("\n");
+window.alert(details);
+}
+
+async function copyPath() {
+setMoreOpen(false);
+const value = selectedEntries.length === 1 ? selectedEntries[0].path : currentPath;
+try {
+await navigator.clipboard.writeText(value);
+setTransferStatus("Copied remote path");
+setError("");
+} catch (reason) {
+setError("Could not copy remote path: " + String(reason));
+}
+}
+
+function openTerminalHere() {
+setMoreOpen(false);
+const escapedPath = currentPath.replaceAll("'", "'\\''");
+props.containerApi.addPanel({
+id: "ssh-sftp-" + Date.now(),
+component: "terminal",
+title: connection.name,
+params: {
+ssh: {
+host: connection.host,
+port: connection.port,
+user: connection.user,
+name: connection.name,
+},
+initialCommand: "cd '" + escapedPath + "'",
+},
+});
+}
+
 async function moveSelected() {
 if (selectedEntries.length === 0 || transferring || loading) return;
 const destination = window.prompt("Move selected items to remote directory:", currentPath);
@@ -521,11 +638,25 @@ Refresh
 </div>
 {listing && !needsVaultUnlock ? (
 <div className="sftp-action-toolbar" role="toolbar" aria-label="SFTP file actions">
-<button type="button" title="Choose files to upload" aria-label="Choose files to upload" onClick={() => void chooseUploadFiles()} disabled={!listing || needsVaultUnlock || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0-5 5m5-5 5 5M5 20h14"/></svg><span>{transferState === "uploading" ? "Working…" : "Upload"}</span></button>
-<button type="button" title="Download selected files and folders" aria-label="Download selected files and folders" onClick={() => void downloadFiles()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12m0 0 5-5m-5 5-5-5M5 20h14"/></svg><span>{transferState === "downloading" ? "Working…" : "Download"}</span></button>
-<button type="button" title="Move selected items" aria-label="Move selected items" onClick={() => void moveSelected()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-4-4 4 4-4 4M9 8 5 12l4 4"/></svg><span>{transferState === "moving" ? "Working…" : "Move"}</span></button>
-<button type="button" title="Change permissions" aria-label="Change permissions" onClick={() => void chmodSelected()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 11V8a4 4 0 0 1 8 0v3M6 11h12v9H6z"/></svg><span>{transferState === "chmodding" ? "Working…" : "CHMOD"}</span></button>
-<button type="button" className="sftp-danger-action" title="Delete selected items" aria-label="Delete selected items" onClick={() => void deleteSelected()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg><span>{transferState === "deleting" ? "Working…" : "Delete"}</span></button>
+<button className="sftp-icon-action" type="button" title="Upload" aria-label="Upload" onClick={() => void chooseUploadFiles()} disabled={!listing || needsVaultUnlock || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0-5 5m5-5 5 5M5 20h14"/></svg></button>
+<button className="sftp-icon-action" type="button" title="Download" aria-label="Download" onClick={() => void downloadFiles()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12m0 0 5-5m-5 5-5-5M5 20h14"/></svg></button>
+<span className="sftp-toolbar-separator" aria-hidden="true" />
+<button className="sftp-icon-action" type="button" title="New Folder" aria-label="New Folder" onClick={() => void createFolder()} disabled={loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3zM12 12v5m-2.5-2.5h5"/></svg></button>
+<button className="sftp-icon-action" type="button" title="Rename" aria-label="Rename" onClick={() => void renameSelected()} disabled={selectedEntries.length !== 1 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.5-1L19 8.5 15.5 5 5 15.5 4 20ZM13.5 7l3.5 3.5"/></svg></button>
+<button className="sftp-icon-action" type="button" title="Move" aria-label="Move" onClick={() => void moveSelected()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-4-4 4 4-4 4M9 8 5 12l4 4"/></svg></button>
+<button className="sftp-icon-action" type="button" title="CHMOD" aria-label="CHMOD" onClick={() => void chmodSelected()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 11V8a4 4 0 0 1 8 0v3M6 11h12v9H6z"/></svg></button>
+<span className="sftp-toolbar-separator" aria-hidden="true" />
+<button className="sftp-icon-action sftp-danger-action" type="button" title="Delete" aria-label="Delete" onClick={() => void deleteSelected()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg></button>
+<div className="sftp-more">
+<button className="sftp-icon-action" type="button" title="More actions" aria-label="More actions" aria-expanded={moreOpen} onClick={() => setMoreOpen((value) => !value)} disabled={loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button>
+{moreOpen ? (
+<div className="sftp-more-menu" role="menu">
+<button type="button" role="menuitem" onClick={showProperties}>Properties</button>
+<button type="button" role="menuitem" onClick={() => void copyPath()}>Copy Path</button>
+<button type="button" role="menuitem" onClick={openTerminalHere}>Open Terminal Here</button>
+</div>
+) : null}
+</div>
 </div>
 ) : null}
 {liveTransfer ? (() => {

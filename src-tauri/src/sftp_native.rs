@@ -705,6 +705,47 @@ pub async fn sftp_native_list(
 }
 
 #[tauri::command]
+pub async fn sftp_native_mkdir(
+    session_id: String,
+    host: String,
+    port: u16,
+    user: String,
+    path: String,
+    credential_ref: String,
+    state: tauri::State<'_, PersistentSftpState>,
+    vault_state: tauri::State<'_, crate::vault::VaultState>,
+) -> Result<(), String> {
+    let password = password_from_vault(&vault_state, &credential_ref)?;
+    let session = session_for(&state, &session_id, &host, port, &user, &password).await?;
+    let session = session.lock().await;
+    session
+        .sftp
+        .create_dir(path.trim())
+        .await
+        .map_err(|error| map_sftp_error("mkdir", error))
+}
+#[tauri::command]
+pub async fn sftp_native_rename_entry(
+    session_id: String,
+    host: String,
+    port: u16,
+    user: String,
+    source: String,
+    destination: String,
+    credential_ref: String,
+    state: tauri::State<'_, PersistentSftpState>,
+    vault_state: tauri::State<'_, crate::vault::VaultState>,
+) -> Result<(), String> {
+    let password = password_from_vault(&vault_state, &credential_ref)?;
+    let session = session_for(&state, &session_id, &host, port, &user, &password).await?;
+    let session = session.lock().await;
+    session
+        .sftp
+        .rename(source.trim(), destination.trim())
+        .await
+        .map_err(|error| map_sftp_error("rename", error))
+}
+#[tauri::command]
 pub async fn sftp_native_upload_many(
     app: AppHandle,
     session_id: String,
