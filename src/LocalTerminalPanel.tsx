@@ -51,6 +51,7 @@ params,
 }: IDockviewPanelProps<TerminalParams>) {
 const hostRef = useRef<HTMLDivElement>(null);
 const terminalRef = useRef<Terminal | null>(null);
+const fitAddonRef = useRef<FitAddon | null>(null);
 const outputRef = useRef("");
 const [searchOpen, setSearchOpen] = useState(false);
 const [searchQuery, setSearchQuery] = useState("");
@@ -66,11 +67,12 @@ useEffect(() => {
 const host = hostRef.current;
 if (!host) return;
 const fitAddon = new FitAddon();
+fitAddonRef.current = fitAddon;
 const terminal = new Terminal({
 cursorBlink: true,
 convertEol: false,
-fontFamily: ["JetBrains Mono", "Cascadia Code", "Cascadia Mono", "Consolas", "Liberation Mono", "monospace"].join(", "),
-fontSize: 13,
+fontFamily: getComputedStyle(document.documentElement).getPropertyValue("--terminal-font-family").trim() || ["JetBrains Mono", "Cascadia Code", "Cascadia Mono", "Consolas", "Liberation Mono", "monospace"].join(", "),
+fontSize: Number.parseInt(getComputedStyle(document.documentElement).getPropertyValue("--terminal-font-size"), 10) || 13,
 scrollback: 10000,
 theme: getTheme(),
 });
@@ -93,6 +95,7 @@ setStatus("Desktop runtime required");
 return () => {
 terminal.dispose();
 terminalRef.current = null;
+fitAddonRef.current = null;
 };
 }
 
@@ -215,21 +218,39 @@ unlistenOutput?.();
 unlistenExit?.();
 terminal.dispose();
 terminalRef.current = null;
+fitAddonRef.current = null;
 };
 }, [initialCommand, sessionId, shell, ssh]);
 useEffect(() => {
-const observer = new MutationObserver(() => {
-if (terminalRef.current) {
-terminalRef.current.options.theme = getTheme();
+const applyAppearance = () => {
+const terminal = terminalRef.current;
+if (!terminal) return;
+const styles = getComputedStyle(document.documentElement);
+const fontFamily = styles.getPropertyValue("--terminal-font-family").trim();
+const fontSize = Number.parseInt(styles.getPropertyValue("--terminal-font-size"), 10);
+terminal.options.theme = getTheme();
+if (fontFamily) terminal.options.fontFamily = fontFamily;
+if (Number.isFinite(fontSize)) terminal.options.fontSize = fontSize;
+fitAddonRef.current?.fit();
+if (isTauri()) {
+void invoke("terminal_resize", {
+sessionId,
+rows: terminal.rows,
+cols: terminal.cols,
+}).catch(() => undefined);
 }
-});
+};
+const observer = new MutationObserver(applyAppearance);
 observer.observe(document.documentElement, {
 attributes: true,
 attributeFilter: ["data-theme"],
 });
-
-return () => observer.disconnect();
-}, []);
+window.addEventListener("remotehand-appearance-change", applyAppearance);
+return () => {
+observer.disconnect();
+window.removeEventListener("remotehand-appearance-change", applyAppearance);
+};
+}, [sessionId]);
 useEffect(() => {
 const host = hostRef.current;
 if (!host) return;

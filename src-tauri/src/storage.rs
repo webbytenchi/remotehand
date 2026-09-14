@@ -1,14 +1,24 @@
 use serde::{Deserialize, Serialize};
 use std::{env, fs, path::PathBuf};
 #[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(default, rename_all = "camelCase")]
 pub struct Settings {
     pub theme: String,
+    pub color_scheme: String,
+    pub ui_font_family: String,
+    pub ui_font_size: u8,
+    pub terminal_font_family: String,
+    pub terminal_font_size: u8,
 }
 impl Default for Settings {
     fn default() -> Self {
         Self {
             theme: "dark".to_string(),
+            color_scheme: "blue".to_string(),
+            ui_font_family: "Inter".to_string(),
+            ui_font_size: 13,
+            terminal_font_family: "JetBrains Mono".to_string(),
+            terminal_font_size: 13,
         }
     }
 }

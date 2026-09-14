@@ -343,9 +343,8 @@ grid-template-columns: 1fr;
   min-height: 0;
   background: #05070a;
   color: #bcc6d3;
-  font-family:
-    "JetBrains Mono", "Cascadia Code", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
-  font-size: 13px;
+  font-family: var(--terminal-font-family, "JetBrains Mono", "Cascadia Code", "Cascadia Mono", Consolas, "Liberation Mono", monospace);
+  font-size: var(--terminal-font-size, 13px);
 }
 .terminal-output {
   overflow: auto;
@@ -952,7 +951,7 @@ border-radius: 7px;
 padding: 8px 10px;
 background: #090d13;
 color: #9eacbd;
-font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+font-family: var(--terminal-font-family, "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace);
 font-size: 12px;
 text-overflow: ellipsis;
 white-space: nowrap;
@@ -1640,7 +1639,7 @@ height: 20px;
   padding: 12px;
   background: #05070a;
   color: #d5dbe5;
-  font-family: "JetBrains Mono", "Cascadia Code", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  font-family: var(--terminal-font-family, "JetBrains Mono", "Cascadia Code", "Cascadia Mono", Consolas, "Liberation Mono", monospace);
   font-size: 12px;
   line-height: 1.5;
   white-space: pre-wrap;
@@ -1650,4 +1649,160 @@ html[data-theme="light"] .terminal-paste-preview {
   border-color: #c8d0da;
   background: #f4f5f7;
   color: #20242c;
+}
+/* Appearance settings */
+:root {
+  --accent: #70a7e8;
+  --accent-border: #3b5f8d;
+  --accent-surface: #16263a;
+  --accent-surface-hover: #1d3550;
+}
+:root[data-scheme="emerald"] {
+  --accent: #73d6a2;
+  --accent-border: #39785a;
+  --accent-surface: #142c22;
+  --accent-surface-hover: #1a3b2c;
+}
+:root[data-scheme="violet"] {
+  --accent: #b59af0;
+  --accent-border: #67508f;
+  --accent-surface: #261c39;
+  --accent-surface-hover: #33264c;
+}
+:root[data-scheme="amber"] {
+  --accent: #e9bd69;
+  --accent-border: #826332;
+  --accent-surface: #332715;
+  --accent-surface-hover: #44351d;
+}
+:root[data-scheme="neutral"] {
+  --accent: #aeb8c6;
+  --accent-border: #556170;
+  --accent-surface: #20262e;
+  --accent-surface-hover: #2b333d;
+}
+.settings-button {
+  color: var(--accent);
+  border-color: var(--accent-border);
+}
+.settings-button:hover {
+  background: var(--accent-surface);
+}
+.appearance-settings {
+  display: grid;
+  gap: 18px;
+}
+.app-modal:has(.appearance-settings) {
+  width: min(560px, 100%);
+}
+.settings-section-heading {
+  display: grid;
+  gap: 3px;
+}
+.settings-section-heading > span {
+  color: #718094;
+  font-size: 12px;
+}
+.settings-field {
+  display: grid;
+  gap: 8px;
+}
+.settings-field > label,
+.settings-field > span {
+  color: #aeb8c6;
+  font-size: 12px;
+  font-weight: 600;
+}
+.settings-field select {
+  width: 100%;
+  border: 1px solid #2b3747;
+  border-radius: 7px;
+  background: #0d141d;
+  color: #d2dae5;
+  padding: 8px 10px;
+  outline: none;
+}
+.settings-field select:focus {
+  border-color: var(--accent-border);
+}
+.settings-segmented {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.settings-segmented button,
+.settings-stepper button,
+.settings-reset {
+  border: 1px solid #303c4c;
+  border-radius: 7px;
+  background: #111823;
+  color: #c8d1dc;
+  cursor: pointer;
+}
+.settings-segmented button {
+  padding: 8px 10px;
+}
+.settings-segmented button.active {
+  border-color: var(--accent-border);
+  background: var(--accent-surface);
+  color: var(--accent);
+}
+.settings-font-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.settings-font-row > label {
+  grid-column: 1 / -1;
+}
+.settings-stepper {
+  display: grid;
+  grid-template-columns: 32px 58px 32px;
+  align-items: center;
+  gap: 4px;
+}
+.settings-stepper button {
+  height: 36px;
+  padding: 0;
+  font-size: 16px;
+}
+.settings-stepper span {
+  text-align: center;
+  color: #aeb8c6;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.settings-reset {
+  justify-self: start;
+  padding: 8px 11px;
+}
+.settings-reset:hover,
+.settings-stepper button:hover,
+.settings-segmented button:not(.active):hover {
+  background: #182231;
+}
+.modal-button.primary {
+  border-color: var(--accent-border);
+  background: var(--accent-surface);
+  color: var(--accent);
+}
+.modal-button.primary:hover {
+  background: var(--accent-surface-hover);
+}
+html[data-theme="light"] .settings-section-heading > span,
+html[data-theme="light"] .settings-field > label,
+html[data-theme="light"] .settings-field > span,
+html[data-theme="light"] .settings-stepper span {
+  color: #647184;
+}
+html[data-theme="light"] .settings-field select,
+html[data-theme="light"] .settings-segmented button,
+html[data-theme="light"] .settings-stepper button,
+html[data-theme="light"] .settings-reset {
+  background: #ffffff;
+  border-color: #c7ced8;
+  color: #29313d;
+}
+html[data-theme="light"] .settings-segmented button.active {
+  border-color: var(--accent-border);
+  background: var(--accent-surface);
+  color: var(--accent);
 }

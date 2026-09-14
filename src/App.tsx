@@ -22,12 +22,31 @@ port: number;
 user: string;
 credentialRef?: string;
 };
-type ThemeMode = "dark" | "light";
-type Settings = { theme: ThemeMode };
+type ThemeMode = "dark" | "light" | "system";
+type ColorScheme = "blue" | "emerald" | "violet" | "amber" | "neutral";
+type Settings = {
+theme: ThemeMode;
+colorScheme: ColorScheme;
+uiFontFamily: string;
+uiFontSize: number;
+terminalFontFamily: string;
+terminalFontSize: number;
+};
 type WorkspaceLayout = Parameters<DockviewApi["fromJSON"]>[0];
 const WORKSPACE_KEY = "remotehand.workspace";
 const THEME_KEY = "remotehand.theme";
+const SETTINGS_KEY = "remotehand.settings";
 const SIDEBAR_COLLAPSED_KEY = "remotehand.sidebarCollapsed";
+const DEFAULT_SETTINGS: Settings = {
+theme: "dark",
+colorScheme: "blue",
+uiFontFamily: "Inter",
+uiFontSize: 13,
+terminalFontFamily: "JetBrains Mono",
+terminalFontSize: 13,
+};
+const UI_FONT_OPTIONS = ["Inter", "IBM Plex Sans", "Segoe UI", "System Default"] as const;
+const TERMINAL_FONT_OPTIONS = ["JetBrains Mono", "IBM Plex Mono", "Cascadia Mono", "Consolas", "System Monospace"] as const;
 const initialConnections: Connection[] = [];
 type ConnectionsPanelParams = {
 connections?: Connection[];
@@ -304,9 +323,21 @@ onCancel={() => setNotice(null)}
 function App() {
 const [connections, setConnections] = useState(initialConnections);
 const [connectionsLoaded, setConnectionsLoaded] = useState(() => !isTauri());
-const [themeMode, setThemeMode] = useState<ThemeMode>(() =>
-!isTauri() && localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark",
-);
+const [settings, setSettings] = useState<Settings>(() => {
+if (isTauri()) return DEFAULT_SETTINGS;
+const saved = localStorage.getItem(SETTINGS_KEY);
+if (saved) {
+try {
+return { ...DEFAULT_SETTINGS, ...(JSON.parse(saved) as Partial<Settings>) };
+} catch {
+return DEFAULT_SETTINGS;
+}
+}
+const legacyTheme = localStorage.getItem(THEME_KEY);
+return { ...DEFAULT_SETTINGS, theme: legacyTheme === "light" ? "light" : "dark" };
+});
+const [settingsOpen, setSettingsOpen] = useState(false);
+const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("dark");
 const [settingsLoaded, setSettingsLoaded] = useState(() => !isTauri());
 const settingsPersistenceEnabledRef = useRef(true);
 const [paletteOpen, setPaletteOpen] = useState(false);
@@ -535,15 +566,12 @@ console.error("Failed to save connections", error),
 }, [connections, connectionsLoaded]);
 useEffect(() => {
 if (!isTauri()) {
-localStorage.setItem(THEME_KEY, themeMode);
 setSettingsLoaded(true);
 return;
 }
 void invoke<Settings>("load_settings")
-.then((settings) => {
-if (settings.theme === "dark" || settings.theme === "light") {
-setThemeMode(settings.theme);
-}
+.then((saved) => {
+setSettings({ ...DEFAULT_SETTINGS, ...saved });
 setSettingsLoaded(true);
 })
 .catch((error) => {
@@ -552,12 +580,43 @@ console.error("Failed to load settings", error);
 });
 }, []);
 useEffect(() => {
-document.documentElement.dataset.theme = themeMode;
-if (!settingsLoaded || !isTauri() || !settingsPersistenceEnabledRef.current) return;
-void invoke("save_settings", { settings: { theme: themeMode } satisfies Settings }).catch((error) =>
+const media = window.matchMedia("(prefers-color-scheme: dark)");
+const applyAppearance = () => {
+const resolvedTheme =
+settings.theme === "system" ? (media.matches ? "dark" : "light") : settings.theme;
+setResolvedTheme(resolvedTheme);
+document.documentElement.dataset.theme = resolvedTheme;
+document.documentElement.dataset.scheme = settings.colorScheme;
+const uiFamily =
+settings.uiFontFamily === "System Default"
+? 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+: '"' + settings.uiFontFamily + '", ui-sans-serif, system-ui, sans-serif';
+const terminalFamily =
+settings.terminalFontFamily === "System Monospace"
+? 'ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace'
+: '"' + settings.terminalFontFamily + '", ui-monospace, SFMono-Regular, Consolas, monospace';
+document.documentElement.style.setProperty("--ui-font-family", uiFamily);
+document.documentElement.style.setProperty("--ui-font-size", String(settings.uiFontSize) + "px");
+document.documentElement.style.setProperty("--terminal-font-family", terminalFamily);
+document.documentElement.style.setProperty("--terminal-font-size", String(settings.terminalFontSize) + "px");
+window.dispatchEvent(new CustomEvent("remotehand-appearance-change"));
+};
+applyAppearance();
+media.addEventListener("change", applyAppearance);
+return () => media.removeEventListener("change", applyAppearance);
+}, [settings]);
+useEffect(() => {
+if (!settingsLoaded) return;
+if (!isTauri()) {
+localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+localStorage.setItem(THEME_KEY, settings.theme);
+return;
+}
+if (!settingsPersistenceEnabledRef.current) return;
+void invoke("save_settings", { settings }).catch((error) =>
 console.error("Failed to save settings", error),
 );
-}, [themeMode, settingsLoaded]);
+}, [settings, settingsLoaded]);
 useEffect(() => {
 localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(sidebarCollapsed));
 }, [sidebarCollapsed]);
@@ -666,11 +725,6 @@ const commands = [
 { label: "Float active panel", hint: "Layout", run: popoutActive },
 { label: "Undo layout change", hint: "Ctrl/Cmd+Z", run: undoLayout },
 { label: "Redo layout change", hint: "Ctrl/Cmd+Y", run: redoLayout },
-{
-label: themeMode === "dark" ? "Switch to light theme" : "Switch to dark theme",
-hint: "Theme",
-run: () => setThemeMode((value) => (value === "dark" ? "light" : "dark")),
-},
 { label: "Reset workspace layout", hint: "Reset", run: resetLayout },
 ];
 const filteredCommands = commands.filter((command) =>
@@ -688,12 +742,13 @@ return (
 </div>
 <div className="topbar-actions">
 <button
-className="topbar-button icon-button"
+className="topbar-button icon-button settings-button"
 type="button"
-onClick={() => setThemeMode((value) => (value === "dark" ? "light" : "dark"))}
-title="Toggle theme"
+onClick={() => setSettingsOpen(true)}
+title="Settings"
+aria-label="Settings"
 >
-{themeMode === "dark" ? "☀" : "☾"}
+&#9881;
 </button>
 </div>
 </header>
@@ -767,7 +822,7 @@ title="Toggle theme"
 <div className="dockview-host">
 <DockviewReact
 className="remotehand-dockview"
-theme={themeMode === "dark" ? themeDark : themeLight}
+theme={resolvedTheme === "light" ? themeLight : themeDark}
 components={components}
 onReady={handleReady}
 keyboardNavigation
@@ -778,6 +833,93 @@ popoutUrl="popout.html"
 {!workspaceReady && <div className="workspace-loading">Preparing workspace…</div>}
 </section>
 </section>
+<AppModal
+open={settingsOpen}
+title="Settings"
+confirmLabel="Done"
+onConfirm={() => setSettingsOpen(false)}
+onCancel={() => setSettingsOpen(false)}
+focusActions={false}>
+
+<div className="appearance-settings">
+<div className="settings-section-heading">
+<strong>Appearance</strong>
+<span>Customize RemoteHand and terminal typography.</span>
+</div>
+<div className="settings-field">
+<span>Theme</span>
+<div className="settings-segmented">
+{(["dark", "light", "system"] as ThemeMode[]).map((mode) => (
+<button
+key={mode}
+type="button"
+className={settings.theme === mode ? "active" : ""}
+onClick={() => setSettings((current) => ({ ...current, theme: mode }))}
+>
+{mode[0].toUpperCase() + mode.slice(1)}
+</button>
+))}
+</div>
+</div>
+<div className="settings-field">
+<label htmlFor="color-scheme">Color scheme</label>
+<select
+id="color-scheme"
+value={settings.colorScheme}
+onChange={(event) =>
+setSettings((current) => ({ ...current, colorScheme: event.target.value as ColorScheme }))
+}
+>
+<option value="blue">RemoteHand Blue</option>
+<option value="emerald">Emerald</option>
+<option value="violet">Violet</option>
+<option value="amber">Amber</option>
+<option value="neutral">Neutral</option>
+</select>
+</div>
+<div className="settings-field settings-font-row">
+<label htmlFor="ui-font">Interface font</label>
+<select
+id="ui-font"
+value={settings.uiFontFamily}
+onChange={(event) =>
+setSettings((current) => ({ ...current, uiFontFamily: event.target.value }))
+}
+>
+{UI_FONT_OPTIONS.map((font) => <option key={font} value={font}>{font}</option>)}
+</select>
+<div className="settings-stepper" aria-label="Interface font size">
+<button type="button" onClick={() => setSettings((current) => ({ ...current, uiFontSize: Math.max(11, current.uiFontSize - 1) }))}>−</button>
+<span>{settings.uiFontSize} px</span>
+<button type="button" onClick={() => setSettings((current) => ({ ...current, uiFontSize: Math.min(18, current.uiFontSize + 1) }))}>+</button>
+</div>
+</div>
+<div className="settings-field settings-font-row">
+<label htmlFor="terminal-font">Terminal font</label>
+<select
+id="terminal-font"
+value={settings.terminalFontFamily}
+onChange={(event) =>
+setSettings((current) => ({ ...current, terminalFontFamily: event.target.value }))
+}
+>
+{TERMINAL_FONT_OPTIONS.map((font) => <option key={font} value={font}>{font}</option>)}
+</select>
+<div className="settings-stepper" aria-label="Terminal font size">
+<button type="button" onClick={() => setSettings((current) => ({ ...current, terminalFontSize: Math.max(10, current.terminalFontSize - 1) }))}>−</button>
+<span>{settings.terminalFontSize} px</span>
+<button type="button" onClick={() => setSettings((current) => ({ ...current, terminalFontSize: Math.min(24, current.terminalFontSize + 1) }))}>+</button>
+</div>
+</div>
+<button
+type="button"
+className="settings-reset"
+onClick={() => setSettings(DEFAULT_SETTINGS)}>
+
+Reset appearance
+</button>
+</div>
+</AppModal>
 
 {paletteOpen && (
 <div className="palette-backdrop" role="presentation" onMouseDown={() => setPaletteOpen(false)}>
