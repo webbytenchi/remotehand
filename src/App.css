@@ -1806,3 +1806,97 @@ html[data-theme="light"] .settings-segmented button.active {
   background: var(--accent-surface);
   color: var(--accent);
 }
+/* App-wide color scheme accents */
+.sidebar-action,
+.new-connection {
+border-color: var(--accent-border);
+}
+.sidebar-action .sidebar-icon {
+color: var(--accent);
+}
+.sidebar-action:hover,
+.new-connection:hover {
+background: var(--accent-surface);
+border-color: var(--accent);
+}
+.connection-form input:focus,
+.sftp-path:focus {
+border-color: var(--accent);
+}
+.connection-connect,
+.connection-sftp {
+border-color: var(--accent-border);
+background: var(--accent-surface);
+color: var(--accent);
+}
+.connection-connect:hover,
+.connection-sftp:hover {
+background: var(--accent-surface-hover);
+}
+.connection-menu summary {
+border-color: var(--accent-border);
+}
+.connection-menu[open] summary,
+.connection-menu summary:hover {
+background: var(--accent-surface);
+color: var(--accent);
+}
+.connection-menu-popover button:not(.danger):hover {
+background: var(--accent-surface);
+color: var(--accent);
+}
+.mini-action:hover,
+.topbar-button:hover {
+border-color: var(--accent-border);
+background: var(--accent-surface);
+}
+.settings-color-row {
+display: grid;
+grid-template-columns: 1fr 1fr;
+gap: 12px;
+}
+.settings-color-row > label {
+display: grid;
+gap: 8px;
+}
+.settings-color-row > label > span {
+color: #aeb8c6;
+font-size: 12px;
+font-weight: 600;
+}
+.settings-color-control {
+display: grid;
+grid-template-columns: 42px 1fr;
+gap: 8px;
+}
+.settings-color-control input[type="color"] {
+width: 42px;
+height: 36px;
+padding: 2px;
+border: 1px solid #303c4c;
+border-radius: 7px;
+background: #111823;
+cursor: pointer;
+}
+.settings-color-control input[type="text"] {
+min-width: 0;
+border: 1px solid #2b3747;
+border-radius: 7px;
+background: #0d141d;
+color: #d2dae5;
+padding: 8px 10px;
+font-family: var(--terminal-font-family);
+outline: none;
+}
+.settings-color-control input[type="text"]:focus {
+border-color: var(--accent);
+}
+html[data-theme="light"] .settings-color-row > label > span {
+color: #647184;
+}
+html[data-theme="light"] .settings-color-control input[type="color"],
+html[data-theme="light"] .settings-color-control input[type="text"] {
+background: #ffffff;
+border-color: #c7ced8;
+color: #29313d;
+}

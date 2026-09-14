@@ -24,13 +24,15 @@ credentialRef?: string;
 };
 type ThemeMode = "dark" | "light" | "system";
 type ColorScheme = "blue" | "emerald" | "violet" | "amber" | "neutral";
-type TerminalTheme = "comfort" | "classic";
+type TerminalTheme = "comfort" | "classic" | "custom";
 type Settings = {
 theme: ThemeMode;
 colorScheme: ColorScheme;
 uiFontFamily: string;
 uiFontSize: number;
 terminalTheme: TerminalTheme;
+terminalBackground: string;
+terminalForeground: string;
 terminalFontFamily: string;
 terminalFontSize: number;
 };
@@ -45,6 +47,8 @@ colorScheme: "blue",
 uiFontFamily: "Inter",
 uiFontSize: 13,
 terminalTheme: "comfort",
+terminalBackground: "#11151a",
+terminalForeground: "#d8dde6",
 terminalFontFamily: "JetBrains Mono",
 terminalFontSize: 13,
 };
@@ -591,6 +595,8 @@ setResolvedTheme(resolvedTheme);
 document.documentElement.dataset.theme = resolvedTheme;
 document.documentElement.dataset.scheme = settings.colorScheme;
 document.documentElement.dataset.terminalTheme = settings.terminalTheme;
+document.documentElement.style.setProperty("--terminal-background", settings.terminalBackground);
+document.documentElement.style.setProperty("--terminal-foreground", settings.terminalForeground);
 const uiFamily =
 settings.uiFontFamily === "System Default"
 ? 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
@@ -903,14 +909,35 @@ setSettings((current) => ({ ...current, uiFontFamily: event.target.value }))
 <select
 id="terminal-theme"
 value={settings.terminalTheme}
-onChange={(event) =>
-setSettings((current) => ({ ...current, terminalTheme: event.target.value as TerminalTheme }))
-}
->
+onChange={(event) => {
+const terminalTheme = event.target.value as TerminalTheme;
+setSettings((current) => {
+if (terminalTheme === "comfort") return { ...current, terminalTheme, terminalBackground: "#11151a", terminalForeground: "#d8dde6" };
+if (terminalTheme === "classic") return { ...current, terminalTheme, terminalBackground: "#05070a", terminalForeground: "#d5dbe5" };
+return { ...current, terminalTheme };
+});
+}}
 
 <option value="comfort">RemoteHand Comfort</option>
 <option value="classic">RemoteHand Classic</option>
+<option value="custom">Custom</option>
 </select>
+</div>
+<div className="settings-color-row">
+<label>
+<span>Background</span>
+<div className="settings-color-control">
+<input type="color" value={settings.terminalBackground} onChange={(event) => setSettings((current) => ({ ...current, terminalTheme: "custom", terminalBackground: event.target.value }))} />
+<input type="text" value={settings.terminalBackground} maxLength={7} onChange={(event) => setSettings((current) => ({ ...current, terminalTheme: "custom", terminalBackground: event.target.value }))} />
+</div>
+</label>
+<label>
+<span>Foreground</span>
+<div className="settings-color-control">
+<input type="color" value={settings.terminalForeground} onChange={(event) => setSettings((current) => ({ ...current, terminalTheme: "custom", terminalForeground: event.target.value }))} />
+<input type="text" value={settings.terminalForeground} maxLength={7} onChange={(event) => setSettings((current) => ({ ...current, terminalTheme: "custom", terminalForeground: event.target.value }))} />
+</div>
+</label>
 </div>
 <div className="settings-field settings-font-row">
 <label htmlFor="terminal-font">Terminal font</label>

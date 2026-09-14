@@ -25,10 +25,10 @@ type TerminalExitEvent = {
 sessionId: string;
 };
 const COMFORT_THEME = {
-background: "#171a1f",
+background: "#11151a",
 foreground: "#d8dde6",
 cursor: "#d7dde6",
-cursorAccent: "#171a1f",
+cursorAccent: "#11151a",
 selectionBackground: "#3a4658",
 black: "#252a31",
 red: "#e66b72",
@@ -70,9 +70,17 @@ brightCyan: "#55ffff",
 brightWhite: "#ffffff",
 };
 function getTheme() {
-return document.documentElement.dataset.terminalTheme === "classic"
-? CLASSIC_THEME
-: COMFORT_THEME;
+const terminalTheme = document.documentElement.dataset.terminalTheme;
+const baseTheme = terminalTheme === "classic" ? CLASSIC_THEME : COMFORT_THEME;
+const styles = getComputedStyle(document.documentElement);
+const background = styles.getPropertyValue("--terminal-background").trim();
+const foreground = styles.getPropertyValue("--terminal-foreground").trim();
+return {
+...baseTheme,
+background: background || baseTheme.background,
+foreground: foreground || baseTheme.foreground,
+cursorAccent: background || baseTheme.background,
+};
 }
 async function writeTerminal(sessionId: string, data: string) {
 await invoke("terminal_write", { sessionId, data });
