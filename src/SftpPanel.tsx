@@ -83,7 +83,6 @@ const [vaultPassphrase, setVaultPassphrase] = useState("");
 const [unlocking, setUnlocking] = useState(false);
 const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
 const [lastSelectedPath, setLastSelectedPath] = useState<string | null>(null);
-const [uploadPaths, setUploadPaths] = useState<string[]>([]);
 const [transferState, setTransferState] = useState<TransferState>("idle");
 const [transferStatus, setTransferStatus] = useState("");
 const transferring = transferState !== "idle";
@@ -200,45 +199,32 @@ setTransferStatus("");
 setError("");
 }
 async function chooseUploadFiles() {
-if (transferring || loading) return;
+if (!listing || needsVaultUnlock || transferring || loading) return;
 setError("");
 try {
-const paths = await invoke<string[]>("sftp_pick_upload_files");
-if (paths.length > 0) setUploadPaths(paths);
-} catch (reason) {
-setError(String(reason));
-}
-}
-async function uploadFiles() {
-if (uploadPaths.length === 0 || transferring || loading) return;
+const uploadPaths = await invoke<string[]>("sftp_pick_upload_files");
+if (uploadPaths.length === 0) return;
 const seen = new Set<string>();
 const items: TransferItem[] = [];
-
 for (const localPath of uploadPaths) {
 const fileName = fileNameFromLocalPath(localPath);
 if (!fileName) continue;
-
 if (seen.has(fileName)) {
 setError('Multiple selected local files are named "' + fileName + '".');
 return;
 }
 seen.add(fileName);
-
-if (listing?.entries.some((entry) => entry.name === fileName)) {
+if (listing.entries.some((entry) => entry.name === fileName)) {
 setError('A remote entry named "' + fileName + '" already exists.');
 return;
 }
-
 items.push({
 localPath,
 remotePath: remoteChildPath(currentPath, fileName),
 });
 }
-
 if (items.length === 0) return;
-
 setTransferState("uploading");
-setError("");
 setTransferStatus("");
 try {
 const count = await invoke<number>("sftp_upload_many", {
@@ -249,12 +235,12 @@ items,
 credentialRef: connection.credentialRef,
 });
 setTransferStatus("Uploaded " + String(count) + (count === 1 ? " file" : " files"));
-setUploadPaths([]);
 await loadPath(currentPath);
-} catch (reason) {
-setError(String(reason));
 } finally {
 setTransferState("idle");
+}
+} catch (reason) {
+setError(String(reason));
 }
 }
 async function downloadFiles() {
@@ -393,58 +379,28 @@ Refresh
 </button>
 </div>
 </div>
-<div className="sftp-transfer-bar">
-<div className="sftp-transfer-group">
-<span>Upload local files</span>
-<button
-type="button"
-className="sftp-picker-button"
-onClick={() => void chooseUploadFiles()}
-disabled={loading || transferring}
->
-Choose files…
-</button>
-<div className="sftp-transfer-summary" title={uploadPaths.join("\n")}>
-{uploadPaths.length === 0
-? "No files selected"
-: uploadPaths.length === 1
-? uploadPaths[0]
-: String(uploadPaths.length) + " files selected"}
+<div className="sftp-action-toolbar" role="toolbar" aria-label="SFTP file actions">
+<button type="button" title="Choose files to upload" aria-label="Choose files to upload" onClick={() => void chooseUploadFiles()} disabled={!listing || needsVaultUnlock || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0-5 5m5-5 5 5M5 20h14"/></svg><span>{transferState === "uploading" ? "Working…" : "Upload"}</span></button>
+<button type="button" title="Download selected files and folders" aria-label="Download selected files and folders" onClick={() => void downloadFiles()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12m0 0 5-5m-5 5-5-5M5 20h14"/></svg><span>{transferState === "downloading" ? "Working…" : "Download"}</span></button>
+<button type="button" title="Move selected items" aria-label="Move selected items" onClick={() => void moveSelected()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-4-4 4 4-4 4M9 8 5 12l4 4"/></svg><span>{transferState === "moving" ? "Working…" : "Move"}</span></button>
+<button type="button" title="Change permissions" aria-label="Change permissions" onClick={() => void chmodSelected()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 11V8a4 4 0 0 1 8 0v3M6 11h12v9H6z"/></svg><span>{transferState === "chmodding" ? "Working…" : "CHMOD"}</span></button>
+<button type="button" className="sftp-danger-action" title="Delete selected items" aria-label="Delete selected items" onClick={() => void deleteSelected()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg><span>{transferState === "deleting" ? "Working…" : "Delete"}</span></button>
 </div>
-<button
-type="button"
-onClick={() => void uploadFiles()}
-disabled={uploadPaths.length === 0 || loading || transferring}
->
-{transferState === "uploading" ? "Working…" : "Upload"}
-</button>
-</div>
-
-<div className="sftp-transfer-group sftp-download-group">
+{selectedEntries.length > 0 ? (
+<div className="sftp-selected-summary">
 <span>Selected remote items</span>
-<div className="sftp-transfer-summary">
-{selectedEntries.length === 0
-? "No remote items selected"
-: String(selectedEntries.length) +
+<strong>
+{String(selectedEntries.length) +
 (selectedEntries.length === 1 ? " item" : " items") +
-" selected · " +
+" · " +
 String(selectedFileCount) +
 (selectedFileCount === 1 ? " file" : " files") +
 " · " +
 String(selectedFolderCount) +
 (selectedFolderCount === 1 ? " folder" : " folders")}
+</strong>
 </div>
-</div>
-</div>
-
-<div className="sftp-action-toolbar" role="toolbar" aria-label="SFTP file actions">
-<button type="button" title="Choose files to upload" aria-label="Choose files to upload" onClick={() => void chooseUploadFiles()} disabled={loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0-5 5m5-5 5 5M5 20h14"/></svg><span>Upload</span></button>
-<button type="button" title="Download selected files and folders" aria-label="Download selected files and folders" onClick={() => void downloadFiles()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12m0 0 5-5m-5 5-5-5M5 20h14"/></svg><span>{transferState === "downloading" ? "Working…" : "Download"}</span></button>
-<button type="button" title="Move selected items" aria-label="Move selected items" onClick={() => void moveSelected()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-4-4 4 4-4 4M9 8 5 12l4 4"/></svg><span>{transferState === "moving" ? "Working…" : "Move"}</span></button>
-<button type="button" title="Change permissions" aria-label="Change permissions" onClick={() => void chmodSelected()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 11V8a4 4 0 0 1 8 0v3M6 11h12v9H6z"/></svg><span>{transferState === "chmodding" ? "Working…" : "CHMOD"}</span></button>
-<button type="button" className="sftp-danger-action" title="Delete selected items" aria-label="Delete selected items" onClick={() => void deleteSelected()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg><span>{transferState === "deleting" ? "Working…" : "Delete"}</span></button>
-<div className="sftp-selection-summary">{selectedEntries.length === 0 ? "No selection" : String(selectedEntries.length) + (selectedEntries.length === 1 ? " item selected" : " items selected")}</div>
-</div>
+) : null}
 
 <input
 className="sftp-path"

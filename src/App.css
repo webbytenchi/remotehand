@@ -1265,3 +1265,27 @@ width: 100%;
 margin-left: 0;
 }
 }
+
+.sftp-selected-summary {
+display: flex;
+align-items: center;
+gap: 16px;
+padding: 8px 10px;
+border: 1px solid #222c39;
+border-radius: 8px;
+background: #090d13;
+color: #9aa8ba;
+font-size: 12px;
+}
+.sftp-selected-summary strong {
+font-weight: 500;
+color: #c5cfdb;
+}
+html[data-theme="light"] .sftp-selected-summary {
+background: #ffffff;
+border-color: #c7ced8;
+color: #667085;
+}
+html[data-theme="light"] .sftp-selected-summary strong {
+color: #29313d;
+}
