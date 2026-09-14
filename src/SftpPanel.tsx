@@ -3,6 +3,7 @@ import type { MouseEvent } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { IDockviewPanelProps } from "dockview-react";
+import { AppModal } from "./AppModal";
 type SftpConnection = {
 host: string;
 port: number;
@@ -56,6 +57,7 @@ type TransferState =
 | "moving"
 | "chmodding"
 | "deleting";
+type SftpActionModal = "new-folder" | "rename" | "move" | "chmod" | "delete" | "properties" | null;
 function stripTrailingSlashes(path: string) {
 let result = path;
 while (result.length > 1 && result.endsWith("/")) {
@@ -110,6 +112,9 @@ const [transferStatus, setTransferStatus] = useState("");
 const [liveTransfer, setLiveTransfer] = useState<LiveTransfer | null>(null);
 const [cancelRequested, setCancelRequested] = useState(false);
 const [moreOpen, setMoreOpen] = useState(false);
+const [actionModal, setActionModal] = useState<SftpActionModal>(null);
+const [modalValue, setModalValue] = useState("");
+const [modalError, setModalError] = useState("");
 const transferStartedAtRef = useRef<{ transferId: string; time: number } | null>(null);
 const nativeSessionId = useRef(crypto.randomUUID()).current;
 const useNativeSftp = Boolean(connection?.credentialRef);
@@ -419,89 +424,28 @@ setCancelRequested(false);
 setError(String(reason));
 }
 }
-async function createFolder() {
+function closeActionModal() {
+setActionModal(null);
+setModalValue("");
+setModalError("");
+}
+function createFolder() {
 if (!listing || needsVaultUnlock || transferring || loading) return;
-const name = window.prompt("New folder name:");
-if (!name?.trim()) return;
-const folderName = name.trim();
-if (folderName === "." || folderName === ".." || folderName.includes("/") || folderName.includes(String.fromCharCode(92))) {
-setError("Folder name cannot contain path separators.");
-return;
+setModalValue("");
+setModalError("");
+setActionModal("new-folder");
 }
-setTransferState("creating");
-setError("");
-setTransferStatus("");
-try {
-const path = remoteChildPath(currentPath, folderName);
-await invoke(useNativeSftp ? "sftp_native_mkdir" : "sftp_mkdir", {
-host: connection.host,
-port: connection.port,
-user: connection.user,
-path,
-credentialRef: connection.credentialRef,
-...(useNativeSftp ? { sessionId: nativeSessionId } : {}),
-});
-setTransferStatus('Created folder "' + folderName + '"');
-await loadPath(currentPath);
-} catch (reason) {
-setError(String(reason));
-} finally {
-setTransferState("idle");
-}
-}
-
-async function renameSelected() {
+function renameSelected() {
 if (selectedEntries.length !== 1 || transferring || loading) return;
-const entry = selectedEntries[0];
-const name = window.prompt("Rename item:", entry.name);
-if (!name?.trim() || name.trim() === entry.name) return;
-const nextName = name.trim();
-if (nextName === "." || nextName === ".." || nextName.includes("/") || nextName.includes(String.fromCharCode(92))) {
-setError("Name cannot contain path separators.");
-return;
+setModalValue(selectedEntries[0].name);
+setModalError("");
+setActionModal("rename");
 }
-setTransferState("renaming");
-setError("");
-setTransferStatus("");
-try {
-const destination = remoteChildPath(parentPath(entry.path), nextName);
-await invoke(useNativeSftp ? "sftp_native_rename_entry" : "sftp_rename_entry", {
-host: connection.host,
-port: connection.port,
-user: connection.user,
-source: entry.path,
-destination,
-credentialRef: connection.credentialRef,
-...(useNativeSftp ? { sessionId: nativeSessionId } : {}),
-});
-setTransferStatus('Renamed "' + entry.name + '" to "' + nextName + '"');
-await loadPath(currentPath);
-} catch (reason) {
-setError(String(reason));
-} finally {
-setTransferState("idle");
-}
-}
-
 function showProperties() {
 setMoreOpen(false);
-const entry = selectedEntries.length === 1 ? selectedEntries[0] : null;
-const details = entry
-? [
-"Name: " + entry.name,
-"Path: " + entry.path,
-"Type: " + (entry.isDir ? "Folder" : "File"),
-"Size: " + (entry.isDir ? "—" : formatSize(entry.size)),
-"Permissions: " + entry.permissions,
-].join("\n")
-: [
-"Path: " + currentPath,
-"Type: Folder",
-"Selected items: " + String(selectedEntries.length),
-].join("\n");
-window.alert(details);
+setModalError("");
+setActionModal("properties");
 }
-
 async function copyPath() {
 setMoreOpen(false);
 const value = selectedEntries.length === 1 ? selectedEntries[0].path : currentPath;
@@ -513,7 +457,6 @@ setError("");
 setError("Could not copy remote path: " + String(reason));
 }
 }
-
 function openTerminalHere() {
 setMoreOpen(false);
 const escapedPath = currentPath.replaceAll("'", "'\\''");
@@ -532,20 +475,110 @@ initialCommand: "cd '" + escapedPath + "'",
 },
 });
 }
-
-async function moveSelected() {
+function moveSelected() {
 if (selectedEntries.length === 0 || transferring || loading) return;
-const destination = window.prompt("Move selected items to remote directory:", currentPath);
-if (!destination?.trim()) return;
-setTransferState("moving");
+setModalValue(currentPath);
+setModalError("");
+setActionModal("move");
+}
+function chmodSelected() {
+if (selectedEntries.length === 0 || transferring || loading) return;
+setModalValue("755");
+setModalError("");
+setActionModal("chmod");
+}
+function deleteSelected() {
+if (selectedEntries.length === 0 || transferring || loading) return;
+setModalValue("");
+setModalError("");
+setActionModal("delete");
+}
+async function confirmActionModal() {
+if (!actionModal) return;
+if (actionModal === "properties") {
+closeActionModal();
+return;
+}
+const value = modalValue.trim();
+if (actionModal === "new-folder" || actionModal === "rename") {
+if (!value) {
+setModalError(actionModal === "new-folder" ? "Enter a folder name." : "Enter a new name.");
+return;
+}
+if (value === "." || value === ".." || value.includes("/") || value.includes(String.fromCharCode(92))) {
+setModalError("Name cannot contain path separators.");
+return;
+}
+}
+if (actionModal === "rename" && selectedEntries.length === 1 && value === selectedEntries[0].name) {
+setModalError("Enter a different name.");
+return;
+}
+if (actionModal === "move" && !value) {
+setModalError("Enter a destination directory.");
+return;
+}
+if (actionModal === "chmod" && !/^[0-7]{3,4}$/.test(value)) {
+setModalError("Enter a 3- or 4-digit octal mode, such as 755 or 0644.");
+return;
+}
+const modal = actionModal;
+closeActionModal();
 setError("");
 setTransferStatus("");
+if (modal === "new-folder") {
+setTransferState("creating");
+try {
+const path = remoteChildPath(currentPath, value);
+await invoke(useNativeSftp ? "sftp_native_mkdir" : "sftp_mkdir", {
+host: connection.host,
+port: connection.port,
+user: connection.user,
+path,
+credentialRef: connection.credentialRef,
+...(useNativeSftp ? { sessionId: nativeSessionId } : {}),
+});
+setTransferStatus('Created folder "' + value + '"');
+await loadPath(currentPath);
+} catch (reason) {
+setError(String(reason));
+} finally {
+setTransferState("idle");
+}
+return;
+}
+if (modal === "rename") {
+if (selectedEntries.length !== 1) return;
+const entry = selectedEntries[0];
+setTransferState("renaming");
+try {
+const destination = remoteChildPath(parentPath(entry.path), value);
+await invoke(useNativeSftp ? "sftp_native_rename_entry" : "sftp_rename_entry", {
+host: connection.host,
+port: connection.port,
+user: connection.user,
+source: entry.path,
+destination,
+credentialRef: connection.credentialRef,
+...(useNativeSftp ? { sessionId: nativeSessionId } : {}),
+});
+setTransferStatus('Renamed "' + entry.name + '" to "' + value + '"');
+await loadPath(currentPath);
+} catch (reason) {
+setError(String(reason));
+} finally {
+setTransferState("idle");
+}
+return;
+}
+if (modal === "move") {
+setTransferState("moving");
 try {
 const count = await invoke<number>("sftp_move_entries", {
 host: connection.host,
 port: connection.port,
 user: connection.user,
-destination: destination.trim(),
+destination: value,
 items: selectedEntries.map(({ path, name, isDir }) => ({ path, name, isDir })),
 credentialRef: connection.credentialRef,
 });
@@ -556,20 +589,16 @@ setError(String(reason));
 } finally {
 setTransferState("idle");
 }
+return;
 }
-async function chmodSelected() {
-if (selectedEntries.length === 0 || transferring || loading) return;
-const mode = window.prompt("CHMOD selected items (octal mode):", "755");
-if (!mode?.trim()) return;
+if (modal === "chmod") {
 setTransferState("chmodding");
-setError("");
-setTransferStatus("");
 try {
 const count = await invoke<number>("sftp_chmod_entries", {
 host: connection.host,
 port: connection.port,
 user: connection.user,
-mode: mode.trim(),
+mode: value,
 items: selectedEntries.map(({ path, name, isDir }) => ({ path, name, isDir })),
 credentialRef: connection.credentialRef,
 });
@@ -580,16 +609,10 @@ setError(String(reason));
 } finally {
 setTransferState("idle");
 }
+return;
 }
-async function deleteSelected() {
-if (selectedEntries.length === 0 || transferring || loading) return;
-const description = selectedEntries.length === 1
-? selectedEntries[0].name
-: String(selectedEntries.length) + " selected items";
-if (!window.confirm("Delete " + description + "? Non-empty directories will be refused.")) return;
+if (modal === "delete") {
 setTransferState("deleting");
-setError("");
-setTransferStatus("");
 try {
 const count = await invoke<number>("sftp_delete_entries", {
 host: connection.host,
@@ -606,6 +629,33 @@ setError(String(reason));
 setTransferState("idle");
 }
 }
+}
+function actionModalTitle() {
+switch (actionModal) {
+case "new-folder": return "New folder";
+case "rename": return "Rename item";
+case "move": return "Move selected items";
+case "chmod": return "Change permissions";
+case "delete": return "Delete selected items?";
+case "properties": return "Properties";
+default: return "";
+}
+}
+function actionModalConfirmLabel() {
+switch (actionModal) {
+case "new-folder": return "Create";
+case "rename": return "Rename";
+case "move": return "Move";
+case "chmod": return "Apply";
+case "delete": return "Delete";
+case "properties": return "Close";
+default: return "OK";
+}
+}
+const propertiesEntry = selectedEntries.length === 1 ? selectedEntries[0] : null;
+const deleteDescription = selectedEntries.length === 1
+? selectedEntries[0].name
+: String(selectedEntries.length) + " selected items";
 
 return (
 <section className={"panel-content sftp-panel" + (needsVaultUnlock ? " sftp-panel-unlock" : "")}>
@@ -808,6 +858,71 @@ String(selectedFolderCount) +
 </strong>
 </div>
 ) : null}
+
+<AppModal
+open={actionModal !== null}
+title={actionModalTitle()}
+confirmLabel={actionModalConfirmLabel()}
+cancelLabel={actionModal === "properties" ? undefined : "Cancel"}
+danger={actionModal === "delete"}
+focusActions={actionModal === "delete" || actionModal === "properties"}
+onConfirm={() => void confirmActionModal()}
+onCancel={closeActionModal}
+>
+{actionModal === "properties" ? (
+<div className="sftp-properties">
+{propertiesEntry ? (
+<>
+<div><span>Name</span><strong>{propertiesEntry.name}</strong></div>
+<div><span>Path</span><strong>{propertiesEntry.path}</strong></div>
+<div><span>Type</span><strong>{propertiesEntry.isDir ? "Folder" : "File"}</strong></div>
+<div><span>Size</span><strong>{propertiesEntry.isDir ? "—" : formatSize(propertiesEntry.size)}</strong></div>
+<div><span>Permissions</span><strong>{propertiesEntry.permissions}</strong></div>
+</>
+) : (
+<>
+<div><span>Path</span><strong>{currentPath}</strong></div>
+<div><span>Type</span><strong>Folder</strong></div>
+<div><span>Selected items</span><strong>{selectedEntries.length}</strong></div>
+</>
+)}
+</div>
+) : actionModal === "delete" ? (
+<>
+<p>Delete <strong>{deleteDescription}</strong>?</p>
+<p className="app-modal-muted">Non-empty directories will be refused.</p>
+</>
+) : (
+<label className="sftp-modal-field">
+<span>
+{actionModal === "new-folder"
+? "Folder name"
+: actionModal === "rename"
+? "New name"
+: actionModal === "move"
+? "Destination directory"
+: "Octal mode"}
+</span>
+<input
+type="text"
+value={modalValue}
+onChange={(event) => {
+setModalValue(event.target.value);
+setModalError("");
+}}
+onKeyDown={(event) => {
+if (event.key === "Enter") void confirmActionModal();
+}}
+autoFocus
+/>
+{actionModal === "chmod" ? (
+<small>Use a 3- or 4-digit octal mode, for example 755 or 0644.</small>
+) : null}
+{modalError ? <small className="sftp-modal-error">{modalError}</small> : null}
+</label>
+)}
+</AppModal>
+
 </section>
 );
 }

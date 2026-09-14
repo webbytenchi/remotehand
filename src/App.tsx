@@ -11,6 +11,7 @@ themeLight,
 import "dockview-react/dist/styles/dockview.css";
 import { LocalTerminalPanel } from "./LocalTerminalPanel";
 import { SftpPanel } from "./SftpPanel";
+import { AppModal } from "./AppModal";
 import "./App.css";
 type Connection = {
 id: string;
@@ -44,68 +45,6 @@ keyboard navigation, layout history, and local persistence.
 <div><strong>Keyboard friendly</strong><span>Use Dockview navigation plus Ctrl/Cmd+K for the command palette.</span></div>
 </div>
 </section>
-);
-}
-type AppModalProps = {
-open: boolean;
-title: string;
-children: React.ReactNode;
-confirmLabel?: string;
-cancelLabel?: string;
-danger?: boolean;
-onConfirm: () => void;
-onCancel: () => void;
-};
-function AppModal({
-open,
-title,
-children,
-confirmLabel = "OK",
-cancelLabel,
-danger = false,
-onConfirm,
-onCancel,
-}: AppModalProps) {
-useEffect(() => {
-if (!open) return;
-const handleKeyDown = (event: KeyboardEvent) => {
-if (event.key === "Escape") onCancel();
-};
-window.addEventListener("keydown", handleKeyDown);
-return () => window.removeEventListener("keydown", handleKeyDown);
-}, [open, onCancel]);
-if (!open) return null;
-return (
-<div className="app-modal-backdrop" onMouseDown={onCancel}>
-<div
-className="app-modal"
-role="dialog"
-aria-modal="true"
-aria-labelledby="app-modal-title"
-onMouseDown={(event) => event.stopPropagation()}
->
-<div className="app-modal-header">
-<p className="eyebrow">RemoteHand</p>
-<h3 id="app-modal-title">{title}</h3>
-</div>
-<div className="app-modal-body">{children}</div>
-<div className="app-modal-actions">
-{cancelLabel ? (
-<button type="button" className="modal-button" onClick={onCancel} autoFocus>
-{cancelLabel}
-</button>
-) : null}
-<button
-type="button"
-className={danger ? "modal-button danger" : "modal-button primary"}
-onClick={onConfirm}
-autoFocus={!cancelLabel}
->
-{confirmLabel}
-</button>
-</div>
-</div>
-</div>
 );
 }
 function ConnectionsPanel({

@@ -1462,3 +1462,56 @@ color: #29313d;
 html[data-theme="light"] .sftp-transfer-cancel:hover:not(:disabled) {
 background: #e8edf3;
 }
+.sftp-modal-field {
+display: grid;
+gap: 7px;
+color: #718094;
+font-size: 11px;
+}
+.sftp-modal-field input {
+width: 100%;
+box-sizing: border-box;
+border: 1px solid #2b3544;
+border-radius: 7px;
+background: #070b11;
+color: #e2e8f0;
+padding: 9px 10px;
+font: inherit;
+font-size: 13px;
+}
+.sftp-modal-field input:focus {
+outline: none;
+border-color: #52657d;
+}
+.sftp-modal-field small {
+color: #6f7b8c;
+font-size: 11px;
+}
+.sftp-modal-field .sftp-modal-error {
+color: #f1a2a8;
+}
+.sftp-properties {
+display: grid;
+gap: 10px;
+}
+.sftp-properties > div {
+display: grid;
+grid-template-columns: minmax(90px, 0.35fr) minmax(0, 1fr);
+gap: 14px;
+align-items: start;
+}
+.sftp-properties span {
+color: #718094;
+font-size: 12px;
+}
+.sftp-properties strong {
+min-width: 0;
+overflow-wrap: anywhere;
+font-size: 12px;
+font-weight: 500;
+}
+html[data-theme="light"] .sftp-modal-field input {
+border-color: #c7ced8;
+background: #ffffff;
+color: #20242c;
+}
