@@ -5,10 +5,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tauri::{
-    dpi::{PhysicalPosition, PhysicalSize},
-    Manager, Monitor, Window, WindowEvent, Wry,
+    Manager, Monitor, PhysicalPosition, PhysicalSize, WebviewWindow, Window, WindowEvent, Wry,
 };
+
 const MIN_VISIBLE_PIXELS: i32 = 80;
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WindowState {
@@ -21,6 +22,7 @@ pub struct WindowState {
     #[serde(default)]
     pub fullscreen: bool,
 }
+
 impl WindowState {
     fn from_window(window: &Window<Wry>) -> Result<Self, String> {
         let position = window.outer_position().map_err(|error| error.to_string())?;
@@ -34,11 +36,26 @@ impl WindowState {
             fullscreen: window.is_fullscreen().map_err(|error| error.to_string())?,
         })
     }
+
+    fn from_webview_window(window: &WebviewWindow<Wry>) -> Result<Self, String> {
+        let position = window.outer_position().map_err(|error| error.to_string())?;
+        let size = window.outer_size().map_err(|error| error.to_string())?;
+        Ok(Self {
+            x: position.x,
+            y: position.y,
+            width: size.width,
+            height: size.height,
+            maximized: window.is_maximized().map_err(|error| error.to_string())?,
+            fullscreen: window.is_fullscreen().map_err(|error| error.to_string())?,
+        })
+    }
 }
+
 #[derive(Clone, Default)]
 pub struct WindowStateTracker {
     normal: Arc<Mutex<Option<WindowState>>>,
 }
+
 fn data_root() -> Result<PathBuf, String> {
     let executable = env::current_exe().map_err(|error| error.to_string())?;
     let executable_dir = executable
@@ -46,9 +63,11 @@ fn data_root() -> Result<PathBuf, String> {
         .ok_or_else(|| "failed to resolve executable directory".to_string())?;
     Ok(executable_dir.join("data"))
 }
+
 fn window_state_path() -> Result<PathBuf, String> {
     Ok(data_root()?.join("config").join("window.json"))
 }
+
 fn load_window_state() -> Result<Option<WindowState>, String> {
     let path = window_state_path()?;
     if !path.exists() {
@@ -59,6 +78,7 @@ fn load_window_state() -> Result<Option<WindowState>, String> {
         .map(Some)
         .map_err(|error| error.to_string())
 }
+
 fn save_window_state(state: &WindowState) -> Result<(), String> {
     let path = window_state_path()?;
     let parent = path
@@ -68,6 +88,7 @@ fn save_window_state(state: &WindowState) -> Result<(), String> {
     let contents = serde_json::to_string_pretty(state).map_err(|error| error.to_string())?;
     fs::write(path, contents).map_err(|error| error.to_string())
 }
+
 fn overlap_pixels(state: &WindowState, monitor: &Monitor) -> (i32, i32) {
     let work = monitor.work_area();
     let left = state.x.max(work.position.x);
@@ -76,12 +97,14 @@ fn overlap_pixels(state: &WindowState, monitor: &Monitor) -> (i32, i32) {
     let bottom = (state.y + state.height as i32).min(work.position.y + work.size.height as i32);
     ((right - left).max(0), (bottom - top).max(0))
 }
+
 fn is_visible_on_any_monitor(state: &WindowState, monitors: &[Monitor]) -> bool {
     monitors.iter().any(|monitor| {
         let (width, height) = overlap_pixels(state, monitor);
         width >= MIN_VISIBLE_PIXELS && height >= MIN_VISIBLE_PIXELS
     })
 }
+
 fn clamp_size_to_monitor(state: &WindowState, monitor: &Monitor) -> PhysicalSize<u32> {
     let work = monitor.work_area();
     PhysicalSize::new(
@@ -89,10 +112,12 @@ fn clamp_size_to_monitor(state: &WindowState, monitor: &Monitor) -> PhysicalSize
         state.height.max(600).min(work.size.height),
     )
 }
+
 pub fn restore(app: &tauri::App, tracker: &WindowStateTracker) -> Result<(), String> {
-    let Some(window) = app.get_window("main") else {
+    let Some(window) = app.get_webview_window("main") else {
         return Ok(());
     };
+
     let saved = load_window_state()?;
     if let Some(saved) = saved {
         let monitors = window
@@ -147,7 +172,7 @@ pub fn restore(app: &tauri::App, tracker: &WindowStateTracker) -> Result<(), Str
                 .set_fullscreen(true)
                 .map_err(|error| error.to_string())?;
         }
-    } else if let Ok(state) = WindowState::from_window(&window) {
+    } else if let Ok(state) = WindowState::from_webview_window(&window) {
         if let Ok(mut normal) = tracker.normal.lock() {
             *normal = Some(state);
         }
@@ -155,6 +180,7 @@ pub fn restore(app: &tauri::App, tracker: &WindowStateTracker) -> Result<(), Str
 
     Ok(())
 }
+
 pub fn handle_event(tracker: &WindowStateTracker, window: &Window<Wry>, event: &WindowEvent) {
     let is_maximized = window.is_maximized().unwrap_or(false);
     let is_fullscreen = window.is_fullscreen().unwrap_or(false);
