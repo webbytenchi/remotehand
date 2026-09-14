@@ -507,6 +507,7 @@ return (
 {connection.user}@{connection.host}:{connection.port}
 </span>
 </div>
+{listing && !needsVaultUnlock ? (
 <div className="sftp-toolbar">
 <button
 type="button"
@@ -523,6 +524,7 @@ onClick={() => void loadPath(currentPath)}
 Refresh
 </button>
 </div>
+) : null}
 </div>
 {listing && !needsVaultUnlock ? (
 <div className="sftp-action-toolbar" role="toolbar" aria-label="SFTP file actions">
