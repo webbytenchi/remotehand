@@ -389,7 +389,7 @@ pub fn sftp_default_download_path(file_name: String) -> String {
     home.map(|home| {
         std::path::PathBuf::from(home)
             .join("Downloads")
-            .join(file_name)
+            .join(&file_name)
             .to_string_lossy()
             .into_owned()
     })
