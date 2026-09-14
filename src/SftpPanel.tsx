@@ -33,17 +33,18 @@ transferId: string;
 direction: "upload" | "download";
 path: string;
 completedFiles: number;
+totalFiles: number;
+totalFolders: number;
+transferredBytes: number;
+totalBytes: number;
 };
 type SftpTransferResult = {
 items: number;
 files: number;
+folders: number;
+bytes: number;
 };
-type LiveTransfer = {
-transferId: string;
-direction: "upload" | "download";
-path: string;
-completedFiles: number;
-};
+type LiveTransfer = SftpTransferProgressEvent;
 type TransferState =
 | "idle"
 | "uploading"
@@ -169,12 +170,7 @@ let unlisten: UnlistenFn | undefined;
 void listen<SftpTransferProgressEvent>("sftp-transfer-progress", (event) => {
 setLiveTransfer((current) => {
 if (!current || current.transferId !== event.payload.transferId) return current;
-return {
-transferId: event.payload.transferId,
-direction: event.payload.direction,
-path: event.payload.path,
-completedFiles: event.payload.completedFiles,
-};
+return event.payload;
 });
 }).then((stop) => {
 unlisten = stop;
@@ -266,7 +262,16 @@ if (items.length === 0) return;
 const transferId = crypto.randomUUID();
 setTransferState("uploading");
 setTransferStatus("");
-setLiveTransfer({ transferId, direction: "upload", path: "", completedFiles: 0 });
+setLiveTransfer({
+transferId,
+direction: "upload",
+path: "",
+completedFiles: 0,
+totalFiles: items.length,
+totalFolders: 0,
+transferredBytes: 0,
+totalBytes: 0,
+});
 try {
 const result = await invoke<SftpTransferResult>("sftp_upload_many", {
 host: connection.host,
@@ -279,7 +284,9 @@ transferId,
 setTransferStatus(
 "Upload complete · " +
 String(result.files) +
-(result.files === 1 ? " file" : " files"),
+(result.files === 1 ? " file" : " files") +
+" · " +
+formatSize(result.bytes),
 );
 await loadPath(currentPath);
 } finally {
@@ -306,11 +313,21 @@ const items = selectedEntries.map((entry) => ({
 path: entry.path,
 name: entry.name,
 isDir: entry.isDir,
+size: entry.size,
 }));
 const transferId = crypto.randomUUID();
 setTransferState("downloading");
 setTransferStatus("");
-setLiveTransfer({ transferId, direction: "download", path: "", completedFiles: 0 });
+setLiveTransfer({
+transferId,
+direction: "download",
+path: "",
+completedFiles: 0,
+totalFiles: 0,
+totalFolders: 0,
+transferredBytes: 0,
+totalBytes: 0,
+});
 try {
 const result = await invoke<SftpTransferResult>("sftp_download_entries", {
 host: connection.host,
@@ -326,8 +343,10 @@ setTransferStatus(
 String(result.files) +
 (result.files === 1 ? " file" : " files") +
 " · " +
-String(result.items) +
-(result.items === 1 ? " selected item" : " selected items"),
+String(result.folders) +
+(result.folders === 1 ? " folder" : " folders") +
+" · " +
+formatSize(result.bytes),
 );
 } catch (reason) {
 setError(String(reason));
@@ -444,23 +463,47 @@ Refresh
 <button type="button" title="Change permissions" aria-label="Change permissions" onClick={() => void chmodSelected()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 11V8a4 4 0 0 1 8 0v3M6 11h12v9H6z"/></svg><span>{transferState === "chmodding" ? "Working…" : "CHMOD"}</span></button>
 <button type="button" className="sftp-danger-action" title="Delete selected items" aria-label="Delete selected items" onClick={() => void deleteSelected()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg><span>{transferState === "deleting" ? "Working…" : "Delete"}</span></button>
 </div>
-{liveTransfer ? (
+{liveTransfer ? (() => {
+const progressPercent = liveTransfer.totalBytes > 0
+? Math.min(100, (liveTransfer.transferredBytes / liveTransfer.totalBytes) * 100)
+: liveTransfer.totalFiles > 0
+? Math.min(100, (liveTransfer.completedFiles / liveTransfer.totalFiles) * 100)
+: 0;
+return (
 <div className="sftp-transfer-progress" role="status" aria-live="polite">
 <div className="sftp-transfer-progress-header">
 <strong>{liveTransfer.direction === "upload" ? "Uploading…" : "Downloading…"}</strong>
 <span>
-{String(liveTransfer.completedFiles) +
-(liveTransfer.completedFiles === 1 ? " file transferred" : " files transferred")}
+{liveTransfer.totalFiles > 0
+? String(liveTransfer.completedFiles) + " / " + String(liveTransfer.totalFiles) + " files"
+: "Preparing transfer…"}
 </span>
 </div>
 <div className="sftp-transfer-current-path" title={liveTransfer.path}>
 {liveTransfer.path || "Preparing transfer…"}
 </div>
-<div className="sftp-transfer-progress-track" aria-hidden="true">
-<div className="sftp-transfer-progress-bar" />
+<div className="sftp-transfer-progress-detail">
+<span>
+{liveTransfer.totalBytes > 0
+? formatSize(liveTransfer.transferredBytes) + " / " + formatSize(liveTransfer.totalBytes)
+: liveTransfer.totalFolders > 0
+? String(liveTransfer.totalFolders) + (liveTransfer.totalFolders === 1 ? " folder" : " folders")
+: "Calculating transfer size…"}
+</span>
+<strong>{progressPercent.toFixed(0) + "%"}</strong>
+</div>
+<div
+className="sftp-transfer-progress-track"
+role="progressbar"
+aria-valuemin={0}
+aria-valuemax={100}
+aria-valuenow={Math.round(progressPercent)}
+>
+<div className="sftp-transfer-progress-bar" style={{ width: progressPercent + "%" }} />
 </div>
 </div>
-) : null}
+);
+})() : null}
 
 {selectedEntries.length > 0 ? (
 <div className="sftp-selected-summary">

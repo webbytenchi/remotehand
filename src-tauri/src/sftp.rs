@@ -2,7 +2,7 @@ use crate::vault::{self, VaultState};
 use serde::{Deserialize, Serialize};
 use std::{
     env,
-    io::{BufRead, BufReader, Write},
+    io::{BufRead, BufReader, Read, Write},
     process::{Command, Stdio},
 };
 use tauri::{AppHandle, Emitter, State};
@@ -29,6 +29,8 @@ pub struct SftpRemoteItem {
     path: String,
     name: String,
     is_dir: bool,
+    #[serde(default)]
+    size: u64,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -45,6 +47,10 @@ pub struct SftpTransferProgress {
     direction: String,
     path: String,
     completed_files: usize,
+    total_files: usize,
+    total_folders: usize,
+    transferred_bytes: u64,
+    total_bytes: u64,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -52,6 +58,14 @@ pub struct SftpTransferProgress {
 pub struct SftpTransferResult {
     items: usize,
     files: usize,
+    folders: usize,
+    bytes: u64,
+}
+
+#[derive(Clone, Debug)]
+struct SftpTransferPlanItem {
+    path: String,
+    size: u64,
 }
 
 fn quote_batch_path(path: &str) -> Result<String, String> {
@@ -122,27 +136,79 @@ fn password_for_credential(
         .map(|value| value.flatten())
 }
 
-fn transfer_path_from_line(line: &str, direction: &str) -> Option<String> {
-    let line = line.trim();
-    let prefix = if direction == "download" {
-        "Fetching "
-    } else if direction == "upload" {
-        "Uploading "
-    } else {
-        return None;
-    };
-    let rest = line.strip_prefix(prefix)?;
-    let path = if direction == "download" {
-        rest.split_once(" to ")
-            .map(|(source, _unused)| source)
-            .unwrap_or(rest)
-    } else {
-        rest.split_once(" to ")
-            .map(|(_unused, destination)| destination)
-            .unwrap_or(rest)
-    };
-    Some(path.trim_matches('"').to_string())
+fn transfer_percent_from_record(record: &str) -> Option<u64> {
+    record.split_whitespace().find_map(|token| {
+        token
+            .strip_suffix('%')
+            .and_then(|value| value.parse::<u64>().ok())
+            .filter(|value| *value <= 100)
+    })
 }
+
+fn forward_sftp_records<R: Read>(
+    mut reader: R,
+    is_stderr: bool,
+    sender: std::sync::mpsc::Sender<(bool, String)>,
+) {
+    let mut buffer = [0u8; 4096];
+    let mut pending = Vec::new();
+    loop {
+        let read = match reader.read(&mut buffer) {
+            Ok(0) => break,
+            Ok(read) => read,
+            Err(_) => break,
+        };
+        for byte in &buffer[..read] {
+            if *byte == b'\r' || *byte == b'\n' {
+                if !pending.is_empty() {
+                    let record = String::from_utf8_lossy(&pending).into_owned();
+                    if sender.send((is_stderr, record)).is_err() {
+                        return;
+                    }
+                    pending.clear();
+                }
+            } else {
+                pending.push(*byte);
+            }
+        }
+    }
+    if !pending.is_empty() {
+        let _ = sender.send((is_stderr, String::from_utf8_lossy(&pending).into_owned()));
+    }
+}
+
+fn emit_transfer_progress(
+    app: &AppHandle,
+    transfer_id: &str,
+    direction: &str,
+    plan: &[SftpTransferPlanItem],
+    total_folders: usize,
+    completed_files: usize,
+    transferred_bytes: u64,
+) {
+    let total_bytes: u64 = plan.iter().map(|item| item.size).sum();
+    let path = if completed_files < plan.len() {
+        plan[completed_files].path.clone()
+    } else {
+        plan.last()
+            .map(|item| item.path.clone())
+            .unwrap_or_default()
+    };
+    let _ = app.emit(
+        "sftp-transfer-progress",
+        SftpTransferProgress {
+            transfer_id: transfer_id.to_string(),
+            direction: direction.to_string(),
+            path,
+            completed_files,
+            total_files: plan.len(),
+            total_folders,
+            transferred_bytes: transferred_bytes.min(total_bytes),
+            total_bytes,
+        },
+    );
+}
+
 fn run_sftp_transfer_stream(
     app: AppHandle,
     transfer_id: String,
@@ -152,7 +218,9 @@ fn run_sftp_transfer_stream(
     user: String,
     password: Option<String>,
     batch: String,
-) -> Result<usize, String> {
+    plan: Vec<SftpTransferPlanItem>,
+    total_folders: usize,
+) -> Result<(), String> {
     let host = host.trim();
     let user = user.trim();
     if host.is_empty() {
@@ -161,6 +229,8 @@ fn run_sftp_transfer_stream(
     if user.is_empty() {
         return Err("SFTP user is required".to_string());
     }
+
+    emit_transfer_progress(&app, &transfer_id, direction, &plan, total_folders, 0, 0);
 
     let mut command = Command::new("sftp");
     command
@@ -212,52 +282,61 @@ fn run_sftp_transfer_stream(
         .take()
         .ok_or_else(|| "failed to read sftp errors".to_string())?;
 
-    let (line_tx, line_rx) = std::sync::mpsc::channel::<(bool, String)>();
-    let stdout_tx = line_tx.clone();
+    let (record_tx, record_rx) = std::sync::mpsc::channel::<(bool, String)>();
+    let stdout_tx = record_tx.clone();
     let stdout_thread = std::thread::spawn(move || {
-        for line in BufReader::new(stdout).lines() {
-            match line {
-                Ok(line) => {
-                    if stdout_tx.send((false, line)).is_err() {
-                        break;
-                    }
-                }
-                Err(_) => break,
-            }
-        }
+        forward_sftp_records(stdout, false, stdout_tx);
     });
     let stderr_thread = std::thread::spawn(move || {
-        for line in BufReader::new(stderr).lines() {
-            match line {
-                Ok(line) => {
-                    if line_tx.send((true, line)).is_err() {
-                        break;
-                    }
-                }
-                Err(_) => break,
-            }
-        }
+        forward_sftp_records(stderr, true, record_tx);
     });
 
     let mut completed_files = 0usize;
+    let mut completed_bytes = 0u64;
+    let mut last_percent = None;
     let mut stderr_text = String::new();
-    for (is_stderr, line) in line_rx {
-        if is_stderr {
+
+    for (is_stderr, record) in record_rx {
+        let percent = transfer_percent_from_record(&record);
+        if is_stderr && percent.is_none() {
             if !stderr_text.is_empty() {
                 stderr_text.push('\n');
             }
-            stderr_text.push_str(&line);
+            stderr_text.push_str(&record);
         }
-        if let Some(path) = transfer_path_from_line(&line, direction) {
+
+        if let Some(percent) = percent {
+            if last_percent != Some(percent) {
+                if let Some(current) = plan.get(completed_files) {
+                    let current_bytes = current.size.saturating_mul(percent).saturating_div(100);
+                    emit_transfer_progress(
+                        &app,
+                        &transfer_id,
+                        direction,
+                        &plan,
+                        total_folders,
+                        completed_files,
+                        completed_bytes.saturating_add(current_bytes),
+                    );
+                }
+                last_percent = Some(percent);
+            }
+        }
+        if !is_stderr
+            && record.contains("Remote working directory:")
+            && completed_files < plan.len()
+        {
+            completed_bytes = completed_bytes.saturating_add(plan[completed_files].size);
             completed_files += 1;
-            let _ = app.emit(
-                "sftp-transfer-progress",
-                SftpTransferProgress {
-                    transfer_id: transfer_id.clone(),
-                    direction: direction.to_string(),
-                    path,
-                    completed_files,
-                },
+            last_percent = None;
+            emit_transfer_progress(
+                &app,
+                &transfer_id,
+                direction,
+                &plan,
+                total_folders,
+                completed_files,
+                completed_bytes,
             );
         }
     }
@@ -267,10 +346,9 @@ fn run_sftp_transfer_stream(
     let status = child
         .wait()
         .map_err(|error| format!("failed to wait for sftp: {error}"))?;
-    let stderr = stderr_text;
 
     if !status.success() {
-        let message = stderr.trim();
+        let message = stderr_text.trim();
         return Err(if message.is_empty() {
             format!("SFTP {direction} failed")
         } else {
@@ -278,8 +356,16 @@ fn run_sftp_transfer_stream(
         });
     }
 
-    Ok(completed_files)
+    if completed_files != plan.len() {
+        return Err(format!(
+            "SFTP {direction} finished without confirming every file ({completed_files}/{})",
+            plan.len()
+        ));
+    }
+
+    Ok(())
 }
+
 fn run_sftp_batch(
     host: String,
     port: u16,
@@ -521,25 +607,34 @@ pub async fn sftp_upload_many(
     if items.is_empty() {
         return Err("at least one upload file is required".to_string());
     }
+
+    let mut plan = Vec::with_capacity(items.len());
     for item in &items {
         if item.local_path.trim().is_empty() || item.remote_path.trim().is_empty() {
             return Err("upload paths cannot be empty".to_string());
         }
-        if !std::path::Path::new(item.local_path.trim()).is_file() {
+        let metadata = std::fs::metadata(item.local_path.trim())
+            .map_err(|error| format!("failed to inspect upload file: {error}"))?;
+        if !metadata.is_file() {
             return Err("one or more local source files do not exist".to_string());
         }
+        plan.push(SftpTransferPlanItem {
+            path: item.remote_path.trim().to_string(),
+            size: metadata.len(),
+        });
     }
 
     let count = items.len();
+    let total_bytes: u64 = plan.iter().map(|item| item.size).sum();
     let password = password_for_credential(&vault_state, credential_ref.as_deref())?;
     tauri::async_runtime::spawn_blocking(move || {
         let mut batch = String::new();
         for item in items {
             let local = quote_batch_path(item.local_path.trim())?;
             let remote = quote_batch_path(item.remote_path.trim())?;
-            batch.push_str(&format!("put {local} {remote}\n"));
+            batch.push_str(&format!("put {local} {remote}\npwd\n"));
         }
-        let files = run_sftp_transfer_stream(
+        run_sftp_transfer_stream(
             app,
             transfer_id,
             "upload",
@@ -548,11 +643,15 @@ pub async fn sftp_upload_many(
             user,
             password,
             batch,
+            plan,
+            0,
         )?;
         log::info!("SFTP upload batch completed");
         Ok(SftpTransferResult {
             items: count,
-            files: files.max(count),
+            files: count,
+            folders: 0,
+            bytes: total_bytes,
         })
     })
     .await
@@ -618,6 +717,44 @@ fn remote_directory_is_empty(
         .next()
         .is_none())
 }
+fn collect_remote_download_plan(
+    host: &str,
+    port: u16,
+    user: &str,
+    password: &Option<String>,
+    remote_path: &str,
+    local_path: &std::path::Path,
+    files: &mut Vec<(String, std::path::PathBuf, u64)>,
+    directories: &mut Vec<std::path::PathBuf>,
+) -> Result<(), String> {
+    directories.push(local_path.to_path_buf());
+    let listing = run_sftp_list(
+        host.to_string(),
+        port,
+        user.to_string(),
+        remote_path.to_string(),
+        password.clone(),
+    )?;
+    for entry in listing.entries {
+        let local_child = local_path.join(&entry.name);
+        if entry.is_dir {
+            collect_remote_download_plan(
+                host,
+                port,
+                user,
+                password,
+                &entry.path,
+                &local_child,
+                files,
+                directories,
+            )?;
+        } else {
+            files.push((entry.path, local_child, entry.size));
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn sftp_download_entries(
     app: AppHandle,
@@ -636,6 +773,7 @@ pub async fn sftp_download_entries(
     if folder.trim().is_empty() {
         return Err("local destination folder is required".to_string());
     }
+
     let folder_path = std::path::PathBuf::from(folder.trim());
     let mut destinations = Vec::with_capacity(items.len());
     for item in &items {
@@ -649,20 +787,56 @@ pub async fn sftp_download_entries(
         destinations.push(destination);
     }
 
-    let count = items.len();
+    let selected_items = items.len();
     let password = password_for_credential(&vault_state, credential_ref.as_deref())?;
     tauri::async_runtime::spawn_blocking(move || {
-        let mut batch = String::new();
-        for (item, destination) in items.into_iter().zip(destinations) {
-            let remote = quote_batch_path(item.path.trim())?;
-            let local = quote_batch_path(&destination.to_string_lossy())?;
+        let mut files = Vec::<(String, std::path::PathBuf, u64)>::new();
+        let mut directories = Vec::<std::path::PathBuf>::new();
+
+        for (item, destination) in items.iter().zip(destinations.iter()) {
             if item.is_dir {
-                batch.push_str(&format!("get -R {remote} {local}\n"));
+                collect_remote_download_plan(
+                    &host,
+                    port,
+                    &user,
+                    &password,
+                    item.path.trim(),
+                    destination,
+                    &mut files,
+                    &mut directories,
+                )?;
             } else {
-                batch.push_str(&format!("get {remote} {local}\n"));
+                files.push((item.path.trim().to_string(), destination.clone(), item.size));
             }
         }
-        let files = run_sftp_transfer_stream(
+
+        for directory in &directories {
+            std::fs::create_dir_all(directory).map_err(|error| {
+                format!(
+                    "failed to create download directory {}: {error}",
+                    directory.to_string_lossy()
+                )
+            })?;
+        }
+
+        let total_folders = directories.len();
+        let total_bytes: u64 = files.iter().map(|(_, _, size)| *size).sum();
+        let plan = files
+            .iter()
+            .map(|(remote, _, size)| SftpTransferPlanItem {
+                path: remote.clone(),
+                size: *size,
+            })
+            .collect::<Vec<_>>();
+
+        let mut batch = String::new();
+        for (remote_path, local_path, _) in &files {
+            let remote = quote_batch_path(remote_path)?;
+            let local = quote_batch_path(&local_path.to_string_lossy())?;
+            batch.push_str(&format!("get {remote} {local}\npwd\n"));
+        }
+
+        run_sftp_transfer_stream(
             app,
             transfer_id,
             "download",
@@ -671,11 +845,15 @@ pub async fn sftp_download_entries(
             user,
             password,
             batch,
+            plan,
+            total_folders,
         )?;
         log::info!("SFTP recursive download batch completed");
         Ok(SftpTransferResult {
-            items: count,
-            files,
+            items: selected_items,
+            files: files.len(),
+            folders: total_folders,
+            bytes: total_bytes,
         })
     })
     .await
