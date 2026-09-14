@@ -685,7 +685,6 @@ return (
 <section className={"panel-content sftp-panel" + (needsVaultUnlock ? " sftp-panel-unlock" : "")}>
 <div className="sftp-heading">
 <div>
-<p className="eyebrow">Milestone 5</p>
 <h2>{connection.name}</h2>
 <span>
 {connection.user}@{connection.host}:{connection.port}

@@ -35,7 +35,6 @@ connections?: Connection[];
 function WelcomePanel() {
 return (
 <section className="panel-content welcome-panel">
-<p className="eyebrow">Milestone 1</p>
 <h1>Workspace Shell</h1>
 <p>
 RemoteHand now has a dockable workspace with tabs, splits, popouts,
@@ -170,7 +169,6 @@ return (
 <section className="panel-content connections-panel">
 <div className="panel-heading">
 <div>
-<p className="eyebrow">Milestone 4</p>
 <h2>SSH Connections</h2>
 </div>
 <button
@@ -643,7 +641,6 @@ title="Toggle theme"
 >
 {themeMode === "dark" ? "☀" : "☾"}
 </button>
-<span className="phase-badge">Milestone 3</span>
 </div>
 </header>
 <section className={"workspace" + (sidebarCollapsed ? " sidebar-collapsed" : "")}>
