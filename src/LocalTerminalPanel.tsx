@@ -69,8 +69,7 @@ const fitAddon = new FitAddon();
 const terminal = new Terminal({
 cursorBlink: true,
 convertEol: false,
-fontFamily:
-'"Cascadia Code", "Cascadia Mono", Consolas, "Liberation Mono", monospace',
+fontFamily: ["JetBrains Mono", "Cascadia Code", "Cascadia Mono", "Consolas", "Liberation Mono", "monospace"].join(", "),
 fontSize: 13,
 scrollback: 10000,
 theme: getTheme(),

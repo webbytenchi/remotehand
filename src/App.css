@@ -344,7 +344,7 @@ grid-template-columns: 1fr;
   background: #05070a;
   color: #bcc6d3;
   font-family:
-    "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    "JetBrains Mono", "Cascadia Code", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
   font-size: 13px;
 }
 .terminal-output {
@@ -952,7 +952,7 @@ border-radius: 7px;
 padding: 8px 10px;
 background: #090d13;
 color: #9eacbd;
-font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
 font-size: 12px;
 text-overflow: ellipsis;
 white-space: nowrap;
@@ -1640,7 +1640,7 @@ height: 20px;
   padding: 12px;
   background: #05070a;
   color: #d5dbe5;
-  font-family: "Cascadia Code", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  font-family: "JetBrains Mono", "Cascadia Code", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
   font-size: 12px;
   line-height: 1.5;
   white-space: pre-wrap;
