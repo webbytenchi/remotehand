@@ -7,6 +7,11 @@ mod vault;
 mod window_state;
 use tauri::Manager;
 use terminal::TerminalState;
+
+#[tauri::command]
+fn local_os() -> &'static str {
+    std::env::consts::OS
+}
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -54,6 +59,7 @@ pub fn run() {
             terminal::terminal_write,
             terminal::terminal_resize,
             terminal::terminal_close,
+            local_os,
         ])
         .setup(|app| {
             app.handle()

@@ -264,6 +264,7 @@ const [paletteOpen, setPaletteOpen] = useState(false);
 const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true");
 const [paletteQuery, setPaletteQuery] = useState("");
 const [workspaceReady, setWorkspaceReady] = useState(false);
+const [localOs, setLocalOs] = useState(() => (isTauri() ? "" : "linux"));
 const apiRef = useRef<DockviewApi | null>(null);
 const restoredRef = useRef(false);
 const layoutHistoryRef = useRef<string[]>([]);
@@ -271,6 +272,12 @@ const layoutHistoryIndexRef = useRef(-1);
 const applyingHistoryRef = useRef(false);
 const workspaceSaveTimerRef = useRef<number | null>(null);
 const workspacePersistenceEnabledRef = useRef(true);
+useEffect(() => {
+if (!isTauri()) return;
+void invoke<string>("local_os")
+.then(setLocalOs)
+.catch((error) => console.error("Failed to detect local OS", error));
+}, []);
 const persistWorkspaceSnapshot = useCallback((snapshot: string, immediate = false) => {
 const save = () => {
 if (!workspacePersistenceEnabledRef.current) return;
@@ -649,9 +656,20 @@ title="Toggle theme"
 </span>
 </button>
 </div>
+{localOs === "windows" ? (
+<>
+<button className="sidebar-action" type="button" onClick={() => addTerminal(undefined, "powershell")} title="PowerShell">
+<span className="sidebar-icon">PS</span><span className="sidebar-label">PowerShell</span>
+</button>
+<button className="sidebar-action" type="button" onClick={() => addTerminal(undefined, "cmd")} title="Command Prompt">
+<span className="sidebar-icon">CMD</span><span className="sidebar-label">Command Prompt</span>
+</button>
+</>
+) : (
 <button className="sidebar-action" type="button" onClick={() => addTerminal()} title="Terminal">
 <span className="sidebar-icon">⌘</span><span className="sidebar-label">Terminal</span>
 </button>
+)}
 <button className="sidebar-action" type="button" onClick={addConnections} title="Connections">
 <span className="sidebar-icon">◈</span><span className="sidebar-label">Connections</span>
 </button>
