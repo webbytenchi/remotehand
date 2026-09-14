@@ -241,33 +241,50 @@ select {
   color: #7e8da0;
   font-weight: 700;
 }
+.welcome-panel {
+padding-top: clamp(36px, 6vh, 72px);
+}
 .welcome-panel h1 {
-  margin: 0 0 12px;
-  font-size: clamp(28px, 4vw, 42px);
+margin: 0 0 14px;
+font-size: clamp(32px, 5vw, 48px);
+letter-spacing: -0.03em;
 }
 .welcome-panel > p:not(.eyebrow) {
-  max-width: 720px;
-  margin: 0;
-  color: #909cad;
-  line-height: 1.65;
+max-width: 760px;
+margin: 0;
+color: #909cad;
+line-height: 1.7;
+font-size: 14px;
 }
 .feature-list {
-  margin-top: 28px;
-  display: grid;
-  gap: 10px;
-  max-width: 760px;
+margin-top: 32px;
+display: grid;
+grid-template-columns: repeat(2, minmax(0, 1fr));
+gap: 12px;
+max-width: 860px;
 }
 .feature-list > div {
-  display: grid;
-  gap: 4px;
-  border: 1px solid #202a37;
-  border-radius: 9px;
-  padding: 13px 15px;
-  background: #090d13;
+display: grid;
+align-content: start;
+gap: 6px;
+min-height: 82px;
+border: 1px solid #202a37;
+border-radius: 10px;
+padding: 16px 18px;
+background: #090d13;
+}
+.feature-list strong {
+font-size: 13px;
 }
 .feature-list span {
-  color: #6f7b8c;
-  font-size: 12px;
+color: #6f7b8c;
+font-size: 12px;
+line-height: 1.5;
+}
+@media (max-width: 760px) {
+.feature-list {
+grid-template-columns: 1fr;
+}
 }
 .panel-heading {
   display: flex;
