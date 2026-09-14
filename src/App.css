@@ -1606,6 +1606,7 @@ stroke-linejoin: round;
 }
 .workspace.sidebar-collapsed .sidebar-title-row {
 gap: 0;
+margin-bottom: 11px;
 }
 .workspace.sidebar-collapsed .sidebar-title-row .sidebar-heading {
 display: none;

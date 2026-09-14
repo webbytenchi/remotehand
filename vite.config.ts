@@ -21,7 +21,7 @@ BUILD_REVISION: JSON.stringify(buildRevision),
 },
 server: {
 watch: {
-ignored: ["/src-tauri/target/"],
+ignored: ["**/src-tauri/target/**"],
 },
 },
 });
