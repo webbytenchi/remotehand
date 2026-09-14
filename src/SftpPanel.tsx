@@ -107,7 +107,7 @@ const [transferState, setTransferState] = useState<TransferState>("idle");
 const [transferStatus, setTransferStatus] = useState("");
 const [liveTransfer, setLiveTransfer] = useState<LiveTransfer | null>(null);
 const [cancelRequested, setCancelRequested] = useState(false);
-const transferSampleRef = useRef<{ transferId: string; bytes: number; time: number } | null>(null);
+const transferStartedAtRef = useRef<{ transferId: string; time: number } | null>(null);
 const nativeSessionId = useRef(crypto.randomUUID()).current;
 const useNativeSftp = Boolean(connection?.credentialRef);
 const transferring = transferState !== "idle";
@@ -187,21 +187,14 @@ let unlisten: UnlistenFn | undefined;
 void listen<SftpTransferProgressEvent>("sftp-transfer-progress", (event) => {
 setLiveTransfer((current) => {
 if (!current || current.transferId !== event.payload.transferId) return current;
-const now = performance.now();
-const previous = transferSampleRef.current;
+const started = transferStartedAtRef.current;
 let speedBytesPerSecond = current.speedBytesPerSecond;
-if (previous && previous.transferId === event.payload.transferId) {
-const elapsedSeconds = (now - previous.time) / 1000;
-const byteDelta = event.payload.transferredBytes - previous.bytes;
-if (elapsedSeconds > 0 && byteDelta >= 0) {
-speedBytesPerSecond = byteDelta / elapsedSeconds;
+if (started && started.transferId === event.payload.transferId) {
+const elapsedSeconds = (performance.now() - started.time) / 1000;
+if (elapsedSeconds > 0 && event.payload.transferredBytes > 0) {
+speedBytesPerSecond = event.payload.transferredBytes / elapsedSeconds;
 }
 }
-transferSampleRef.current = {
-transferId: event.payload.transferId,
-bytes: event.payload.transferredBytes,
-time: now,
-};
 return { ...event.payload, speedBytesPerSecond };
 });
 }).then((stop) => {
@@ -306,7 +299,7 @@ transferredBytes: 0,
 totalBytes: 0,
 speedBytesPerSecond: 0,
 });
-transferSampleRef.current = { transferId, bytes: 0, time: performance.now() };
+transferStartedAtRef.current = { transferId, time: performance.now() };
 try {
 const result = await invoke<SftpTransferResult>(
 useNativeSftp ? "sftp_native_upload_many" : "sftp_upload_many",
@@ -375,7 +368,7 @@ transferredBytes: 0,
 totalBytes: 0,
 speedBytesPerSecond: 0,
 });
-transferSampleRef.current = { transferId, bytes: 0, time: performance.now() };
+transferStartedAtRef.current = { transferId, time: performance.now() };
 try {
 const result = await invoke<SftpTransferResult>(
 useNativeSftp ? "sftp_native_download_entries" : "sftp_download_entries",
