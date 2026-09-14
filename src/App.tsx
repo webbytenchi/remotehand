@@ -917,6 +917,7 @@ if (terminalTheme === "classic") return { ...current, terminalTheme, terminalBac
 return { ...current, terminalTheme };
 });
 }}
+>
 
 <option value="comfort">RemoteHand Comfort</option>
 <option value="classic">RemoteHand Classic</option>
