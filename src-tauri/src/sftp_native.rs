@@ -64,15 +64,31 @@ impl client::Handler for HostVerifier {
         &mut self,
         server_public_key: &russh::keys::ssh_key::PublicKey,
     ) -> Result<bool, Self::Error> {
-        match russh::keys::check_known_hosts(&self.host, self.port, server_public_key) {
+        let known_hosts = home::home_dir()
+            .map(|home| home.join(".ssh").join("known_hosts"))
+            .ok_or_else(|| {
+                SshClientError::HostKey(
+                    "SSH host key verification failed: home directory is unavailable".to_string(),
+                )
+            })?;
+        match russh::keys::check_known_hosts_path(
+            &self.host,
+            self.port,
+            server_public_key,
+            &known_hosts,
+        ) {
             Ok(true) => Ok(true),
             Ok(false) => Err(SshClientError::HostKey(format!(
-                "SSH host key for {}:{} is not trusted in ~/.ssh/known_hosts",
-                self.host, self.port
+                "SSH host key for {}:{} is not trusted in {}",
+                self.host,
+                self.port,
+                known_hosts.display()
             ))),
             Err(error) => Err(SshClientError::HostKey(format!(
-                "SSH host key verification failed for {}:{}: {error}",
-                self.host, self.port
+                "SSH host key verification failed for {}:{} using {}: {error}",
+                self.host,
+                self.port,
+                known_hosts.display()
             ))),
         }
     }
