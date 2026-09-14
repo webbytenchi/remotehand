@@ -622,7 +622,7 @@ return (
 <span className="brand-mark">RH</span>
 <div>
 <strong>RemoteHand</strong>
-<span>Portable workstation manager</span>
+<span>v{APP_VERSION} · {BUILD_REVISION}</span>
 </div>
 </div>
 <div className="topbar-actions">

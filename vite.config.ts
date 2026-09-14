@@ -1,12 +1,27 @@
+import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-
-// https://vite.dev/config/
+const packageJson = JSON.parse(
+readFileSync(new URL("./package.json", import.meta.url), "utf8"),
+) as { version: string };
+let buildRevision = "dev";
+try {
+buildRevision = execSync("git rev-parse --short HEAD", {
+encoding: "utf8",
+}).trim();
+} catch {
+// Source archives without Git metadata fall back to "dev".
+}
 export default defineConfig({
-  plugins: [react()],
-  server: {
-    watch: {
-      ignored: ["**/src-tauri/target/**"],
-    },
-  },
+plugins: [react()],
+define: {
+APP_VERSION: JSON.stringify(packageJson.version),
+BUILD_REVISION: JSON.stringify(buildRevision),
+},
+server: {
+watch: {
+ignored: ["/src-tauri/target/"],
+},
+},
 });
