@@ -626,14 +626,6 @@ return (
 </div>
 <div className="topbar-actions">
 <button
-className="topbar-button"
-type="button"
-onClick={() => setPaletteOpen(true)}
-title="Command palette (Ctrl/Cmd+K)"
->
-Command Palette
-</button>
-<button
 className="topbar-button icon-button"
 type="button"
 onClick={() => setThemeMode((value) => (value === "dark" ? "light" : "dark"))}
