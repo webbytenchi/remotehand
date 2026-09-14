@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
@@ -104,6 +104,9 @@ const [lastSelectedPath, setLastSelectedPath] = useState<string | null>(null);
 const [transferState, setTransferState] = useState<TransferState>("idle");
 const [transferStatus, setTransferStatus] = useState("");
 const [liveTransfer, setLiveTransfer] = useState<LiveTransfer | null>(null);
+const [cancelRequested, setCancelRequested] = useState(false);
+const nativeSessionId = useRef(crypto.randomUUID()).current;
+const useNativeSftp = Boolean(connection?.credentialRef);
 const transferring = transferState !== "idle";
 const loadPath = useCallback(
 async (path: string) => {
@@ -118,13 +121,17 @@ return;
 setLoading(true);
 setError("");
 try {
-const next = await invoke<SftpListing>("sftp_list", {
+const next = await invoke<SftpListing>(
+useNativeSftp ? "sftp_native_list" : "sftp_list",
+{
 host: connection.host,
 port: connection.port,
 user: connection.user,
 path,
 credentialRef: connection.credentialRef,
-});
+...(useNativeSftp ? { sessionId: nativeSessionId } : {}),
+},
+);
 setListing(next);
 setRequestedPath(next.path);
 setPathInput(next.path);
@@ -143,7 +150,7 @@ setError(message);
 setLoading(false);
 }
 },
-[connection],
+[connection, nativeSessionId, useNativeSftp],
 );
 const unlockVault = useCallback(async () => {
 if (!vaultPassphrase || unlocking) return;
@@ -163,6 +170,13 @@ setUnlocking(false);
 useEffect(() => {
 void loadPath(".");
 }, [loadPath]);
+
+useEffect(() => {
+if (!isTauri() || !useNativeSftp) return;
+return () => {
+void invoke("sftp_native_disconnect", { sessionId: nativeSessionId });
+};
+}, [nativeSessionId, useNativeSftp]);
 
 useEffect(() => {
 if (!isTauri()) return;
@@ -262,6 +276,7 @@ if (items.length === 0) return;
 const transferId = crypto.randomUUID();
 setTransferState("uploading");
 setTransferStatus("");
+setCancelRequested(false);
 setLiveTransfer({
 transferId,
 direction: "upload",
@@ -273,14 +288,18 @@ transferredBytes: 0,
 totalBytes: 0,
 });
 try {
-const result = await invoke<SftpTransferResult>("sftp_upload_many", {
+const result = await invoke<SftpTransferResult>(
+useNativeSftp ? "sftp_native_upload_many" : "sftp_upload_many",
+{
 host: connection.host,
 port: connection.port,
 user: connection.user,
 items,
 credentialRef: connection.credentialRef,
 transferId,
-});
+...(useNativeSftp ? { sessionId: nativeSessionId } : {}),
+},
+);
 setTransferStatus(
 "Upload complete · " +
 String(result.files) +
@@ -292,9 +311,15 @@ await loadPath(currentPath);
 } finally {
 setTransferState("idle");
 setLiveTransfer(null);
+setCancelRequested(false);
 }
 } catch (reason) {
-setError(String(reason));
+const message = String(reason);
+if (message.includes("SFTP transfer cancelled")) {
+setTransferStatus("Upload cancelled");
+} else {
+setError(message);
+}
 }
 }
 async function downloadFiles() {
@@ -318,6 +343,7 @@ size: entry.size,
 const transferId = crypto.randomUUID();
 setTransferState("downloading");
 setTransferStatus("");
+setCancelRequested(false);
 setLiveTransfer({
 transferId,
 direction: "download",
@@ -329,7 +355,9 @@ transferredBytes: 0,
 totalBytes: 0,
 });
 try {
-const result = await invoke<SftpTransferResult>("sftp_download_entries", {
+const result = await invoke<SftpTransferResult>(
+useNativeSftp ? "sftp_native_download_entries" : "sftp_download_entries",
+{
 host: connection.host,
 port: connection.port,
 user: connection.user,
@@ -337,7 +365,9 @@ folder,
 items,
 credentialRef: connection.credentialRef,
 transferId,
-});
+...(useNativeSftp ? { sessionId: nativeSessionId } : {}),
+},
+);
 setTransferStatus(
 "Download complete · " +
 String(result.files) +
@@ -349,10 +379,26 @@ String(result.folders) +
 formatSize(result.bytes),
 );
 } catch (reason) {
-setError(String(reason));
+const message = String(reason);
+if (message.includes("SFTP transfer cancelled")) {
+setTransferStatus("Download cancelled");
+} else {
+setError(message);
+}
 } finally {
 setTransferState("idle");
 setLiveTransfer(null);
+setCancelRequested(false);
+}
+}
+async function cancelTransfer() {
+if (!liveTransfer || !useNativeSftp || cancelRequested) return;
+setCancelRequested(true);
+try {
+await invoke("sftp_native_cancel_transfer", { transferId: liveTransfer.transferId });
+} catch (reason) {
+setCancelRequested(false);
+setError(String(reason));
 }
 }
 async function moveSelected() {
@@ -473,11 +519,23 @@ return (
 <div className="sftp-transfer-progress" role="status" aria-live="polite">
 <div className="sftp-transfer-progress-header">
 <strong>{liveTransfer.direction === "upload" ? "Uploading…" : "Downloading…"}</strong>
+<div className="sftp-transfer-progress-actions">
 <span>
 {liveTransfer.totalFiles > 0
 ? String(liveTransfer.completedFiles) + " / " + String(liveTransfer.totalFiles) + " files"
 : "Preparing transfer…"}
 </span>
+{useNativeSftp ? (
+<button
+type="button"
+className="sftp-transfer-cancel"
+onClick={() => void cancelTransfer()}
+disabled={cancelRequested}
+>
+{cancelRequested ? "Cancelling…" : "Cancel"}
+</button>
+) : null}
+</div>
 </div>
 <div className="sftp-transfer-current-path" title={liveTransfer.path}>
 {liveTransfer.path || "Preparing transfer…"}

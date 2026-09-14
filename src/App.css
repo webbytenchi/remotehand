@@ -1367,3 +1367,32 @@ background: #e3e8ef;
 transition: none;
 }
 }
+.sftp-transfer-progress-actions {
+display: flex;
+align-items: center;
+gap: 10px;
+}
+.sftp-transfer-cancel {
+border: 1px solid #46566b;
+border-radius: 6px;
+padding: 3px 8px;
+background: #182332;
+color: #dbe7f3;
+font: inherit;
+cursor: pointer;
+}
+.sftp-transfer-cancel:hover:not(:disabled) {
+background: #223247;
+}
+.sftp-transfer-cancel:disabled {
+opacity: 0.55;
+cursor: default;
+}
+html[data-theme="light"] .sftp-transfer-cancel {
+border-color: #b8c1cc;
+background: #f4f6f8;
+color: #29313d;
+}
+html[data-theme="light"] .sftp-transfer-cancel:hover:not(:disabled) {
+background: #e8edf3;
+}

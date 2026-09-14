@@ -9,57 +9,57 @@ use tauri::{AppHandle, Emitter, State};
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SftpEntry {
-    name: String,
-    path: String,
-    is_dir: bool,
-    size: u64,
-    permissions: String,
+pub(crate) struct SftpEntry {
+    pub(crate) name: String,
+    pub(crate) path: String,
+    pub(crate) is_dir: bool,
+    pub(crate) size: u64,
+    pub(crate) permissions: String,
 }
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SftpTransferItem {
-    local_path: String,
-    remote_path: String,
+pub(crate) struct SftpTransferItem {
+    pub(crate) local_path: String,
+    pub(crate) remote_path: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SftpRemoteItem {
-    path: String,
-    name: String,
-    is_dir: bool,
+pub(crate) struct SftpRemoteItem {
+    pub(crate) path: String,
+    pub(crate) name: String,
+    pub(crate) is_dir: bool,
     #[serde(default)]
-    size: u64,
+    pub(crate) size: u64,
 }
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SftpListing {
-    path: String,
-    entries: Vec<SftpEntry>,
+pub(crate) struct SftpListing {
+    pub(crate) path: String,
+    pub(crate) entries: Vec<SftpEntry>,
 }
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SftpTransferProgress {
-    transfer_id: String,
-    direction: String,
-    path: String,
-    completed_files: usize,
-    total_files: usize,
-    total_folders: usize,
-    transferred_bytes: u64,
-    total_bytes: u64,
+pub(crate) struct SftpTransferProgress {
+    pub(crate) transfer_id: String,
+    pub(crate) direction: String,
+    pub(crate) path: String,
+    pub(crate) completed_files: usize,
+    pub(crate) total_files: usize,
+    pub(crate) total_folders: usize,
+    pub(crate) transferred_bytes: u64,
+    pub(crate) total_bytes: u64,
 }
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SftpTransferResult {
-    items: usize,
-    files: usize,
-    folders: usize,
-    bytes: u64,
+pub(crate) struct SftpTransferResult {
+    pub(crate) items: usize,
+    pub(crate) files: usize,
+    pub(crate) folders: usize,
+    pub(crate) bytes: u64,
 }
 
 #[derive(Clone, Debug)]

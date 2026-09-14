@@ -1,5 +1,6 @@
 mod logging;
 mod sftp;
+mod sftp_native;
 mod storage;
 mod terminal;
 mod vault;
@@ -10,6 +11,7 @@ use terminal::TerminalState;
 pub fn run() {
     tauri::Builder::default()
         .manage(TerminalState::default())
+        .manage(sftp_native::PersistentSftpState::default())
         .manage(vault::VaultState::default())
         .invoke_handler(tauri::generate_handler![
             storage::load_settings,
@@ -31,6 +33,11 @@ pub fn run() {
             sftp::sftp_download,
             sftp::sftp_upload,
             sftp::sftp_default_download_path,
+            sftp_native::sftp_native_list,
+            sftp_native::sftp_native_upload_many,
+            sftp_native::sftp_native_download_entries,
+            sftp_native::sftp_native_cancel_transfer,
+            sftp_native::sftp_native_disconnect,
             vault::vault_status,
             vault::vault_initialize,
             vault::vault_unlock,
