@@ -435,7 +435,7 @@ String(selectedFolderCount) +
 (selectedFolderCount === 1 ? " folder" : " folders")}
 </div>
 </div>
-
+</div>
 
 <div className="sftp-action-toolbar" role="toolbar" aria-label="SFTP file actions">
 <button type="button" title="Choose files to upload" aria-label="Choose files to upload" onClick={() => void chooseUploadFiles()} disabled={loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0-5 5m5-5 5 5M5 20h14"/></svg><span>Upload</span></button>
