@@ -82,6 +82,18 @@ function fileNameFromLocalPath(path: string) {
 const normalized = path.split(String.fromCharCode(92)).join("/");
 return normalized.split("/").pop() || normalized;
 }
+function permissionsToOctal(permissions: string) {
+const mode = permissions.slice(-9);
+if (mode.length !== 9) return "";
+const digit = (triplet: string) =>
+String((triplet[0] === "r" ? 4 : 0) + (triplet[1] === "w" ? 2 : 0) + ("xst".includes(triplet[2].toLowerCase()) ? 1 : 0));
+const special =
+(mode[2] === "s" || mode[2] === "S" ? 4 : 0) +
+(mode[5] === "s" || mode[5] === "S" ? 2 : 0) +
+(mode[8] === "t" || mode[8] === "T" ? 1 : 0);
+const octal = digit(mode.slice(0, 3)) + digit(mode.slice(3, 6)) + digit(mode.slice(6, 9));
+return special ? String(special) + octal : octal;
+}
 function joinLocalPath(folder: string, fileName: string) {
 const backslash = String.fromCharCode(92);
 const separator = folder.includes(backslash) ? backslash : "/";
@@ -483,7 +495,9 @@ setActionModal("move");
 }
 function chmodSelected() {
 if (selectedEntries.length === 0 || transferring || loading) return;
-setModalValue("755");
+const octalValues = selectedEntries.map((entry) => permissionsToOctal(entry.permissions)).filter(Boolean);
+const uniqueOctalValues = Array.from(new Set(octalValues));
+setModalValue(uniqueOctalValues.length === 1 ? uniqueOctalValues[0] : "");
 setModalError("");
 setActionModal("chmod");
 }
@@ -658,6 +672,11 @@ default: return "OK";
 }
 }
 const propertiesEntry = selectedEntries.length === 1 ? selectedEntries[0] : null;
+const selectedPermissionOctals = selectedEntries.map((entry) => permissionsToOctal(entry.permissions)).filter(Boolean);
+const uniquePermissionOctals = Array.from(new Set(selectedPermissionOctals));
+const selectedPermissionSymbols = Array.from(new Set(selectedEntries.map((entry) => entry.permissions)));
+const chmodCurrentOctal = uniquePermissionOctals.length === 1 ? uniquePermissionOctals[0] : "Mixed";
+const chmodCurrentPermissions = selectedPermissionSymbols.length === 1 ? selectedPermissionSymbols[0] : "Mixed";
 const deleteDescription = selectedEntries.length === 1
 ? selectedEntries[0].name
 : String(selectedEntries.length) + " selected items";
@@ -883,6 +902,7 @@ onCancel={closeActionModal}
 <div><span>Type</span><strong>{propertiesEntry.isDir ? "Folder" : "File"}</strong></div>
 <div><span>Size</span><strong>{propertiesEntry.isDir ? "—" : formatSize(propertiesEntry.size)}</strong></div>
 <div><span>Permissions</span><strong>{propertiesEntry.permissions}</strong></div>
+<div><span>Octal</span><strong>{permissionsToOctal(propertiesEntry.permissions) || "—"}</strong></div>
 </>
 ) : (
 <>
@@ -898,6 +918,24 @@ onCancel={closeActionModal}
 <p className="app-modal-muted">Non-empty directories will be refused.</p>
 </>
 ) : (
+<>
+{actionModal === "chmod" ? (
+<div className="sftp-properties">
+{selectedEntries.length === 1 ? (
+<>
+<div><span>Name</span><strong>{selectedEntries[0].name}</strong></div>
+<div><span>Current permissions</span><strong>{selectedEntries[0].permissions}</strong></div>
+<div><span>Current octal</span><strong>{permissionsToOctal(selectedEntries[0].permissions) || "—"}</strong></div>
+</>
+) : (
+<>
+<div><span>Selected items</span><strong>{selectedEntries.length}</strong></div>
+<div><span>Current permissions</span><strong>{chmodCurrentPermissions}</strong></div>
+<div><span>Current octal</span><strong>{chmodCurrentOctal}</strong></div>
+</>
+)}
+</div>
+) : null}
 <label className="sftp-modal-field">
 <span>
 {actionModal === "new-folder"
@@ -925,6 +963,7 @@ autoFocus
 ) : null}
 {modalError ? <small className="sftp-modal-error">{modalError}</small> : null}
 </label>
+</>
 )}
 </AppModal>
 
