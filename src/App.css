@@ -298,12 +298,15 @@ grid-template-columns: 1fr;
   font-size: 24px;
 }
 .primary-button {
-  border: 1px solid #3a485d;
-  background: #1c293a;
-  color: #e2e8f0;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-surface);
+  color: var(--accent);
   border-radius: 7px;
   padding: 8px 12px;
   cursor: pointer;
+}
+.primary-button:hover {
+  background: var(--accent-surface-hover);
 }
 .connection-list {
   display: grid;
@@ -603,6 +606,14 @@ cursor: pointer;
 .terminal-toolbar button:hover,
 .terminal-search button:hover {
 background: #172131;
+}
+.terminal-toolbar .terminal-primary-action {
+  border-color: var(--accent-border);
+  background: var(--accent-surface);
+  color: var(--accent);
+}
+.terminal-toolbar .terminal-primary-action:hover {
+  background: var(--accent-surface-hover);
 }
 .terminal-status {
 color: #8b99aa;
@@ -1081,12 +1092,15 @@ color: #c5cfdb;
 padding: 7px 9px;
 }
 .sftp-unlock button {
-border: 1px solid #354a61;
+border: 1px solid var(--accent-border);
 border-radius: 7px;
-background: #132033;
-color: #9ec7ef;
+background: var(--accent-surface);
+color: var(--accent);
 padding: 7px 11px;
 cursor: pointer;
+}
+.sftp-unlock .sftp-unlock-button:hover:not(:disabled) {
+background: var(--accent-surface-hover);
 }
 html[data-theme="light"] .sftp-unlock {
 background: #ffffff;

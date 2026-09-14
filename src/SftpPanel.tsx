@@ -810,6 +810,7 @@ autoFocus
 </label>
 <button
 type="button"
+              className="sftp-unlock-button"
 onClick={() => void unlockVault()}
 disabled={!vaultPassphrase || unlocking}
 >

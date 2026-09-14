@@ -402,6 +402,7 @@ Confirm multi-line
 <button
 type="button"
 onClick={() => void pasteClipboard()}
+              className="terminal-primary-action"
 title="Paste clipboard"
 >
 Paste
