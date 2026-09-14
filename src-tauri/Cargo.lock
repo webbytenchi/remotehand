@@ -4055,6 +4055,7 @@ name = "remotehand"
 version = "0.1.0"
 dependencies = [
  "age",
+ "async-trait",
  "ed25519-dalek",
  "home",
  "log",

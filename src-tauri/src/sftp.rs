@@ -2,7 +2,7 @@ use crate::vault::{self, VaultState};
 use serde::{Deserialize, Serialize};
 use std::{
     env,
-    io::{BufRead, BufReader, Read, Write},
+    io::{Read, Write},
     process::{Command, Stdio},
 };
 use tauri::{AppHandle, Emitter, State};

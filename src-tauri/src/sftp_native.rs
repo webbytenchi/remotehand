@@ -57,6 +57,7 @@ impl std::fmt::Display for SshClientError {
     }
 }
 impl std::error::Error for SshClientError {}
+#[async_trait::async_trait]
 impl client::Handler for HostVerifier {
     type Error = SshClientError;
     async fn check_server_key(
