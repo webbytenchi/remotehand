@@ -247,7 +247,7 @@ document.querySelectorAll<HTMLDetailsElement>(".connection-menu[open]").forEach(
 if (other !== menu) other.open = false;
 });
 }}
-
+>
 <summary aria-label={`Manage ${connection.name}`}>⋯</summary>
 <div className="connection-menu-popover">
 <button
