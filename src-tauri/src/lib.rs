@@ -4,9 +4,9 @@ mod sftp_native;
 mod storage;
 mod terminal;
 mod vault;
-
+mod window_state;
+use tauri::Manager;
 use terminal::TerminalState;
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -58,8 +58,18 @@ pub fn run() {
         .setup(|app| {
             app.handle()
                 .plugin(logging::builder().map_err(std::io::Error::other)?.build())?;
+            let tracker = window_state::WindowStateTracker::default();
+            app.manage(tracker.clone());
+            window_state::restore(app, &tracker).map_err(std::io::Error::other)?;
             log::info!("RemoteHand started");
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if window.label() != "main" {
+                return;
+            }
+            let tracker = window.state::<window_state::WindowStateTracker>();
+            window_state::handle_event(&tracker, window, event);
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

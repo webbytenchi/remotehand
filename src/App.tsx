@@ -580,6 +580,9 @@ captureLayout(event.api);
 event.api.onDidMutateLayout(() => {
 captureLayout(event.api);
 });
+event.api.onDidLayoutChange(() => {
+captureLayout(event.api);
+});
 event.api.onDidRemovePanel((panel) => {
 if (panel.api.component !== "terminal") return;
 const sessionId = panel.id;
@@ -647,7 +650,13 @@ title="Toggle theme"
 <div className="sidebar-title-row">
 <div className="sidebar-heading">Workspace</div>
 <button className="sidebar-toggle" type="button" onClick={() => setSidebarCollapsed((value) => !value)} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}>
-<span>{sidebarCollapsed ? "›" : "‹"}</span>
+<span className="sidebar-toggle-icon" aria-hidden="true">
+<svg viewBox="0 0 20 20" focusable="false">
+<rect x="2.5" y="3" width="15" height="14" rx="2" />
+<path d="M7 3v14" />
+<path d={sidebarCollapsed ? "M11 7l3 3-3 3" : "M14 7l-3 3 3 3"} />
+</svg>
+</span>
 </button>
 </div>
 <button className="sidebar-action" type="button" onClick={() => addTerminal()} title="Terminal">
