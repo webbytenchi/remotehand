@@ -7,6 +7,7 @@ pub struct Settings {
     pub color_scheme: String,
     pub ui_font_family: String,
     pub ui_font_size: u8,
+    pub terminal_theme: String,
     pub terminal_font_family: String,
     pub terminal_font_size: u8,
 }
@@ -17,6 +18,7 @@ impl Default for Settings {
             color_scheme: "blue".to_string(),
             ui_font_family: "Inter".to_string(),
             ui_font_size: 13,
+            terminal_theme: "comfort".to_string(),
             terminal_font_family: "JetBrains Mono".to_string(),
             terminal_font_size: 13,
         }

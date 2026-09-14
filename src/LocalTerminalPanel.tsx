@@ -24,22 +24,55 @@ data: string;
 type TerminalExitEvent = {
 sessionId: string;
 };
-const DARK_THEME = {
+const COMFORT_THEME = {
+background: "#171a1f",
+foreground: "#d8dde6",
+cursor: "#d7dde6",
+cursorAccent: "#171a1f",
+selectionBackground: "#3a4658",
+black: "#252a31",
+red: "#e66b72",
+green: "#55c79a",
+yellow: "#d7c84d",
+blue: "#4eb4d8",
+magenta: "#d76bd7",
+cyan: "#70c8d8",
+white: "#c7ccd4",
+brightBlack: "#666d78",
+brightRed: "#f07b82",
+brightGreen: "#69d7aa",
+brightYellow: "#e3d85a",
+brightBlue: "#62c3e6",
+brightMagenta: "#e784df",
+brightCyan: "#86d6e3",
+brightWhite: "#eef1f5",
+};
+const CLASSIC_THEME = {
 background: "#05070a",
 foreground: "#d5dbe5",
 cursor: "#d5dbe5",
 selectionBackground: "#32445f",
-};
-const LIGHT_THEME = {
-background: "#f4f5f7",
-foreground: "#20242c",
-cursor: "#20242c",
-selectionBackground: "#b8c9df",
+black: "#000000",
+red: "#ff0000",
+green: "#00ff00",
+yellow: "#ffff00",
+blue: "#5c5cff",
+magenta: "#ff00ff",
+cyan: "#00ffff",
+white: "#d5dbe5",
+brightBlack: "#666666",
+brightRed: "#ff5555",
+brightGreen: "#55ff55",
+brightYellow: "#ffff55",
+brightBlue: "#7f7fff",
+brightMagenta: "#ff55ff",
+brightCyan: "#55ffff",
+brightWhite: "#ffffff",
 };
 function getTheme() {
-return document.documentElement.dataset.theme === "light"
-? LIGHT_THEME
-: DARK_THEME;
+return document.documentElement.dataset.terminalTheme === "classic"
+? CLASSIC_THEME
+: COMFORT_THEME;
 }
 async function writeTerminal(sessionId: string, data: string) {
 await invoke("terminal_write", { sessionId, data });
@@ -243,7 +276,7 @@ cols: terminal.cols,
 const observer = new MutationObserver(applyAppearance);
 observer.observe(document.documentElement, {
 attributes: true,
-attributeFilter: ["data-theme"],
+attributeFilter: ["data-theme", "data-terminal-theme"],
 });
 window.addEventListener("remotehand-appearance-change", applyAppearance);
 return () => {

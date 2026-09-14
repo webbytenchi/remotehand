@@ -24,11 +24,13 @@ credentialRef?: string;
 };
 type ThemeMode = "dark" | "light" | "system";
 type ColorScheme = "blue" | "emerald" | "violet" | "amber" | "neutral";
+type TerminalTheme = "comfort" | "classic";
 type Settings = {
 theme: ThemeMode;
 colorScheme: ColorScheme;
 uiFontFamily: string;
 uiFontSize: number;
+terminalTheme: TerminalTheme;
 terminalFontFamily: string;
 terminalFontSize: number;
 };
@@ -42,6 +44,7 @@ theme: "dark",
 colorScheme: "blue",
 uiFontFamily: "Inter",
 uiFontSize: 13,
+terminalTheme: "comfort",
 terminalFontFamily: "JetBrains Mono",
 terminalFontSize: 13,
 };
@@ -587,6 +590,7 @@ settings.theme === "system" ? (media.matches ? "dark" : "light") : settings.them
 setResolvedTheme(resolvedTheme);
 document.documentElement.dataset.theme = resolvedTheme;
 document.documentElement.dataset.scheme = settings.colorScheme;
+document.documentElement.dataset.terminalTheme = settings.terminalTheme;
 const uiFamily =
 settings.uiFontFamily === "System Default"
 ? 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
@@ -893,6 +897,19 @@ setSettings((current) => ({ ...current, uiFontFamily: event.target.value }))
 <span>{settings.uiFontSize} px</span>
 <button type="button" onClick={() => setSettings((current) => ({ ...current, uiFontSize: Math.min(18, current.uiFontSize + 1) }))}>+</button>
 </div>
+</div>
+<div className="settings-field">
+<label htmlFor="terminal-theme">Terminal theme</label>
+<select
+id="terminal-theme"
+value={settings.terminalTheme}
+onChange={(event) =>
+setSettings((current) => ({ ...current, terminalTheme: event.target.value as TerminalTheme }))
+}
+
+<option value="comfort">RemoteHand Comfort</option>
+<option value="classic">RemoteHand Classic</option>
+</select>
 </div>
 <div className="settings-field settings-font-row">
 <label htmlFor="terminal-font">Terminal font</label>
