@@ -2,10 +2,10 @@ use crate::vault::{self, VaultState};
 use serde::{Deserialize, Serialize};
 use std::{
     env,
-    io::Write,
+    io::{BufRead, BufReader, Write},
     process::{Command, Stdio},
 };
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -36,6 +36,22 @@ pub struct SftpRemoteItem {
 pub struct SftpListing {
     path: String,
     entries: Vec<SftpEntry>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SftpTransferProgress {
+    transfer_id: String,
+    direction: String,
+    path: String,
+    completed_files: usize,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SftpTransferResult {
+    items: usize,
+    files: usize,
 }
 
 fn quote_batch_path(path: &str) -> Result<String, String> {
@@ -106,6 +122,164 @@ fn password_for_credential(
         .map(|value| value.flatten())
 }
 
+fn transfer_path_from_line(line: &str, direction: &str) -> Option<String> {
+    let line = line.trim();
+    let prefix = if direction == "download" {
+        "Fetching "
+    } else if direction == "upload" {
+        "Uploading "
+    } else {
+        return None;
+    };
+    let rest = line.strip_prefix(prefix)?;
+    let path = if direction == "download" {
+        rest.split_once(" to ")
+            .map(|(source, _unused)| source)
+            .unwrap_or(rest)
+    } else {
+        rest.split_once(" to ")
+            .map(|(_unused, destination)| destination)
+            .unwrap_or(rest)
+    };
+    Some(path.trim_matches('"').to_string())
+}
+fn run_sftp_transfer_stream(
+    app: AppHandle,
+    transfer_id: String,
+    direction: &str,
+    host: String,
+    port: u16,
+    user: String,
+    password: Option<String>,
+    batch: String,
+) -> Result<usize, String> {
+    let host = host.trim();
+    let user = user.trim();
+    if host.is_empty() {
+        return Err("SFTP host is required".to_string());
+    }
+    if user.is_empty() {
+        return Err("SFTP user is required".to_string());
+    }
+
+    let mut command = Command::new("sftp");
+    command
+        .arg("-o")
+        .arg("ConnectTimeout=10")
+        .arg("-P")
+        .arg(port.max(1).to_string())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    if let Some(password) = password {
+        let askpass = env::current_exe().map_err(|error| error.to_string())?;
+        command
+            .arg("-o")
+            .arg("BatchMode=no")
+            .arg("-o")
+            .arg("PreferredAuthentications=password")
+            .arg("-o")
+            .arg("NumberOfPasswordPrompts=1")
+            .env("SSH_ASKPASS", askpass)
+            .env("SSH_ASKPASS_REQUIRE", "force")
+            .env("DISPLAY", "remotehand")
+            .env("REMOTEHAND_ASKPASS", "1")
+            .env("REMOTEHAND_ASKPASS_SECRET", password);
+    } else {
+        command.arg("-b").arg("-").arg("-o").arg("BatchMode=yes");
+    }
+
+    command.arg(format!("{user}@{host}"));
+
+    let mut child = command
+        .spawn()
+        .map_err(|error| format!("failed to start sftp: {error}"))?;
+
+    child
+        .stdin
+        .take()
+        .ok_or_else(|| "failed to open sftp input".to_string())?
+        .write_all(batch.as_bytes())
+        .map_err(|error| format!("failed to send sftp command: {error}"))?;
+
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "failed to read sftp output".to_string())?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| "failed to read sftp errors".to_string())?;
+
+    let (line_tx, line_rx) = std::sync::mpsc::channel::<(bool, String)>();
+    let stdout_tx = line_tx.clone();
+    let stdout_thread = std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines() {
+            match line {
+                Ok(line) => {
+                    if stdout_tx.send((false, line)).is_err() {
+                        break;
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    });
+    let stderr_thread = std::thread::spawn(move || {
+        for line in BufReader::new(stderr).lines() {
+            match line {
+                Ok(line) => {
+                    if line_tx.send((true, line)).is_err() {
+                        break;
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
+    let mut completed_files = 0usize;
+    let mut stderr_text = String::new();
+    for (is_stderr, line) in line_rx {
+        if is_stderr {
+            if !stderr_text.is_empty() {
+                stderr_text.push('\n');
+            }
+            stderr_text.push_str(&line);
+        }
+        if let Some(path) = transfer_path_from_line(&line, direction) {
+            completed_files += 1;
+            let _ = app.emit(
+                "sftp-transfer-progress",
+                SftpTransferProgress {
+                    transfer_id: transfer_id.clone(),
+                    direction: direction.to_string(),
+                    path,
+                    completed_files,
+                },
+            );
+        }
+    }
+
+    let _ = stdout_thread.join();
+    let _ = stderr_thread.join();
+    let status = child
+        .wait()
+        .map_err(|error| format!("failed to wait for sftp: {error}"))?;
+    let stderr = stderr_text;
+
+    if !status.success() {
+        let message = stderr.trim();
+        return Err(if message.is_empty() {
+            format!("SFTP {direction} failed")
+        } else {
+            format!("SFTP {direction} failed: {message}")
+        });
+    }
+
+    Ok(completed_files)
+}
 fn run_sftp_batch(
     host: String,
     port: u16,
@@ -335,13 +509,15 @@ pub async fn sftp_pick_download_folder() -> Result<Option<String>, String> {
 }
 #[tauri::command]
 pub async fn sftp_upload_many(
+    app: AppHandle,
     host: String,
     port: u16,
     user: String,
     items: Vec<SftpTransferItem>,
     credential_ref: Option<String>,
+    transfer_id: String,
     vault_state: State<'_, VaultState>,
-) -> Result<usize, String> {
+) -> Result<SftpTransferResult, String> {
     if items.is_empty() {
         return Err("at least one upload file is required".to_string());
     }
@@ -363,9 +539,21 @@ pub async fn sftp_upload_many(
             let remote = quote_batch_path(item.remote_path.trim())?;
             batch.push_str(&format!("put {local} {remote}\n"));
         }
-        run_sftp_batch(host, port, user, password, batch, "upload")?;
+        let files = run_sftp_transfer_stream(
+            app,
+            transfer_id,
+            "upload",
+            host,
+            port,
+            user,
+            password,
+            batch,
+        )?;
         log::info!("SFTP upload batch completed");
-        Ok(count)
+        Ok(SftpTransferResult {
+            items: count,
+            files: files.max(count),
+        })
     })
     .await
     .map_err(|error| format!("SFTP task failed: {error}"))?
@@ -432,14 +620,16 @@ fn remote_directory_is_empty(
 }
 #[tauri::command]
 pub async fn sftp_download_entries(
+    app: AppHandle,
     host: String,
     port: u16,
     user: String,
     folder: String,
     items: Vec<SftpRemoteItem>,
     credential_ref: Option<String>,
+    transfer_id: String,
     vault_state: State<'_, VaultState>,
-) -> Result<usize, String> {
+) -> Result<SftpTransferResult, String> {
     if items.is_empty() {
         return Err("at least one remote item is required".to_string());
     }
@@ -472,9 +662,21 @@ pub async fn sftp_download_entries(
                 batch.push_str(&format!("get {remote} {local}\n"));
             }
         }
-        run_sftp_batch(host, port, user, password, batch, "download")?;
+        let files = run_sftp_transfer_stream(
+            app,
+            transfer_id,
+            "download",
+            host,
+            port,
+            user,
+            password,
+            batch,
+        )?;
         log::info!("SFTP recursive download batch completed");
-        Ok(count)
+        Ok(SftpTransferResult {
+            items: count,
+            files,
+        })
     })
     .await
     .map_err(|error| format!("SFTP task failed: {error}"))?

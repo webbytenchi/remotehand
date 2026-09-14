@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MouseEvent } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { IDockviewPanelProps } from "dockview-react";
 type SftpConnection = {
 host: string;
@@ -26,6 +27,22 @@ connection?: SftpConnection;
 type TransferItem = {
 localPath: string;
 remotePath: string;
+};
+type SftpTransferProgressEvent = {
+transferId: string;
+direction: "upload" | "download";
+path: string;
+completedFiles: number;
+};
+type SftpTransferResult = {
+items: number;
+files: number;
+};
+type LiveTransfer = {
+transferId: string;
+direction: "upload" | "download";
+path: string;
+completedFiles: number;
 };
 type TransferState =
 | "idle"
@@ -85,6 +102,7 @@ const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
 const [lastSelectedPath, setLastSelectedPath] = useState<string | null>(null);
 const [transferState, setTransferState] = useState<TransferState>("idle");
 const [transferStatus, setTransferStatus] = useState("");
+const [liveTransfer, setLiveTransfer] = useState<LiveTransfer | null>(null);
 const transferring = transferState !== "idle";
 const loadPath = useCallback(
 async (path: string) => {
@@ -144,6 +162,27 @@ setUnlocking(false);
 useEffect(() => {
 void loadPath(".");
 }, [loadPath]);
+
+useEffect(() => {
+if (!isTauri()) return;
+let unlisten: UnlistenFn | undefined;
+void listen<SftpTransferProgressEvent>("sftp-transfer-progress", (event) => {
+setLiveTransfer((current) => {
+if (!current || current.transferId !== event.payload.transferId) return current;
+return {
+transferId: event.payload.transferId,
+direction: event.payload.direction,
+path: event.payload.path,
+completedFiles: event.payload.completedFiles,
+};
+});
+}).then((stop) => {
+unlisten = stop;
+});
+return () => {
+unlisten?.();
+};
+}, []);
 const selectedEntries = useMemo(
 () => listing?.entries.filter((entry) => selectedPaths.includes(entry.path)) ?? [],
 [listing, selectedPaths],
@@ -224,20 +263,28 @@ remotePath: remoteChildPath(currentPath, fileName),
 });
 }
 if (items.length === 0) return;
+const transferId = crypto.randomUUID();
 setTransferState("uploading");
 setTransferStatus("");
+setLiveTransfer({ transferId, direction: "upload", path: "", completedFiles: 0 });
 try {
-const count = await invoke<number>("sftp_upload_many", {
+const result = await invoke<SftpTransferResult>("sftp_upload_many", {
 host: connection.host,
 port: connection.port,
 user: connection.user,
 items,
 credentialRef: connection.credentialRef,
+transferId,
 });
-setTransferStatus("Uploaded " + String(count) + (count === 1 ? " file" : " files"));
+setTransferStatus(
+"Upload complete · " +
+String(result.files) +
+(result.files === 1 ? " file" : " files"),
+);
 await loadPath(currentPath);
 } finally {
 setTransferState("idle");
+setLiveTransfer(null);
 }
 } catch (reason) {
 setError(String(reason));
@@ -260,22 +307,33 @@ path: entry.path,
 name: entry.name,
 isDir: entry.isDir,
 }));
+const transferId = crypto.randomUUID();
 setTransferState("downloading");
 setTransferStatus("");
+setLiveTransfer({ transferId, direction: "download", path: "", completedFiles: 0 });
 try {
-const count = await invoke<number>("sftp_download_entries", {
+const result = await invoke<SftpTransferResult>("sftp_download_entries", {
 host: connection.host,
 port: connection.port,
 user: connection.user,
 folder,
 items,
 credentialRef: connection.credentialRef,
+transferId,
 });
-setTransferStatus("Downloaded " + String(count) + (count === 1 ? " item" : " items"));
+setTransferStatus(
+"Download complete · " +
+String(result.files) +
+(result.files === 1 ? " file" : " files") +
+" · " +
+String(result.items) +
+(result.items === 1 ? " selected item" : " selected items"),
+);
 } catch (reason) {
 setError(String(reason));
 } finally {
 setTransferState("idle");
+setLiveTransfer(null);
 }
 }
 async function moveSelected() {
@@ -386,6 +444,24 @@ Refresh
 <button type="button" title="Change permissions" aria-label="Change permissions" onClick={() => void chmodSelected()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 11V8a4 4 0 0 1 8 0v3M6 11h12v9H6z"/></svg><span>{transferState === "chmodding" ? "Working…" : "CHMOD"}</span></button>
 <button type="button" className="sftp-danger-action" title="Delete selected items" aria-label="Delete selected items" onClick={() => void deleteSelected()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg><span>{transferState === "deleting" ? "Working…" : "Delete"}</span></button>
 </div>
+{liveTransfer ? (
+<div className="sftp-transfer-progress" role="status" aria-live="polite">
+<div className="sftp-transfer-progress-header">
+<strong>{liveTransfer.direction === "upload" ? "Uploading…" : "Downloading…"}</strong>
+<span>
+{String(liveTransfer.completedFiles) +
+(liveTransfer.completedFiles === 1 ? " file transferred" : " files transferred")}
+</span>
+</div>
+<div className="sftp-transfer-current-path" title={liveTransfer.path}>
+{liveTransfer.path || "Preparing transfer…"}
+</div>
+<div className="sftp-transfer-progress-track" aria-hidden="true">
+<div className="sftp-transfer-progress-bar" />
+</div>
+</div>
+) : null}
+
 {selectedEntries.length > 0 ? (
 <div className="sftp-selected-summary">
 <span>Selected remote items</span>

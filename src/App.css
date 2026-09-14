@@ -1289,3 +1289,74 @@ color: #667085;
 html[data-theme="light"] .sftp-selected-summary strong {
 color: #29313d;
 }
+
+.sftp-transfer-progress {
+display: grid;
+gap: 7px;
+padding: 9px 10px;
+border: 1px solid #2e3c4f;
+border-radius: 8px;
+background: #0d1520;
+color: #c5cfdb;
+font-size: 12px;
+}
+.sftp-transfer-progress-header {
+display: flex;
+align-items: center;
+justify-content: space-between;
+gap: 16px;
+}
+.sftp-transfer-progress-header strong {
+font-weight: 600;
+color: #dbe7f3;
+}
+.sftp-transfer-progress-header span {
+color: #91a1b4;
+white-space: nowrap;
+}
+.sftp-transfer-current-path {
+overflow: hidden;
+text-overflow: ellipsis;
+white-space: nowrap;
+color: #9ec7ef;
+}
+.sftp-transfer-progress-track {
+height: 5px;
+overflow: hidden;
+border-radius: 999px;
+background: #1c2938;
+}
+.sftp-transfer-progress-bar {
+width: 36%;
+height: 100%;
+border-radius: inherit;
+background: currentColor;
+color: #5a8fc7;
+animation: sftp-transfer-indeterminate 1.15s ease-in-out infinite;
+}
+@keyframes sftp-transfer-indeterminate {
+0% { transform: translateX(-110%); }
+100% { transform: translateX(315%); }
+}
+html[data-theme="light"] .sftp-transfer-progress {
+background: #ffffff;
+border-color: #c7ced8;
+color: #29313d;
+}
+html[data-theme="light"] .sftp-transfer-progress-header strong {
+color: #29313d;
+}
+html[data-theme="light"] .sftp-transfer-progress-header span {
+color: #667085;
+}
+html[data-theme="light"] .sftp-transfer-current-path {
+color: #35658f;
+}
+html[data-theme="light"] .sftp-transfer-progress-track {
+background: #e3e8ef;
+}
+@media (prefers-reduced-motion: reduce) {
+.sftp-transfer-progress-bar {
+animation-duration: 2.5s;
+}
+}
