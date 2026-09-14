@@ -1630,3 +1630,24 @@ border-radius: 8px;
 width: 20px;
 height: 20px;
 }
+
+.terminal-paste-preview {
+  max-height: 280px;
+  margin: 12px 0 0;
+  overflow: auto;
+  border: 1px solid #263142;
+  border-radius: 8px;
+  padding: 12px;
+  background: #05070a;
+  color: #d5dbe5;
+  font-family: "Cascadia Code", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+html[data-theme="light"] .terminal-paste-preview {
+  border-color: #c8d0da;
+  background: #f4f5f7;
+  color: #20242c;
+}

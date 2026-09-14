@@ -4,6 +4,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import type { IDockviewPanelProps } from "dockview-react";
 import { useEffect, useRef, useState } from "react";
+import { AppModal } from "./AppModal";
 import "@xterm/xterm/css/xterm.css";
 type LocalShell = "default" | "powershell" | "cmd" | "wsl";
 type TerminalParams = {
@@ -56,6 +57,7 @@ const [searchQuery, setSearchQuery] = useState("");
 const [status, setStatus] = useState(params?.ssh ? "Connecting SSH..." : "Starting local shell...");
 const [rightClickPaste, setRightClickPaste] = useState(true);
 const [confirmMultiline, setConfirmMultiline] = useState(true);
+const [pendingPaste, setPendingPaste] = useState<string | null>(null);
 const sessionId = api.id;
 const shell = params?.shell ?? "default";
 const ssh = params?.ssh;
@@ -245,13 +247,8 @@ void navigator.clipboard
 if (!text) return;
 
 const multiline = text.includes("\n") || text.includes("\r");
-if (
-multiline &&
-confirmMultiline &&
-!window.confirm(
-"Paste multiple lines into the terminal? This may execute commands immediately.",
-)
-) {
+if (multiline && confirmMultiline) {
+setPendingPaste(text);
 return;
 }
 
@@ -291,13 +288,8 @@ const text = await navigator.clipboard.readText();
 if (!text) return;
 
 const multiline = text.includes("\n") || text.includes("\r");
-if (
-multiline &&
-confirmMultiline &&
-!window.confirm(
-"Paste multiple lines into the terminal? This may execute commands immediately.",
-)
-) {
+if (multiline && confirmMultiline) {
+setPendingPaste(text);
 return;
 }
 
@@ -389,6 +381,25 @@ ref={hostRef}
 className="terminal-host"
 onMouseDown={() => terminalRef.current?.focus()}
 />
+<AppModal
+open={pendingPaste !== null}
+title="Paste multiple lines?"
+confirmLabel="Paste"
+cancelLabel="Cancel"
+onConfirm={() => {
+const text = pendingPaste;
+setPendingPaste(null);
+if (!text) return;
+void writeTerminal(sessionId, text).finally(() => terminalRef.current?.focus());
+}}
+onCancel={() => {
+setPendingPaste(null);
+terminalRef.current?.focus();
+}}
+>
+<p>This may execute commands immediately. Review the text before pasting:</p>
+<pre className="terminal-paste-preview">{pendingPaste}</pre>
+</AppModal>
 </section>
 );
 }
