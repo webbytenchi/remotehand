@@ -1,5 +1,5 @@
 use crate::sftp_path::safe_local_child;
-use crate::vault::{self, VaultState};
+use crate::vault::VaultState;
 use serde::{Deserialize, Serialize};
 use std::{
     env,
@@ -127,14 +127,13 @@ fn parse_listing_line(line: &str, base: &str) -> Option<SftpEntry> {
 }
 
 fn password_for_credential(
-    vault_state: &State<'_, VaultState>,
+    _vault_state: &State<'_, VaultState>,
     credential_ref: Option<&str>,
 ) -> Result<Option<String>, String> {
-    credential_ref
-        .filter(|value| !value.trim().is_empty())
-        .map(|credential_ref| vault::get_secret(vault_state, credential_ref))
-        .transpose()
-        .map(|value| value.flatten())
+    if credential_ref.is_some_and(|value| !value.trim().is_empty()) {
+        return Err("Password-backed SFTP requires the native SFTP implementation".to_string());
+    }
+    Ok(None)
 }
 
 fn transfer_percent_from_record(record: &str) -> Option<u64> {
@@ -217,7 +216,7 @@ fn run_sftp_transfer_stream(
     host: String,
     port: u16,
     user: String,
-    password: Option<String>,
+    _password: Option<String>,
     batch: String,
     plan: Vec<SftpTransferPlanItem>,
     total_folders: usize,
@@ -243,23 +242,7 @@ fn run_sftp_transfer_stream(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
-    if let Some(password) = password {
-        let askpass = env::current_exe().map_err(|error| error.to_string())?;
-        command
-            .arg("-o")
-            .arg("BatchMode=no")
-            .arg("-o")
-            .arg("PreferredAuthentications=password")
-            .arg("-o")
-            .arg("NumberOfPasswordPrompts=1")
-            .env("SSH_ASKPASS", askpass)
-            .env("SSH_ASKPASS_REQUIRE", "force")
-            .env("DISPLAY", "remotehand")
-            .env("REMOTEHAND_ASKPASS", "1")
-            .env("REMOTEHAND_ASKPASS_SECRET", password);
-    } else {
-        command.arg("-b").arg("-").arg("-o").arg("BatchMode=yes");
-    }
+    command.arg("-b").arg("-").arg("-o").arg("BatchMode=yes");
 
     command.arg(format!("{user}@{host}"));
 
@@ -371,7 +354,7 @@ fn run_sftp_batch(
     host: String,
     port: u16,
     user: String,
-    password: Option<String>,
+    _password: Option<String>,
     batch: String,
     activity: &str,
 ) -> Result<String, String> {
@@ -396,23 +379,7 @@ fn run_sftp_batch(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
-    if let Some(password) = password {
-        let askpass = env::current_exe().map_err(|error| error.to_string())?;
-        command
-            .arg("-o")
-            .arg("BatchMode=no")
-            .arg("-o")
-            .arg("PreferredAuthentications=password")
-            .arg("-o")
-            .arg("NumberOfPasswordPrompts=1")
-            .env("SSH_ASKPASS", askpass)
-            .env("SSH_ASKPASS_REQUIRE", "force")
-            .env("DISPLAY", "remotehand")
-            .env("REMOTEHAND_ASKPASS", "1")
-            .env("REMOTEHAND_ASKPASS_SECRET", password);
-    } else {
-        command.arg("-b").arg("-").arg("-o").arg("BatchMode=yes");
-    }
+    command.arg("-b").arg("-").arg("-o").arg("BatchMode=yes");
 
     command.arg(format!("{user}@{host}"));
 
@@ -465,7 +432,7 @@ fn run_sftp_list(
     port: u16,
     user: String,
     path: String,
-    password: Option<String>,
+    _password: Option<String>,
 ) -> Result<SftpListing, String> {
     let host = host.trim();
     let user = user.trim();
@@ -495,24 +462,8 @@ fn run_sftp_list(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
-    if let Some(password) = password {
-        let askpass = env::current_exe().map_err(|error| error.to_string())?;
-        command
-            .arg("-o")
-            .arg("BatchMode=no")
-            .arg("-o")
-            .arg("PreferredAuthentications=password")
-            .arg("-o")
-            .arg("NumberOfPasswordPrompts=1")
-            .env("SSH_ASKPASS", askpass)
-            .env("SSH_ASKPASS_REQUIRE", "force")
-            .env("DISPLAY", "remotehand")
-            .env("REMOTEHAND_ASKPASS", "1")
-            .env("REMOTEHAND_ASKPASS_SECRET", password);
-    } else {
-        command.arg("-b").arg("-");
-        command.arg("-o").arg("BatchMode=yes");
-    }
+    command.arg("-b").arg("-");
+    command.arg("-o").arg("BatchMode=yes");
 
     command.arg(format!("{user}@{host}"));
 
