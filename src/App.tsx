@@ -12,6 +12,7 @@ import "dockview-react/dist/styles/dockview.css";
 import { LocalTerminalPanel } from "./LocalTerminalPanel";
 import { SftpPanel } from "./SftpPanel";
 import { AppModal } from "./AppModal";
+import { PluginManager } from "./PluginManager";
 import appIcon from "../src-tauri/icons/icon.png";
 import "./App.css";
 type Connection = {
@@ -390,6 +391,7 @@ const legacyTheme = localStorage.getItem(THEME_KEY);
 return { ...DEFAULT_SETTINGS, theme: legacyTheme === "light" ? "light" : "dark" };
 });
 const [settingsOpen, setSettingsOpen] = useState(false);
+const [pluginsOpen, setPluginsOpen] = useState(false);
 const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("dark");
 const [settingsLoaded, setSettingsLoaded] = useState(() => !isTauri());
 const settingsPersistenceEnabledRef = useRef(true);
@@ -863,6 +865,7 @@ const commands = [
 { label: "Split terminal right", hint: "Split", run: () => addTerminal("right") },
 { label: "Split terminal below", hint: "Split", run: () => addTerminal("below") },
 { label: "Open connections", hint: "Panel", run: addConnections },
+{ label: "Manage plugins", hint: "Add-ons", run: () => setPluginsOpen(true) },
 { label: "Float active panel", hint: "Layout", run: popoutActive },
 { label: "Undo layout change", hint: "Ctrl/Cmd+Z", run: undoLayout },
 { label: "Redo layout change", hint: "Ctrl/Cmd+Y", run: redoLayout },
@@ -882,6 +885,7 @@ return (
 </div>
 </div>
 <div className="topbar-actions">
+<button className="topbar-button icon-button" type="button" onClick={() => setPluginsOpen(true)} title="Plugins" aria-label="Plugins">🧩</button>
 <button
 className="topbar-button icon-button settings-button"
 type="button"
@@ -983,6 +987,10 @@ popoutUrl="popout.html"
 {!workspaceReady && <div className="workspace-loading">Preparing workspace…</div>}
 </section>
 </section>
+<PluginManager
+open={pluginsOpen}
+onClose={() => setPluginsOpen(false)}
+/>
 <AppModal
 open={settingsOpen}
 title="Settings"

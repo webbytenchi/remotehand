@@ -1,4 +1,5 @@
 mod logging;
+mod plugins;
 mod sftp;
 mod sftp_native;
 mod sftp_path;
@@ -40,6 +41,10 @@ pub fn run() {
             storage::load_workspace,
             storage::save_workspace,
             storage::clear_workspace,
+            plugins::plugin_install_from_folder,
+            plugins::plugin_list,
+            plugins::plugin_set_enabled,
+            plugins::plugin_remove,
             sftp::sftp_list,
             sftp::sftp_pick_upload_files,
             sftp::sftp_pick_download_folder,
