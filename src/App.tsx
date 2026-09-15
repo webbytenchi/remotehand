@@ -236,11 +236,26 @@ setSaving(false);
 const removeConnection = (connection: Connection) => {
 setPendingRemove(connection);
 };
-const confirmRemoveConnection = () => {
+const confirmRemoveConnection = async () => {
 if (!pendingRemove) return;
-onRemove(pendingRemove);
-if (editingId === pendingRemove.id) resetForm();
+const removed = pendingRemove;
+const credentialRef = removed.credentialRef;
+const credentialIsShared = credentialRef
+? connections.some((connection) => connection.id !== removed.id && connection.credentialRef === credentialRef)
+: false;
+onRemove(removed);
+if (editingId === removed.id) resetForm();
 setPendingRemove(null);
+if (credentialRef && !credentialIsShared && isTauri()) {
+try {
+await invoke("vault_delete_secret", { credentialRef });
+} catch (reason) {
+setNotice({
+title: "Connection removed, credential retained",
+message: "The connection was removed, but its saved credential could not be deleted from the locked or unavailable vault: " + String(reason),
+});
+}
+}
 };
 return (
 <section className="panel-content connections-panel">

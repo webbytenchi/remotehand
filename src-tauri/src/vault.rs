@@ -8,6 +8,7 @@ use std::{
     sync::Mutex,
 };
 use tauri::State;
+use zeroize::Zeroize;
 const VAULT_VERSION: u32 = 1;
 #[derive(Default)]
 pub struct VaultState {
@@ -21,6 +22,14 @@ struct UnlockedVault {
 struct VaultDocument {
     version: u32,
     entries: BTreeMap<String, String>,
+}
+
+impl Drop for VaultDocument {
+    fn drop(&mut self) {
+        for secret in self.entries.values_mut() {
+            secret.zeroize();
+        }
+    }
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -186,25 +195,12 @@ pub fn vault_store_secret<'a>(
     let vault = guard
         .as_mut()
         .ok_or_else(|| "credential vault is locked".to_string())?;
-    vault.document.entries.insert(credential_ref, secret);
+    if let Some(mut replaced) = vault.document.entries.insert(credential_ref, secret) {
+        replaced.zeroize();
+    }
     save_document(vault.passphrase.clone(), &vault.document)?;
     log::info!("Credential vault updated");
     Ok(())
-}
-#[tauri::command]
-pub fn vault_get_secret<'a>(
-    state: State<'a, VaultState>,
-    credential_ref: String,
-) -> Result<Option<String>, String> {
-    validate_credential_ref(&credential_ref)?;
-    let guard = state
-        .unlocked
-        .lock()
-        .map_err(|_| "vault state is unavailable".to_string())?;
-    let vault = guard
-        .as_ref()
-        .ok_or_else(|| "credential vault is locked".to_string())?;
-    Ok(vault.document.entries.get(&credential_ref).cloned())
 }
 #[tauri::command]
 pub fn vault_delete_secret<'a>(
@@ -219,12 +215,13 @@ pub fn vault_delete_secret<'a>(
     let vault = guard
         .as_mut()
         .ok_or_else(|| "credential vault is locked".to_string())?;
-    let removed = vault.document.entries.remove(&credential_ref).is_some();
-    if removed {
+    let mut removed = vault.document.entries.remove(&credential_ref);
+    if let Some(secret) = removed.as_mut() {
+        secret.zeroize();
         save_document(vault.passphrase.clone(), &vault.document)?;
         log::info!("Credential removed from vault");
     }
-    Ok(removed)
+    Ok(removed.is_some())
 }
 #[cfg(test)]
 mod tests {

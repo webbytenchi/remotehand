@@ -1,6 +1,7 @@
 mod logging;
 mod sftp;
 mod sftp_native;
+mod sftp_path;
 mod storage;
 mod terminal;
 mod vault;
@@ -65,7 +66,6 @@ pub fn run() {
             vault::vault_unlock,
             vault::vault_lock,
             vault::vault_store_secret,
-            vault::vault_get_secret,
             vault::vault_delete_secret,
             terminal::terminal_start,
             terminal::ssh_start,

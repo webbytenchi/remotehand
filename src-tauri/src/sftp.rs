@@ -1,3 +1,4 @@
+use crate::sftp_path::safe_local_child;
 use crate::vault::{self, VaultState};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -736,7 +737,7 @@ fn collect_remote_download_plan(
         password.clone(),
     )?;
     for entry in listing.entries {
-        let local_child = local_path.join(&entry.name);
+        let local_child = safe_local_child(local_path, &entry.name)?;
         if entry.is_dir {
             collect_remote_download_plan(
                 host,
@@ -777,7 +778,7 @@ pub async fn sftp_download_entries(
     let folder_path = std::path::PathBuf::from(folder.trim());
     let mut destinations = Vec::with_capacity(items.len());
     for item in &items {
-        let destination = folder_path.join(item.name.trim());
+        let destination = safe_local_child(&folder_path, &item.name)?;
         if destination.exists() {
             return Err(format!(
                 "local destination already exists: {}",

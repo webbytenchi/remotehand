@@ -2,6 +2,7 @@ use crate::sftp::{
     SftpEntry, SftpListing, SftpRemoteItem, SftpTransferItem, SftpTransferProgress,
     SftpTransferResult,
 };
+use crate::sftp_path::safe_local_child;
 use russh::{client, Disconnect};
 use russh_sftp::client::SftpSession;
 use std::{
@@ -62,7 +63,7 @@ impl client::Handler for HostVerifier {
     type Error = SshClientError;
     async fn check_server_key(
         &mut self,
-        server_public_key: &russh::keys::ssh_key::PublicKey,
+        server_public_key: &russh::keys::PublicKeyOrCertificate,
     ) -> Result<bool, Self::Error> {
         let known_hosts = home::home_dir()
             .map(|home| home.join(".ssh").join("known_hosts"))
@@ -71,12 +72,9 @@ impl client::Handler for HostVerifier {
                     "SSH host key verification failed: home directory is unavailable".to_string(),
                 )
             })?;
-        match russh::keys::check_known_hosts_path(
-            &self.host,
-            self.port,
-            server_public_key,
-            &known_hosts,
-        ) {
+        let public_key = server_public_key.public_key();
+        match russh::keys::check_known_hosts_path(&self.host, self.port, &public_key, &known_hosts)
+        {
             Ok(true) => Ok(true),
             Ok(false) => Err(SshClientError::HostKey(format!(
                 "SSH host key for {}:{} is not trusted in {}",
@@ -490,7 +488,7 @@ async fn build_download_plan(
     let mut directories = Vec::<PathBuf>::new();
     let mut stack = Vec::<(String, PathBuf)>::new();
     for item in items {
-        let destination = folder.join(item.name.trim());
+        let destination = safe_local_child(folder, &item.name)?;
         if destination.exists() {
             return Err(format!(
                 "local destination already exists: {}",
@@ -513,7 +511,7 @@ async fn build_download_plan(
             let name = entry.file_name();
             let metadata = entry.metadata();
             let remote_path = join_remote_path(&remote_dir, &name);
-            let local_path = local_dir.join(&name);
+            let local_path = safe_local_child(&local_dir, &name)?;
             if metadata.is_dir() {
                 directories.push(local_path.clone());
                 stack.push((remote_path, local_path));
