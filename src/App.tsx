@@ -13,6 +13,8 @@ import { LocalTerminalPanel } from "./LocalTerminalPanel";
 import { SftpPanel } from "./SftpPanel";
 import { AppModal } from "./AppModal";
 import { PluginManager } from "./PluginManager";
+import { VncPanel, type VncConnection } from "./VncPanel";
+import { VncConnectionsPanel } from "./VncConnectionsPanel";
 import appIcon from "../src-tauri/icons/icon.png";
 import "./App.css";
 type Connection = {
@@ -68,6 +70,7 @@ type HomePanelParams = {
 activities?: RecentActivity[];
 onOpen?: (activity: RecentActivity) => void;
 };
+type AppPluginInfo = { manifest: { id: string }; enabled: boolean };
 type ConnectionsPanelParams = {
 connections?: Connection[];
 };
@@ -391,6 +394,7 @@ const legacyTheme = localStorage.getItem(THEME_KEY);
 return { ...DEFAULT_SETTINGS, theme: legacyTheme === "light" ? "light" : "dark" };
 });
 const [settingsOpen, setSettingsOpen] = useState(false);
+const [vncEnabled, setVncEnabled] = useState(false);
 const [pluginsOpen, setPluginsOpen] = useState(false);
 const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("dark");
 const [settingsLoaded, setSettingsLoaded] = useState(() => !isTauri());
@@ -413,6 +417,22 @@ void invoke<string>("local_os")
 .then(setLocalOs)
 .catch((error) => console.error("Failed to detect local OS", error));
 }, []);
+const refreshPluginState = useCallback(async () => {
+if (!isTauri()) {
+setVncEnabled(false);
+return;
+}
+try {
+const plugins = await invoke<AppPluginInfo[]>("plugin_list");
+setVncEnabled(plugins.some((plugin) => plugin.manifest.id === "remotehand.vnc" && plugin.enabled));
+} catch (error) {
+console.error("Failed to inspect plugin state", error);
+setVncEnabled(false);
+}
+}, []);
+useEffect(() => {
+void refreshPluginState();
+}, [refreshPluginState]);
 const persistWorkspaceSnapshot = useCallback((snapshot: string, immediate = false) => {
 const save = () => {
 if (!workspacePersistenceEnabledRef.current) return;
@@ -571,12 +591,31 @@ detail: "Local shell",
 }, [localOs, recordActivity]);
 const addConnections = useCallback(() => {
 apiRef.current?.addPanel({
-id: `connections-${Date.now()}`,
+id: "connections-" + Date.now(),
 component: "connections",
 title: "Connections",
 params: { connections },
 });
 }, [connections]);
+const connectVnc = useCallback((connection: VncConnection) => {
+const api = apiRef.current;
+if (!api || !vncEnabled) return;
+const sessionId = "vnc-session-" + connection.id + "-" + Date.now();
+api.addPanel({
+id: sessionId,
+component: "vnc",
+title: connection.name,
+params: { sessionId, connection },
+});
+}, [vncEnabled]);
+const addVncConnections = useCallback(() => {
+if (!vncEnabled) return;
+apiRef.current?.addPanel({
+id: "vnc-connections-" + Date.now(),
+component: "vnc-connections",
+title: "VNC Connections",
+});
+}, [vncEnabled]);
 const openRecentActivity = useCallback((activity: RecentActivity) => {
 if (activity.kind === "ssh") {
 if (activity.connection) connectSsh(activity.connection);
@@ -624,8 +663,10 @@ onConnect={connectSsh}
 onSftp={openSftp}
 />
 ),
+vnc: VncPanel,
+"vnc-connections": () => <VncConnectionsPanel onConnect={connectVnc} />,
 }),
-[recentActivities, homeMessageIndex, openRecentActivity, addConnection, updateConnection, removeConnection, connectSsh, openSftp],
+[recentActivities, homeMessageIndex, openRecentActivity, addConnection, updateConnection, removeConnection, connectSsh, openSftp, connectVnc],
 );
 const popoutActive = useCallback(() => {
 const api = apiRef.current;
@@ -862,6 +903,7 @@ const commands = [
 : [
 { label: "New terminal", hint: "Local", run: () => addTerminal() },
 ]),
+...(vncEnabled ? [{ label: "Open VNC connections", hint: "Plugin", run: addVncConnections }] : []),
 { label: "Split terminal right", hint: "Split", run: () => addTerminal("right") },
 { label: "Split terminal below", hint: "Split", run: () => addTerminal("below") },
 { label: "Open connections", hint: "Panel", run: addConnections },
@@ -946,6 +988,11 @@ aria-label="Settings"
 <span className="sidebar-icon">⌘</span><span className="sidebar-label">Terminal</span>
 </button>
 )}
+{vncEnabled ? (
+<button className="sidebar-action" type="button" onClick={addVncConnections} title="VNC Connections">
+<span className="sidebar-icon">▣</span><span className="sidebar-label">VNC</span>
+</button>
+) : null}
 <button className="sidebar-action" type="button" onClick={addConnections} title="Connections">
 <span className="sidebar-icon">◈</span><span className="sidebar-label">Connections</span>
 </button>
@@ -989,7 +1036,7 @@ popoutUrl="popout.html"
 </section>
 <PluginManager
 open={pluginsOpen}
-onClose={() => setPluginsOpen(false)}
+onClose={() => { setPluginsOpen(false); void refreshPluginState(); }}
 />
 <AppModal
 open={settingsOpen}

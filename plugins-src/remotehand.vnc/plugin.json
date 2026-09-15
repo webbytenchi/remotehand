@@ -1,0 +1,16 @@
+{
+"id": "remotehand.vnc",
+"name": "RemoteHand VNC",
+"version": "1.0.4",
+"apiVersion": 1,
+"author": "RemoteHand",
+"description": "First-party host-mediated VNC support for RemoteHand.",
+"capabilities": [
+"connection-type",
+"dock-panel",
+"network",
+"credential-use",
+"filesystem-read",
+"filesystem-write"
+]
+}

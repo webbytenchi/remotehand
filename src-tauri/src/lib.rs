@@ -6,6 +6,7 @@ mod sftp_path;
 mod storage;
 mod terminal;
 mod vault;
+mod vnc;
 mod window_state;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -30,6 +31,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(TerminalState::default())
         .manage(sftp_native::PersistentSftpState::default())
+        .manage(vnc::VncState::default())
         .manage(vault::VaultState::default())
         .invoke_handler(tauri::generate_handler![
             storage::load_settings,
@@ -79,6 +81,17 @@ pub fn run() {
             terminal::ssh_start,
             terminal::terminal_write,
             terminal::terminal_resize,
+            vnc::vnc_start,
+            vnc::vnc_frame,
+            vnc::vnc_pointer,
+            vnc::vnc_key,
+            vnc::vnc_clipboard,
+            vnc::vnc_refresh,
+            vnc::vnc_close,
+            vnc::vnc_load_connections,
+            vnc::vnc_save_connections,
+            vnc::vnc_store_credential,
+            vnc::vnc_delete_credential,
             terminal::terminal_close,
             local_os,
         ])

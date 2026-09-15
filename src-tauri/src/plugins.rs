@@ -495,3 +495,25 @@ mod tests {
         assert!(!safe_directory_name("nested/plugin"));
     }
 }
+pub(crate) fn require_enabled_capabilities(
+    id: &str,
+    required: &[&str],
+) -> Result<PluginInfo, String> {
+    let plugin = require_installed(id)?;
+    if !plugin.enabled {
+        return Err(format!("plugin {id} is disabled"));
+    }
+    for capability in required {
+        if !plugin
+            .manifest
+            .capabilities
+            .iter()
+            .any(|declared| declared == capability)
+        {
+            return Err(format!(
+                "plugin {id} does not declare required capability: {capability}"
+            ));
+        }
+    }
+    Ok(plugin)
+}

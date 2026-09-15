@@ -178,3 +178,20 @@ Explicit network and clipboard permissions.
 Dock panel contribution through stable plugin APIs.
 
 Failure isolation and protocol-specific runtime tests.
+v1.0.4 — VNC plugin milestone
+
+First-party remotehand.vnc Plugin API v1 package.
+
+VNC Connections dock panel and embedded framebuffer viewer.
+
+Classic RFB 3.3/3.7/3.8 with no-auth and VNC password authentication.
+
+Core-mediated VNC credential use; decrypted passwords are not exposed to frontend plugin code.
+
+Plugin-gated network, credential, and plugin-data filesystem operations.
+
+Saved VNC connections under portable plugin data.
+
+Pointer and keyboard input.
+
+Host-mediated driver model; no arbitrary native plugin loading.

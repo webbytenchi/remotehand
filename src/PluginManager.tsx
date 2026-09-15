@@ -124,7 +124,7 @@ Install from folder
 <div className="plugin-security-note">
 <strong>Plugin API v1 security model</strong>
 <span>
-RemoteHand validates manifests and manages plugin lifecycle. v1.0.3 does not load arbitrary
+RemoteHand validates manifests and manages plugin lifecycle. Supported first-party drivers are host-mediated; RemoteHand does not load arbitrary
 native plugin code.
 </span>
 </div>
