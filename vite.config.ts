@@ -19,6 +19,14 @@ define: {
 APP_VERSION: JSON.stringify(packageJson.version),
 BUILD_REVISION: JSON.stringify(buildRevision),
 },
+build: {
+rollupOptions: {
+input: {
+main: "index.html",
+popout: "popout.html",
+},
+},
+},
 server: {
 watch: {
 ignored: ["**/src-tauri/target/**"],
