@@ -156,7 +156,9 @@ terminal.writeln(
 const selectionDisposable = terminal.onSelectionChange(() => {
 const selection = terminal.getSelection();
 if (!selection) return;
-void navigator.clipboard.writeText(selection).catch(() => undefined);
+const clipboard = host.ownerDocument.defaultView?.navigator.clipboard;
+if (!clipboard) return;
+void clipboard.writeText(selection).catch(() => undefined);
 });
 
 const start = async () => {
@@ -302,7 +304,10 @@ if (!pasteAction) return;
 event.preventDefault();
 if (!isTauri()) return;
 
-void navigator.clipboard
+const clipboard = host.ownerDocument.defaultView?.navigator.clipboard;
+if (!clipboard) return;
+
+void clipboard
 .readText()
 .then(async (text) => {
 if (!text) return;
@@ -336,16 +341,19 @@ terminalRef.current?.focus();
 };
 
 host.addEventListener("contextmenu", onContextMenu);
-window.addEventListener("keydown", onKeyDown);
+const ownerWindow = host.ownerDocument.defaultView;
+ownerWindow?.addEventListener("keydown", onKeyDown);
 
 return () => {
 host.removeEventListener("contextmenu", onContextMenu);
-window.removeEventListener("keydown", onKeyDown);
+ownerWindow?.removeEventListener("keydown", onKeyDown);
 };
 }, [confirmMultiline, rightClickPaste, searchOpen, sessionId]);
 const pasteClipboard = async () => {
 if (!isTauri()) return;
-const text = await navigator.clipboard.readText();
+const clipboard = hostRef.current?.ownerDocument.defaultView?.navigator.clipboard;
+if (!clipboard) return;
+const text = await clipboard.readText();
 if (!text) return;
 
 const multiline = text.includes("\n") || text.includes("\r");
