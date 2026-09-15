@@ -143,11 +143,13 @@ select {
   justify-content: center;
 }
 .workspace.sidebar-collapsed .sidebar-title-row .sidebar-heading,
-.workspace.sidebar-collapsed .sidebar > .sidebar-heading,
 .workspace.sidebar-collapsed .sidebar-label {
   width: 0;
   opacity: 0;
   pointer-events: none;
+}
+.workspace.sidebar-collapsed .sidebar > .sidebar-heading {
+  display: none;
 }
 .workspace.sidebar-collapsed .sidebar-action {
   justify-content: center;
@@ -159,7 +161,7 @@ select {
   flex-basis: 20px;
 }
 .workspace.sidebar-collapsed .sidebar-divider {
-  margin: 14px 0;
+  margin: 7px 0 14px;
 }
 .sidebar-action:hover,
 .new-connection:hover {
