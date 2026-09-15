@@ -751,6 +751,154 @@ pub async fn sftp_native_rename_entry(
         .map_err(|error| map_sftp_error("rename", error))
 }
 #[tauri::command]
+pub async fn sftp_native_move_entries(
+    session_id: String,
+    host: String,
+    port: u16,
+    user: String,
+    destination: String,
+    items: Vec<SftpRemoteItem>,
+    credential_ref: String,
+    state: tauri::State<'_, PersistentSftpState>,
+    vault_state: tauri::State<'_, crate::vault::VaultState>,
+) -> Result<usize, String> {
+    if items.is_empty() {
+        return Err("at least one remote item is required".to_string());
+    }
+    let destination = destination.trim();
+    if destination.is_empty() {
+        return Err("remote destination directory is required".to_string());
+    }
+
+    let password = password_from_vault(&vault_state, &credential_ref)?;
+    let session = session_for(&state, &session_id, &host, port, &user, &password).await?;
+    let session = session.lock().await;
+    let count = items.len();
+
+    for item in items {
+        let source = item.path.trim();
+        let name = item.name.trim();
+        if source.is_empty() || name.is_empty() {
+            return Err("remote source path and name are required".to_string());
+        }
+        let target = join_remote_path(destination, name);
+        session
+            .sftp
+            .rename(source, target)
+            .await
+            .map_err(|error| map_sftp_error("move", error))?;
+    }
+
+    Ok(count)
+}
+
+#[tauri::command]
+pub async fn sftp_native_chmod_entries(
+    session_id: String,
+    host: String,
+    port: u16,
+    user: String,
+    mode: String,
+    items: Vec<SftpRemoteItem>,
+    credential_ref: String,
+    state: tauri::State<'_, PersistentSftpState>,
+    vault_state: tauri::State<'_, crate::vault::VaultState>,
+) -> Result<usize, String> {
+    if items.is_empty() {
+        return Err("at least one remote item is required".to_string());
+    }
+
+    let mode = mode.trim();
+    if mode.len() < 3
+        || mode.len() > 4
+        || !mode.chars().all(|character| matches!(character, '0'..='7'))
+    {
+        return Err("CHMOD mode must be a 3 or 4 digit octal value".to_string());
+    }
+
+    let permissions = u32::from_str_radix(mode, 8).map_err(|_| "invalid CHMOD mode".to_string())?;
+    let password = password_from_vault(&vault_state, &credential_ref)?;
+    let session = session_for(&state, &session_id, &host, port, &user, &password).await?;
+    let session = session.lock().await;
+    let count = items.len();
+
+    for item in items {
+        let path = item.path.trim();
+        if path.is_empty() {
+            return Err("remote path is required".to_string());
+        }
+        let metadata = russh_sftp::protocol::FileAttributes {
+            permissions: Some(permissions),
+            ..Default::default()
+        };
+        session
+            .sftp
+            .set_metadata(path, metadata)
+            .await
+            .map_err(|error| map_sftp_error("chmod", error))?;
+    }
+
+    Ok(count)
+}
+
+#[tauri::command]
+pub async fn sftp_native_delete_entries(
+    session_id: String,
+    host: String,
+    port: u16,
+    user: String,
+    items: Vec<SftpRemoteItem>,
+    credential_ref: String,
+    state: tauri::State<'_, PersistentSftpState>,
+    vault_state: tauri::State<'_, crate::vault::VaultState>,
+) -> Result<usize, String> {
+    if items.is_empty() {
+        return Err("at least one remote item is required".to_string());
+    }
+
+    let password = password_from_vault(&vault_state, &credential_ref)?;
+    let session = session_for(&state, &session_id, &host, port, &user, &password).await?;
+    let session = session.lock().await;
+
+    for item in items.iter().filter(|item| item.is_dir) {
+        let entries = session
+            .sftp
+            .read_dir(item.path.trim())
+            .await
+            .map_err(|error| map_sftp_error("directory check", error))?;
+        if entries.into_iter().any(|entry| {
+            let name = entry.file_name();
+            name != "." && name != ".."
+        }) {
+            return Err(format!("Directory is not empty: {}", item.name));
+        }
+    }
+
+    let count = items.len();
+    for item in items {
+        let path = item.path.trim();
+        if path.is_empty() {
+            return Err("remote path is required".to_string());
+        }
+        if item.is_dir {
+            session
+                .sftp
+                .remove_dir(path)
+                .await
+                .map_err(|error| map_sftp_error("delete", error))?;
+        } else {
+            session
+                .sftp
+                .remove_file(path)
+                .await
+                .map_err(|error| map_sftp_error("delete", error))?;
+        }
+    }
+
+    Ok(count)
+}
+
+#[tauri::command]
 pub async fn sftp_native_upload_many(
     app: AppHandle,
     session_id: String,

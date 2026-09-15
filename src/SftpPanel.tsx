@@ -575,13 +575,14 @@ if (modal === "move") {
 setTransferState("moving");
 setTransferStatus(selectedEntries.length === 1 ? "Moving " + String.fromCharCode(34) + selectedEntries[0].name + String.fromCharCode(34) + " to " + String.fromCharCode(34) + value + String.fromCharCode(34) + "..." : "Moving " + String(selectedEntries.length) + " items to " + String.fromCharCode(34) + value + String.fromCharCode(34) + "...");
 try {
-const count = await invoke<number>("sftp_move_entries", {
+const count = await invoke<number>(useNativeSftp ? "sftp_native_move_entries" : "sftp_move_entries", {
 host: connection.host,
 port: connection.port,
 user: connection.user,
 destination: value,
 items: selectedEntries.map(({ path, name, isDir }) => ({ path, name, isDir })),
 credentialRef: connection.credentialRef,
+...(useNativeSftp ? { sessionId: nativeSessionId } : {}),
 });
 await loadPath(currentPath);
 setTransferStatus("Moved " + String(count) + (count === 1 ? " item" : " items"));
@@ -596,13 +597,14 @@ if (modal === "chmod") {
 setTransferState("chmodding");
 setTransferStatus(selectedEntries.length === 1 ? "Changing permissions for " + String.fromCharCode(34) + selectedEntries[0].name + String.fromCharCode(34) + " to " + value + "..." : "Changing permissions for " + String(selectedEntries.length) + " items to " + value + "...");
 try {
-const count = await invoke<number>("sftp_chmod_entries", {
+const count = await invoke<number>(useNativeSftp ? "sftp_native_chmod_entries" : "sftp_chmod_entries", {
 host: connection.host,
 port: connection.port,
 user: connection.user,
 mode: value,
 items: selectedEntries.map(({ path, name, isDir }) => ({ path, name, isDir })),
 credentialRef: connection.credentialRef,
+...(useNativeSftp ? { sessionId: nativeSessionId } : {}),
 });
 await loadPath(currentPath);
 setTransferStatus("Changed permissions on " + String(count) + (count === 1 ? " item" : " items"));
@@ -617,12 +619,13 @@ if (modal === "delete") {
 setTransferState("deleting");
 setTransferStatus(selectedEntries.length === 1 ? "Deleting " + String.fromCharCode(34) + selectedEntries[0].name + String.fromCharCode(34) + "..." : "Deleting " + String(selectedEntries.length) + " items...");
 try {
-const count = await invoke<number>("sftp_delete_entries", {
+const count = await invoke<number>(useNativeSftp ? "sftp_native_delete_entries" : "sftp_delete_entries", {
 host: connection.host,
 port: connection.port,
 user: connection.user,
 items: selectedEntries.map(({ path, name, isDir }) => ({ path, name, isDir })),
 credentialRef: connection.credentialRef,
+...(useNativeSftp ? { sessionId: nativeSessionId } : {}),
 });
 await loadPath(currentPath);
 setTransferStatus("Deleted " + String(count) + (count === 1 ? " item" : " items"));
