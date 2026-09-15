@@ -66,7 +66,9 @@ fn write_frame<W: Write, T: Serialize>(writer: &mut W, value: &T) -> Result<(), 
         .and_then(|_| writer.flush())
         .map_err(|error| format!("failed to write plugin frame: {error}"))
 }
-fn resolve_entrypoint(plugin: &PluginInfo) -> Result<std::path::PathBuf, String> {
+fn resolve_entrypoint(
+    plugin: &PluginInfo,
+) -> Result<(std::path::PathBuf, std::path::PathBuf), String> {
     let plugin_root = crate::plugins::plugins_root_for_runtime()?.join(&plugin.directory);
     let entrypoint = Path::new(&plugin.manifest.runtime.entrypoint);
     if entrypoint.is_absolute()
@@ -91,7 +93,7 @@ fn resolve_entrypoint(plugin: &PluginInfo) -> Result<std::path::PathBuf, String>
     if !canonical.starts_with(&root) {
         return Err("plugin runtime entrypoint escaped package root".to_string());
     }
-    Ok(canonical)
+    Ok((root, canonical))
 }
 fn perform_handshake(
     plugin: &PluginInfo,
@@ -150,14 +152,10 @@ impl PluginRuntimeState {
                 return Ok(());
             }
         }
-        let entrypoint = resolve_entrypoint(plugin)?;
-        let plugin_root = entrypoint
-            .parent()
-            .and_then(Path::parent)
-            .unwrap_or_else(|| Path::new("."));
+        let (plugin_root, entrypoint) = resolve_entrypoint(plugin)?;
 
         let mut child = Command::new(&entrypoint)
-            .current_dir(plugin_root)
+            .current_dir(&plugin_root)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
@@ -211,11 +209,20 @@ impl PluginRuntimeState {
         let Some(mut session) = sessions.remove(id) else {
             return Ok(());
         };
-        session
+        match session
             .child
-            .kill()
-            .map_err(|error| format!("failed to stop plugin runtime: {error}"))?;
-        let _ = session.child.wait();
+            .try_wait()
+            .map_err(|error| format!("failed to inspect plugin runtime: {error}"))?
+        {
+            Some(_) => {}
+            None => {
+                session
+                    .child
+                    .kill()
+                    .map_err(|error| format!("failed to stop plugin runtime: {error}"))?;
+                let _ = session.child.wait();
+            }
+        }
         log::info!("Plugin runtime {id} stopped");
         Ok(())
     }
