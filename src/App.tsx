@@ -76,12 +76,7 @@ const HOME_MESSAGES = [
 "Your workspace is ready. Continue a recent session.",
 "Ready when you are. Open a recent activity below.",
 ];
-function HomePanel({ activities, onOpen }: { activities: RecentActivity[]; onOpen: (activity: RecentActivity) => void }) {
-const [messageIndex, setMessageIndex] = useState(0);
-useEffect(() => {
-const timer = window.setInterval(() => setMessageIndex((current) => (current + 1) % HOME_MESSAGES.length), 7000);
-return () => window.clearInterval(timer);
-}, []);
+function HomePanel({ activities, onOpen, messageIndex }: { activities: RecentActivity[]; onOpen: (activity: RecentActivity) => void; messageIndex: number }) {
 return (
 <section className="panel-content home-panel">
 <div className="home-hero">
@@ -363,6 +358,7 @@ onCancel={() => setNotice(null)}
 function App() {
 const [connections, setConnections] = useState(initialConnections);
 const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
+const [homeMessageIndex, setHomeMessageIndex] = useState(() => Math.floor(Math.random() * HOME_MESSAGES.length));
 const [recentActivitiesLoaded, setRecentActivitiesLoaded] = useState(() => !isTauri());
 const [connectionsLoaded, setConnectionsLoaded] = useState(() => !isTauri());
 const [settings, setSettings] = useState<Settings>(() => {
@@ -578,6 +574,10 @@ addTerminal(undefined, activity.kind === "terminal" ? "default" : activity.kind)
 const openHome = useCallback(() => {
 const api = apiRef.current;
 if (!api) return;
+setHomeMessageIndex((current) => {
+const offset = 1 + Math.floor(Math.random() * (HOME_MESSAGES.length - 1));
+return (current + offset) % HOME_MESSAGES.length;
+});
 const existing = api.panels.find((panel) => panel.api.component === "welcome");
 if (existing) {
 existing.api.setTitle("Home");
@@ -592,6 +592,7 @@ welcome: (props: IDockviewPanelProps<HomePanelParams>) => (
 <HomePanel
 activities={props.params?.activities ?? recentActivities}
 onOpen={openRecentActivity}
+messageIndex={homeMessageIndex}
 />
 ),
 terminal: LocalTerminalPanel,
@@ -607,7 +608,7 @@ onSftp={openSftp}
 />
 ),
 }),
-[recentActivities, openRecentActivity, addConnection, updateConnection, removeConnection, connectSsh, openSftp],
+[recentActivities, homeMessageIndex, openRecentActivity, addConnection, updateConnection, removeConnection, connectSsh, openSftp],
 );
 const popoutActive = useCallback(() => {
 const api = apiRef.current;
