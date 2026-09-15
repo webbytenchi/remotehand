@@ -381,7 +381,7 @@ className="panel-dock-back"
 type="button"
 onClick={() => api.getWindow().close()}
 title="Dock back into RemoteHand"
-aria-label="Dock back into RemoteHand"
+aria-label="Dock back into RemoteHand">
 
 <span aria-hidden="true">↙</span>
 <span>Dock back</span>
