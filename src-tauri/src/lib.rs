@@ -23,6 +23,8 @@ pub fn run() {
             storage::save_settings,
             storage::load_connections,
             storage::save_connections,
+            storage::load_recent_activities,
+            storage::save_recent_activities,
             storage::load_workspace,
             storage::save_workspace,
             storage::clear_workspace,

@@ -39,6 +39,17 @@ pub struct SavedConnection {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credential_ref: Option<String>,
 }
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentActivity {
+    pub id: String,
+    pub kind: String,
+    pub title: String,
+    pub detail: String,
+    pub timestamp: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connection: Option<SavedConnection>,
+}
 fn data_root() -> Result<PathBuf, String> {
     let executable = env::current_exe().map_err(|error| error.to_string())?;
     let executable_dir = executable
@@ -54,6 +65,9 @@ fn workspace_path() -> Result<PathBuf, String> {
 }
 fn settings_path() -> Result<PathBuf, String> {
     Ok(data_root()?.join("config").join("settings.json"))
+}
+fn recent_activity_path() -> Result<PathBuf, String> {
+    Ok(data_root()?.join("activity").join("recent.json"))
 }
 #[tauri::command]
 pub fn load_settings() -> Result<Settings, String> {
@@ -91,6 +105,25 @@ pub fn save_connections(connections: Vec<SavedConnection>) -> Result<(), String>
         .ok_or_else(|| "failed to resolve connections directory".to_string())?;
     fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     let contents = serde_json::to_string_pretty(&connections).map_err(|error| error.to_string())?;
+    fs::write(path, contents).map_err(|error| error.to_string())
+}
+#[tauri::command]
+pub fn load_recent_activities() -> Result<Vec<RecentActivity>, String> {
+    let path = recent_activity_path()?;
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let contents = fs::read_to_string(&path).map_err(|error| error.to_string())?;
+    serde_json::from_str(&contents).map_err(|error| error.to_string())
+}
+#[tauri::command]
+pub fn save_recent_activities(activities: Vec<RecentActivity>) -> Result<(), String> {
+    let path = recent_activity_path()?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| "failed to resolve activity directory".to_string())?;
+    fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    let contents = serde_json::to_string_pretty(&activities).map_err(|error| error.to_string())?;
     fs::write(path, contents).map_err(|error| error.to_string())
 }
 #[tauri::command]

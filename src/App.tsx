@@ -363,6 +363,7 @@ onCancel={() => setNotice(null)}
 function App() {
 const [connections, setConnections] = useState(initialConnections);
 const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
+const [recentActivitiesLoaded, setRecentActivitiesLoaded] = useState(() => !isTauri());
 const [connectionsLoaded, setConnectionsLoaded] = useState(() => !isTauri());
 const [settings, setSettings] = useState<Settings>(() => {
 if (isTauri()) return DEFAULT_SETTINGS;
@@ -643,7 +644,7 @@ title: "Connections",
 params: { connections },
 position: { referencePanel: "welcome", direction: "right" },
 });
-}, [[connections, recentActivities]]);
+}, [connections, recentActivities]);
 useEffect(() => {
 if (!isTauri()) return;
 void invoke<Connection[]>("load_connections")
@@ -657,6 +658,21 @@ void invoke("save_connections", { connections }).catch((error) =>
 console.error("Failed to save connections", error),
 );
 }, [connections, connectionsLoaded]);
+useEffect(() => {
+if (!isTauri()) return;
+void invoke<RecentActivity[]>("load_recent_activities")
+.then((saved) => {
+setRecentActivities(saved.slice(0, 8));
+setRecentActivitiesLoaded(true);
+})
+.catch((error) => console.error("Failed to load recent activity", error));
+}, []);
+useEffect(() => {
+if (!recentActivitiesLoaded || !isTauri()) return;
+void invoke("save_recent_activities", { activities: recentActivities }).catch((error) =>
+console.error("Failed to save recent activity", error),
+);
+}, [recentActivities, recentActivitiesLoaded]);
 useEffect(() => {
 if (!isTauri()) {
 setSettingsLoaded(true);

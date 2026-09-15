@@ -277,11 +277,17 @@ font-size: 18px;
 color: #6f7b8c;
 font-size: 12px;
 }
+.home-panel,
+.connections-panel {
+container-type: inline-size;
+}
 .activity-list {
 display: grid;
+grid-template-columns: repeat(2, minmax(0, 1fr));
 gap: 9px;
 }
 .activity-empty {
+grid-column: 1 / -1;
 border: 1px dashed #2a3544;
 border-radius: 10px;
 padding: 18px;
@@ -342,6 +348,12 @@ color: var(--accent);
 font-size: 11px;
 font-weight: 700;
 }
+@container (max-width: 760px) {
+.activity-list,
+.connection-list {
+grid-template-columns: minmax(0, 1fr);
+}
+}
 @media (max-width: 640px) {
 .home-section-heading {
 align-items: flex-start;
@@ -379,6 +391,7 @@ grid-column: 2;
 }
 .connection-list {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 .connection-card {
@@ -796,6 +809,7 @@ cursor: pointer;
 background: #193322;
 }
 .connection-empty {
+  grid-column: 1 / -1;
 display: grid;
 gap: 5px;
 padding: 18px;

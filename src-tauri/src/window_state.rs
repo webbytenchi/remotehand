@@ -26,7 +26,7 @@ pub struct WindowState {
 impl WindowState {
     fn from_window(window: &Window<Wry>) -> Result<Self, String> {
         let position = window.outer_position().map_err(|error| error.to_string())?;
-        let size = window.outer_size().map_err(|error| error.to_string())?;
+        let size = window.inner_size().map_err(|error| error.to_string())?;
         Ok(Self {
             x: position.x,
             y: position.y,
@@ -39,7 +39,7 @@ impl WindowState {
 
     fn from_webview_window(window: &WebviewWindow<Wry>) -> Result<Self, String> {
         let position = window.outer_position().map_err(|error| error.to_string())?;
-        let size = window.outer_size().map_err(|error| error.to_string())?;
+        let size = window.inner_size().map_err(|error| error.to_string())?;
         Ok(Self {
             x: position.x,
             y: position.y,
