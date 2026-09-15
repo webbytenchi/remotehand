@@ -18,9 +18,11 @@ directory: string;
 export function PluginManager({
 open,
 onClose,
+onChanged,
 }: {
 open: boolean;
 onClose: () => void;
+onChanged?: () => void;
 }) {
 const [plugins, setPlugins] = useState<PluginInfo[]>([]);
 const [loading, setLoading] = useState(false);
@@ -50,7 +52,10 @@ setLoading(true);
 setError(null);
 try {
 const installed = await invoke<PluginInfo | null>("plugin_install_from_folder");
-if (installed) await refresh();
+if (installed) {
+await refresh();
+onChanged?.();
+}
 } catch (cause) {
 setError(String(cause));
 } finally {
@@ -66,6 +71,7 @@ id: plugin.manifest.id,
 enabled,
 });
 await refresh();
+onChanged?.();
 } catch (cause) {
 setError(String(cause));
 } finally {
@@ -88,6 +94,7 @@ setError(null);
 try {
 await invoke("plugin_remove", { id: plugin.manifest.id });
 await refresh();
+onChanged?.();
 } catch (cause) {
 setError(String(cause));
 } finally {

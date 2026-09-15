@@ -46,6 +46,7 @@ pub fn run() {
             storage::clear_workspace,
             plugins::plugin_install_from_folder,
             plugins::plugin_list,
+            plugins::plugin_read_panel_html,
             plugins::plugin_set_enabled,
             plugins::plugin_remove,
             plugin_runtime::plugin_runtime_call,

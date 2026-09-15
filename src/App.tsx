@@ -14,6 +14,7 @@ import { LocalTerminalPanel } from "./LocalTerminalPanel";
 import { SftpPanel } from "./SftpPanel";
 import { AppModal } from "./AppModal";
 import { PluginManager } from "./PluginManager";
+import { PluginPanel, type PluginPanelParams } from "./PluginPanel";
 import appIcon from "../src-tauri/icons/icon.png";
 import "./App.css";
 type Connection = {
@@ -71,6 +72,32 @@ onOpen?: (activity: RecentActivity) => void;
 };
 type ConnectionsPanelParams = {
 connections?: Connection[];
+};
+type PluginContribution = {
+id: string;
+title: string;
+icon: string;
+panel: string;
+entry: string;
+};
+type PluginManifestInfo = {
+id: string;
+name: string;
+version: string;
+apiVersion: number;
+author: string;
+description: string;
+permissions: string[];
+contributes: {
+sidebar: PluginContribution[];
+panels: PluginContribution[];
+commands: PluginContribution[];
+};
+};
+type PluginInfo = {
+manifest: PluginManifestInfo;
+enabled: boolean;
+directory: string;
 };
 const HOME_MESSAGES = [
 "Welcome back. Here is your recent activity.",
@@ -404,6 +431,7 @@ return { ...DEFAULT_SETTINGS, theme: legacyTheme === "light" ? "light" : "dark" 
 });
 const [settingsOpen, setSettingsOpen] = useState(false);
 const [pluginsOpen, setPluginsOpen] = useState(false);
+const [plugins, setPlugins] = useState<PluginInfo[]>([]);
 const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("dark");
 const [settingsLoaded, setSettingsLoaded] = useState(() => !isTauri());
 const settingsPersistenceEnabledRef = useRef(true);
@@ -425,6 +453,20 @@ void invoke<string>("local_os")
 .then(setLocalOs)
 .catch((error) => console.error("Failed to detect local OS", error));
 }, []);
+const refreshPlugins = useCallback(async () => {
+if (!isTauri()) {
+setPlugins([]);
+return;
+}
+try {
+setPlugins(await invoke<PluginInfo[]>("plugin_list"));
+} catch (error) {
+console.error("Failed to load plugins", error);
+}
+}, []);
+useEffect(() => {
+void refreshPlugins();
+}, [refreshPlugins]);
 const persistWorkspaceSnapshot = useCallback((snapshot: string, immediate = false) => {
 const save = () => {
 if (!workspacePersistenceEnabledRef.current) return;
@@ -600,6 +642,22 @@ return;
 }
 addTerminal(undefined, activity.kind === "terminal" ? "default" : activity.kind);
 }, [addTerminal, connectSsh, openSftp]);
+const openPluginPanel = useCallback((plugin: PluginInfo, sidebar: PluginContribution) => {
+const api = apiRef.current;
+if (!api) return;
+const panel = plugin.manifest.contributes.panels.find((item) => item.id === sidebar.panel);
+if (!panel) return;
+api.addPanel({
+id: "plugin-" + plugin.manifest.id + "-" + panel.id + "-" + Date.now(),
+component: "plugin",
+title: panel.title,
+params: {
+pluginId: plugin.manifest.id,
+panelId: panel.id,
+title: panel.title,
+} satisfies PluginPanelParams,
+});
+}, []);
 const openHome = useCallback(() => {
 const api = apiRef.current;
 if (!api) return;
@@ -626,6 +684,7 @@ messageIndex={homeMessageIndex}
 ),
 terminal: LocalTerminalPanel,
 sftp: SftpPanel,
+plugin: PluginPanel,
 connections: (props: IDockviewPanelProps<ConnectionsPanelParams>) => (
 <ConnectionsPanel
 connections={props.params?.connections ?? []}
@@ -972,6 +1031,23 @@ aria-label="Settings"
 <span className="sidebar-icon">↗</span><span className="sidebar-label">Pop out active</span>
 </button>
 
+{plugins.flatMap((plugin) =>
+plugin.enabled
+? plugin.manifest.contributes.sidebar.map((sidebar) => (
+<button
+className="sidebar-action"
+type="button"
+key={plugin.manifest.id + ":" + sidebar.id}
+onClick={() => openPluginPanel(plugin, sidebar)}
+title={sidebar.title}
+>
+<span className="sidebar-icon" aria-hidden="true">◇</span>
+<span className="sidebar-label">{sidebar.title}</span>
+</button>
+))
+: [],
+)}
+
 <div className="sidebar-divider" />
 <div className="sidebar-heading">Layout</div>
 <button className="sidebar-action" type="button" onClick={undoLayout} title="Undo layout change">
@@ -1004,6 +1080,7 @@ popoutUrl="popout.html"
 <PluginManager
 open={pluginsOpen}
 onClose={() => setPluginsOpen(false)}
+onChanged={() => void refreshPlugins()}
 />
 <AppModal
 open={settingsOpen}

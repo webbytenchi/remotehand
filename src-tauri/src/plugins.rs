@@ -511,6 +511,41 @@ pub fn plugin_list() -> Result<Vec<PluginInfo>, String> {
     discover_plugins()
 }
 #[tauri::command]
+pub fn plugin_read_panel_html(id: String, panel_id: String) -> Result<String, String> {
+    const MAX_PANEL_HTML_BYTES: u64 = 2 * 1024 * 1024;
+    let plugin = require_installed(&id)?;
+    if !plugin.enabled {
+        return Err("plugin is disabled".to_string());
+    }
+    let panel = plugin
+        .manifest
+        .contributes
+        .panels
+        .iter()
+        .find(|panel| panel.id == panel_id)
+        .ok_or_else(|| "plugin panel is not declared".to_string())?;
+    if panel.entry.is_empty() {
+        return Err("plugin panel entry is missing".to_string());
+    }
+    validate_relative_package_path(&panel.entry, "panel entry")?;
+    let root = fs::canonicalize(plugins_root_for_runtime()?.join(&plugin.directory))
+        .map_err(|error| error.to_string())?;
+    let path = root.join(&panel.entry);
+    let metadata = fs::symlink_metadata(&path).map_err(|error| error.to_string())?;
+    if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
+        return Err("plugin panel entry must be a regular file".to_string());
+    }
+    if metadata.len() > MAX_PANEL_HTML_BYTES {
+        return Err("plugin panel HTML is too large".to_string());
+    }
+    let canonical = fs::canonicalize(&path).map_err(|error| error.to_string())?;
+    if !canonical.starts_with(&root) {
+        return Err("plugin panel entry escaped the plugin package".to_string());
+    }
+    fs::read_to_string(canonical).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub fn plugin_set_enabled(
     id: String,
     enabled: bool,
