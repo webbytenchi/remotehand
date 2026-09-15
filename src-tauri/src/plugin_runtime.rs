@@ -18,8 +18,9 @@ pub struct PluginRuntimeState {
 }
 struct PluginSession {
     child: Child,
-    _stdin: ChildStdin,
-    _stdout: ChildStdout,
+    stdin: ChildStdin,
+    stdout: ChildStdout,
+    next_request_id: u64,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -38,6 +39,27 @@ struct HostReady<'a> {
     plugin_id: &'a str,
     api_version: u32,
     granted_permissions: &'a [String],
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HostRequest<'a> {
+    #[serde(rename = "type")]
+    message_type: &'static str,
+    request_id: u64,
+    method: &'a str,
+    params: serde_json::Value,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PluginResponse {
+    #[serde(rename = "type")]
+    message_type: String,
+    request_id: u64,
+    ok: bool,
+    #[serde(default)]
+    result: serde_json::Value,
+    #[serde(default)]
+    error: String,
 }
 fn read_frame<R: Read>(reader: &mut R) -> Result<Vec<u8>, String> {
     let mut length = [0u8; 4];
@@ -200,12 +222,70 @@ impl PluginRuntimeState {
             plugin.manifest.id.clone(),
             PluginSession {
                 child,
-                _stdin: stdin,
-                _stdout: stdout,
+                stdin,
+                stdout,
+                next_request_id: 1,
             },
         );
         log::info!("Plugin runtime {} started", plugin.manifest.id);
         Ok(())
+    }
+
+    pub fn call(
+        &self,
+        id: &str,
+        method: &str,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value, String> {
+        if method.is_empty()
+            || method.len() > 128
+            || !method.bytes().all(|byte| {
+                byte.is_ascii_lowercase()
+                    || byte.is_ascii_digit()
+                    || matches!(byte, b'.' | b'-' | b'_')
+            })
+        {
+            return Err("invalid plugin method".to_string());
+        }
+        let mut sessions = self
+            .sessions
+            .lock()
+            .map_err(|| "plugin runtime lock poisoned".to_string())?;
+        let session = sessions
+            .get_mut(id)
+            .ok_or_else(|| "plugin runtime is not running".to_string())?;
+        if let Some(status) = session
+            .child
+            .try_wait()
+            .map_err(|error| format!("failed to inspect plugin runtime: {error}"))?
+        {
+            return Err(format!("plugin runtime exited with {status}"));
+        }
+        let request_id = session.next_request_id;
+        session.next_request_id = session.next_request_id.wrapping_add(1).max(1);
+        let request = HostRequest {
+            message_type: "host.request",
+            request_id,
+            method,
+            params,
+        };
+        write_frame(&mut session.stdin, &request)?;
+        let payload = read_frame(&mut session.stdout)?;
+        let response: PluginResponse = serde_json::from_slice(&payload)
+            .map_err(|error| format!("invalid plugin response: {error}"))?;
+        if response.message_type != "plugin.response" {
+            return Err("plugin returned an unexpected message type".to_string());
+        }
+        if response.request_id != request_id {
+            return Err("plugin response request id does not match".to_string());
+        }
+        if !response.ok {
+            if response.error.is_empty() {
+                return Err("plugin request failed".to_string());
+            }
+            return Err(response.error);
+        }
+        Ok(response.result)
     }
 
     pub fn stop(&self, id: &str) -> Result<(), String> {
@@ -241,6 +321,16 @@ impl PluginRuntimeState {
             .unwrap_or(false)
     }
 }
+#[tauri::command]
+pub fn plugin_runtime_call(
+    runtime: tauri::State<'_, PluginRuntimeState>,
+    id: String,
+    method: String,
+    params: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    runtime.call(&id, &method, params)
+}
+
 impl Drop for PluginRuntimeState {
     fn drop(&mut self) {
         if let Ok(sessions) = self.sessions.get_mut() {
