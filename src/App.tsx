@@ -643,6 +643,7 @@ const popoutActive = useCallback(async () => {
 const api = apiRef.current;
 const panel = api?.activePanel;
 if (!api || !panel) return;
+if (panel.api.location.type === "popout") return;
 try { await api.addPopoutGroup(panel); } catch (error) { console.error("Failed to pop out active panel", error); }
 }, []);
 const resetLayout = useCallback(async () => {
