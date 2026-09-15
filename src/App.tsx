@@ -561,12 +561,12 @@ params: { connections },
 });
 }, [connections]);
 const openRecentActivity = useCallback((activity: RecentActivity) => {
-if (activity.kind === "ssh" && activity.connection) {
-connectSsh(activity.connection);
+if (activity.kind === "ssh") {
+if (activity.connection) connectSsh(activity.connection);
 return;
 }
-if (activity.kind === "sftp" && activity.connection) {
-openSftp(activity.connection);
+if (activity.kind === "sftp") {
+if (activity.connection) openSftp(activity.connection);
 return;
 }
 addTerminal(undefined, activity.kind === "terminal" ? "default" : activity.kind);

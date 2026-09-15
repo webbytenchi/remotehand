@@ -23,7 +23,7 @@ path: string;
 entries: SftpEntry[];
 };
 type SftpPanelParams = {
-connection?: SftpConnection;
+connection: SftpConnection;
 };
 type TransferItem = {
 localPath: string;
@@ -94,21 +94,12 @@ const special =
 const octal = digit(mode.slice(0, 3)) + digit(mode.slice(3, 6)) + digit(mode.slice(6, 9));
 return special ? String(special) + octal : octal;
 }
-function joinLocalPath(folder: string, fileName: string) {
-const backslash = String.fromCharCode(92);
-const separator = folder.includes(backslash) ? backslash : "/";
-let base = folder;
-while (base.endsWith("/") || base.endsWith(backslash)) {
-base = base.slice(0, -1);
-}
-return base + separator + fileName;
-}
 function remoteChildPath(folder: string, fileName: string) {
 if (folder === "/") return "/" + fileName;
 return stripTrailingSlashes(folder) + "/" + fileName;
 }
 export function SftpPanel(props: IDockviewPanelProps<SftpPanelParams>) {
-const connection = props.params?.connection;
+const connection = props.params.connection;
 const [listing, setListing] = useState<SftpListing | null>(null);
 const [requestedPath, setRequestedPath] = useState(".");
 const [loading, setLoading] = useState(false);
@@ -129,14 +120,10 @@ const [modalValue, setModalValue] = useState("");
 const [modalError, setModalError] = useState("");
 const transferStartedAtRef = useRef<{ transferId: string; time: number } | null>(null);
 const nativeSessionId = useRef(crypto.randomUUID()).current;
-const useNativeSftp = Boolean(connection?.credentialRef);
+const useNativeSftp = Boolean(connection.credentialRef);
 const transferring = transferState !== "idle";
 const loadPath = useCallback(
 async (path: string) => {
-if (!connection) {
-setError("SFTP connection details are unavailable.");
-return;
-}
 if (!isTauri()) {
 setError("SFTP browsing is available in the RemoteHand desktop app.");
 return;
@@ -230,9 +217,6 @@ const selectedEntries = useMemo(
 );
 const selectedFileCount = selectedEntries.filter((entry) => !entry.isDir).length;
 const selectedFolderCount = selectedEntries.filter((entry) => entry.isDir).length;
-if (!connection) {
-return <section className="panel-content sftp-panel">Missing SFTP connection.</section>;
-}
 const currentPath = listing?.path ?? requestedPath;
 const canGoUp = Boolean(currentPath && currentPath !== "/" && currentPath !== ".");
 function toggleEntry(entry: SftpEntry) {
