@@ -192,7 +192,7 @@ fn inspect_tree(
         }
         let relative = path
             .strip_prefix(root)
-            .map_err(|| "plugin path escaped package root".to_string())?;
+            .map_err(|_| "plugin path escaped package root".to_string())?;
         if relative
             .components()
             .any(|component| !matches!(component, Component::Normal(_)))
