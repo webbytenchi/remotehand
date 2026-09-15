@@ -8,7 +8,7 @@ use std::{
     sync::Mutex,
 };
 use tauri::State;
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 const VAULT_VERSION: u32 = 1;
 #[derive(Default)]
 pub struct VaultState {
@@ -48,7 +48,8 @@ fn vault_path() -> Result<PathBuf, String> {
         .join("credentials.enc"))
 }
 fn encrypt_document(passphrase: SecretString, document: &VaultDocument) -> Result<Vec<u8>, String> {
-    let plaintext = serde_json::to_vec(document).map_err(|error| error.to_string())?;
+    let plaintext =
+        Zeroizing::new(serde_json::to_vec(document).map_err(|error| error.to_string())?);
     let encryptor = Encryptor::with_user_passphrase(passphrase);
     let mut encrypted = Vec::new();
     let mut writer = encryptor
@@ -66,7 +67,7 @@ fn decrypt_document(passphrase: SecretString, encrypted: &[u8]) -> Result<VaultD
     let mut reader = decryptor
         .decrypt(std::iter::once(&identity as &dyn age::Identity))
         .map_err(|_| "failed to unlock vault".to_string())?;
-    let mut plaintext = Vec::new();
+    let mut plaintext = Zeroizing::new(Vec::new());
     reader
         .read_to_end(&mut plaintext)
         .map_err(|error| error.to_string())?;
