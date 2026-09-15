@@ -4,6 +4,8 @@ import {
 DockviewReact,
 type DockviewApi,
 type DockviewReadyEvent,
+type IDockviewHeaderActionsProps,
+type IWatermarkPanelProps,
 type IDockviewPanelProps,
 themeDark,
 themeLight,
@@ -369,6 +371,37 @@ onCancel={() => setNotice(null)}
 <p>{notice?.message}</p>
 </AppModal>
 </section>
+);
+}
+function PanelHeaderActions({ api, location }: IDockviewHeaderActionsProps) {
+if (location?.type !== "popout") return null;
+return (
+<button
+className="panel-dock-back"
+type="button"
+onClick={() => api.getWindow().close()}
+title="Dock back into RemoteHand"
+aria-label="Dock back into RemoteHand"
+
+<span aria-hidden="true">↙</span>
+<span>Dock back</span>
+</button>
+);
+}
+function WorkspaceWatermark({ containerApi }: IWatermarkPanelProps) {
+const popouts = containerApi.getPopouts();
+if (popouts.length === 0) return null;
+const dockAllBack = () => {
+for (const popout of [...containerApi.getPopouts()]) {
+popout.window.close();
+}
+};
+return (
+<div className="workspace-empty">
+<div className="workspace-empty-icon" aria-hidden="true">↙</div>
+<strong>All workspace panels are popped out.</strong>
+<button type="button" onClick={dockAllBack}>Dock all back</button>
+</div>
 );
 }
 function App() {
@@ -978,6 +1011,8 @@ aria-label="Settings"
 className="remotehand-dockview"
 theme={resolvedTheme === "light" ? themeLight : themeDark}
 components={components}
+watermarkComponent={WorkspaceWatermark}
+rightHeaderActionsComponent={PanelHeaderActions}
 onReady={handleReady}
 keyboardNavigation
 dndStrategy="pointer"
