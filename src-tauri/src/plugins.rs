@@ -151,7 +151,8 @@ fn read_manifest(plugin_dir: &Path) -> Result<PluginManifest, String> {
         return Err("plugin manifest is too large".to_string());
     }
     let contents = fs::read_to_string(&manifest_path).map_err(|error| error.to_string())?;
-    let manifest: PluginManifest = serde_json::from_str(&contents)
+    let contents = strip_utf8_bom(&contents);
+    let manifest: PluginManifest = serde_json::from_str(contents)
         .map_err(|error| format!("invalid plugin manifest: {error}"))?;
     validate_manifest(&manifest)?;
     Ok(manifest)
@@ -435,6 +436,12 @@ mod tests {
             description: "test".to_string(),
             capabilities: capabilities.iter().map(|value| value.to_string()).collect(),
         }
+    }
+    #[test]
+    fn strips_utf8_bom() {
+        let bom = char::from_u32(0xfeff).unwrap();
+        let value = format!("{bom}hello");
+        assert_eq!(strip_utf8_bom(&value), "hello");
     }
 
     #[test]
