@@ -123,7 +123,7 @@ async fn connect_native(
         .authenticate_password(user, password)
         .await
         .map_err(|error| format!("SFTP authentication failed: {error}"))?;
-    if !auth {
+    if !auth.success() {
         return Err("SFTP authentication failed: password was rejected".to_string());
     }
     let channel = ssh
