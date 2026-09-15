@@ -26,6 +26,7 @@ const [plugins, setPlugins] = useState<PluginInfo[]>([]);
 const [loading, setLoading] = useState(false);
 const [busyId, setBusyId] = useState<string | null>(null);
 const [error, setError] = useState<string | null>(null);
+const [removeTarget, setRemoveTarget] = useState<PluginInfo | null>(null);
 const refresh = useCallback(async () => {
 if (!isTauri()) {
 setPlugins([]);
@@ -71,18 +72,17 @@ setError(String(cause));
 setBusyId(null);
 }
 };
-const remove = async (plugin: PluginInfo) => {
+const requestRemove = (plugin: PluginInfo) => {
 if (plugin.enabled) {
 setError("Disable the plugin before removing it.");
 return;
 }
-const confirmed = window.confirm(
-"Remove " +
-plugin.manifest.name +
-"? This deletes its plugin directory. Plugin-owned data is not removed automatically.",
-);
-if (!confirmed) return;
-
+setRemoveTarget(plugin);
+};
+const confirmRemove = async () => {
+const plugin = removeTarget;
+if (!plugin) return;
+setRemoveTarget(null);
 setBusyId(plugin.manifest.id);
 setError(null);
 try {
@@ -95,6 +95,7 @@ setBusyId(null);
 }
 };
 return (
+<>
 <AppModal
 open={open}
 title="Plugins"
@@ -177,7 +178,7 @@ onClick={() => void setEnabled(plugin, !plugin.enabled)}
 type="button"
 className="danger"
 disabled={plugin.enabled || busyId === plugin.manifest.id}
-onClick={() => void remove(plugin)}
+onClick={() => requestRemove(plugin)}
 title={plugin.enabled ? "Disable this plugin before removing it" : "Remove plugin"}
 >
 Remove
@@ -188,5 +189,21 @@ Remove
 </div>
 </div>
 </AppModal>
+
+<AppModal
+open={removeTarget !== null}
+title="Remove plugin?"
+confirmLabel="Remove"
+cancelLabel="Cancel"
+danger
+onConfirm={() => void confirmRemove()}
+onCancel={() => setRemoveTarget(null)}
+>
+<p>
+Remove <strong>{removeTarget?.manifest.name}</strong>? This deletes its plugin directory.
+Plugin-owned data is not removed automatically.
+</p>
+</AppModal>
+</>
 );
 }
