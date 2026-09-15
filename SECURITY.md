@@ -81,3 +81,19 @@ Before adding or upgrading a security-sensitive dependency, review:
 ## Reporting Vulnerabilities
 
 Until a dedicated private security-reporting channel is configured, avoid publishing exploitable details in a public issue. For private deployments of this repository, contact the repository owner directly.
+Plugin security
+RemoteHand v1.0.3 introduces Plugin API v1 with a conservative trust model.
+
+Plugins are disabled by default.
+
+Manifests are strictly validated and incompatible API versions are rejected.
+
+Plugin folder installation rejects symlinks, unsafe paths, oversized packages, excessive file counts, and overlapping source/destination trees.
+
+Plugin removal requires the plugin to be disabled first and does not follow symbolic links.
+
+Sensitive capabilities are explicit declarations.
+
+credential-use is preferred over direct vault access so future plugins can request core-mediated authentication without receiving decrypted vault secrets.
+
+v1.0.3 does not load arbitrary native plugin code. Dynamic plugin execution requires a separate security review and host-mediated permission model.

@@ -150,3 +150,31 @@ Further transfer queue polish and richer progress/ETA UX can continue later.
 ## Guiding Rule
 
 RemoteHand should remain useful as a focused SSH/SFTP/terminal workstation manager even as later protocols are added. New protocol work should not destabilize the clean portable V1 baseline.
+Plugin architecture
+v1.0.3 — Plugin foundation
+
+Plugin API v1 manifest contract.
+
+Portable plugins/ directory and persisted enable/disable state.
+
+Plugin Manager UI.
+
+Safe folder-based installation.
+
+Strict capability declaration and manifest validation.
+
+Defensive file-count, size, path, symlink, and removal controls.
+
+No arbitrary native plugin execution.
+
+Next — VNC plugin
+
+First real protocol implemented as an add-on.
+
+Core-mediated credential use.
+
+Explicit network and clipboard permissions.
+
+Dock panel contribution through stable plugin APIs.
+
+Failure isolation and protocol-specific runtime tests.
