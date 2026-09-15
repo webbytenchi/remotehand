@@ -1,4 +1,5 @@
 mod logging;
+mod plugin_runtime;
 mod plugins;
 mod sftp;
 mod sftp_native;
@@ -29,6 +30,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(TerminalState::default())
+        .manage(plugin_runtime::PluginRuntimeState::default())
         .manage(sftp_native::PersistentSftpState::default())
         .manage(vault::VaultState::default())
         .invoke_handler(tauri::generate_handler![
@@ -95,6 +97,11 @@ pub fn run() {
         .setup(move |app| {
             app.handle()
                 .plugin(logging::builder().map_err(std::io::Error::other)?.build())?;
+            if let Some(runtime) = app.try_state::<plugin_runtime::PluginRuntimeState>() {
+                if let Err(error) = plugins::start_enabled_plugins(&runtime) {
+                    log::error!("Failed to restore enabled plugins: {error}");
+                }
+            }
             let tracker = window_state::WindowStateTracker::default();
             app.manage(tracker.clone());
             window_state::restore(app, &tracker).map_err(std::io::Error::other)?;

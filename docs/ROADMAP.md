@@ -153,7 +153,7 @@ RemoteHand should remain useful as a focused SSH/SFTP/terminal workstation manag
 Plugin architecture
 v1.0.3 — Plugin foundation
 
-Plugin API v1 manifest contract.
+Plugin API v1 foundation.
 
 Portable plugins/ directory and persisted enable/disable state.
 
@@ -161,20 +161,34 @@ Plugin Manager UI.
 
 Safe folder-based installation.
 
-Strict capability declaration and manifest validation.
+Strict manifest validation.
 
 Defensive file-count, size, path, symlink, and removal controls.
 
-No arbitrary native plugin execution.
+Plugins disabled by default.
 
-Next — VNC plugin
+v1.0.4 — Plugin Runtime v1
 
-First real protocol implemented as an add-on.
+Out-of-process executable plugin runtime.
 
-Core-mediated credential use.
+Versioned IPC and startup handshake.
 
-Explicit network and clipboard permissions.
+Process lifecycle and crash supervision.
 
-Dock panel contribution through stable plugin APIs.
+Generic sidebar, dock-panel, and command contributions.
 
-Failure isolation and protocol-specific runtime tests.
+Plugin-owned web UI hosted through a controlled bridge.
+
+Generic Host API.
+
+Permission enforcement model.
+
+Plugin-scoped storage.
+
+Credential brokering.
+
+Public Plugin SDK documentation foundation.
+
+First production reference plugin developed separately as remotehand-plugin-vnc.
+
+The core must remain protocol-agnostic. VNC, RDP, X11, and future protocol implementations belong in independent plugin repositories.

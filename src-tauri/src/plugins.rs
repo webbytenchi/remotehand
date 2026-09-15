@@ -9,17 +9,14 @@ const MAX_PLUGIN_FILES: usize = 2048;
 const MAX_PLUGIN_COUNT: usize = 512;
 const MAX_STATE_BYTES: u64 = 1024 * 1024;
 const MAX_PLUGIN_BYTES: u64 = 64 * 1024 * 1024;
-const ALLOWED_CAPABILITIES: &[&str] = &[
-    "connection-type",
-    "dock-panel",
-    "settings",
-    "network",
-    "clipboard-read",
-    "clipboard-write",
-    "filesystem-read",
-    "filesystem-write",
-    "credential-use",
+const ALLOWED_PERMISSIONS: &[&str] = &[
+    "network.connect",
+    "clipboard.read",
+    "clipboard.write",
+    "credentials.use",
+    "storage.plugin",
 ];
+const ALLOWED_CONTRIBUTION_KINDS: &[&str] = &["sidebar", "panel", "command"];
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PluginManifest {
@@ -30,8 +27,39 @@ pub struct PluginManifest {
     pub author: String,
     #[serde(default)]
     pub description: String,
+    pub runtime: PluginRuntime,
     #[serde(default)]
-    pub capabilities: Vec<String>,
+    pub permissions: Vec<String>,
+    #[serde(default)]
+    pub contributes: PluginContributions,
+}
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PluginRuntime {
+    pub kind: String,
+    pub entrypoint: String,
+}
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PluginContributions {
+    #[serde(default)]
+    pub sidebar: Vec<PluginContribution>,
+    #[serde(default)]
+    pub panels: Vec<PluginContribution>,
+    #[serde(default)]
+    pub commands: Vec<PluginContribution>,
+}
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PluginContribution {
+    pub id: String,
+    pub title: String,
+    #[serde(default)]
+    pub icon: String,
+    #[serde(default)]
+    pub panel: String,
+    #[serde(default)]
+    pub entry: String,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -53,7 +81,7 @@ fn executable_dir() -> Result<PathBuf, String> {
         .map(Path::to_path_buf)
         .ok_or_else(|| "failed to resolve executable directory".to_string())
 }
-fn plugins_root() -> Result<PathBuf, String> {
+pub(crate) fn plugins_root_for_runtime() -> Result<PathBuf, String> {
     Ok(executable_dir()?.join("plugins"))
 }
 fn state_path() -> Result<PathBuf, String> {
@@ -126,17 +154,101 @@ fn validate_manifest(manifest: &PluginManifest) -> Result<(), String> {
     if manifest.description.len() > 4096 {
         return Err("plugin description is too long".to_string());
     }
-    if manifest.capabilities.len() > 32 {
-        return Err("plugin declares too many capabilities".to_string());
+    if manifest.runtime.kind != "executable" {
+        return Err("plugin runtime kind must be 'executable'".to_string());
     }
-    let allowed: BTreeSet<&str> = ALLOWED_CAPABILITIES.iter().copied().collect();
+    validate_relative_package_path(&manifest.runtime.entrypoint, "plugin runtime entrypoint")?;
+    if manifest.permissions.len() > 32 {
+        return Err("plugin declares too many permissions".to_string());
+    }
+    let allowed: BTreeSet<&str> = ALLOWED_PERMISSIONS.iter().copied().collect();
     let mut seen = BTreeSet::new();
-    for capability in &manifest.capabilities {
-        if !allowed.contains(capability.as_str()) {
-            return Err(format!("unsupported plugin capability: {capability}"));
+    for permission in &manifest.permissions {
+        if !allowed.contains(permission.as_str()) {
+            return Err(format!("unsupported plugin permission: {permission}"));
         }
-        if !seen.insert(capability.as_str()) {
-            return Err(format!("duplicate plugin capability: {capability}"));
+        if !seen.insert(permission.as_str()) {
+            return Err(format!("duplicate plugin permission: {permission}"));
+        }
+    }
+    validate_contributions(&manifest.contributes)?;
+    Ok(())
+}
+
+fn validate_relative_package_path(value: &str, label: &str) -> Result<(), String> {
+    if value.trim().is_empty() {
+        return Err(format!("{label} is missing"));
+    }
+    let path = Path::new(value);
+    if path.is_absolute()
+        || path
+            .components()
+            .any(|component| !matches!(component, Component::Normal(_)))
+    {
+        return Err(format!("{label} must stay inside the plugin package"));
+    }
+    Ok(())
+}
+fn validate_contribution_id(value: &str) -> bool {
+    valid_identifier(value)
+}
+fn validate_contribution_list(
+    kind: &str,
+    values: &[PluginContribution],
+    seen: &mut BTreeSet<String>,
+) -> Result<(), String> {
+    if !ALLOWED_CONTRIBUTION_KINDS.contains(&kind) {
+        return Err(format!("unsupported contribution kind: {kind}"));
+    }
+    for contribution in values {
+        if !validate_contribution_id(&contribution.id) {
+            return Err(format!("invalid {kind} contribution id"));
+        }
+        if contribution.title.trim().is_empty() || contribution.title.len() > 128 {
+            return Err(format!("{kind} contribution title is missing or too long"));
+        }
+        let scoped = format!("{kind}:{}", contribution.id);
+        if !seen.insert(scoped) {
+            return Err(format!(
+                "duplicate {kind} contribution id: {}",
+                contribution.id
+            ));
+        }
+        if !contribution.icon.is_empty() {
+            validate_relative_package_path(&contribution.icon, "contribution icon")?;
+        }
+        if !contribution.entry.is_empty() {
+            validate_relative_package_path(&contribution.entry, "panel entry")?;
+        }
+        if kind == "sidebar" && contribution.panel.is_empty() {
+            return Err("sidebar contribution must reference a panel".to_string());
+        }
+        if !contribution.panel.is_empty() && !validate_contribution_id(&contribution.panel) {
+            return Err(format!("invalid {kind} panel reference"));
+        }
+    }
+    Ok(())
+}
+fn validate_contributions(contributes: &PluginContributions) -> Result<(), String> {
+    let total = contributes.sidebar.len() + contributes.panels.len() + contributes.commands.len();
+    if total > 128 {
+        return Err("plugin declares too many contributions".to_string());
+    }
+    let mut seen = BTreeSet::new();
+    validate_contribution_list("sidebar", &contributes.sidebar, &mut seen)?;
+    validate_contribution_list("panel", &contributes.panels, &mut seen)?;
+    validate_contribution_list("command", &contributes.commands, &mut seen)?;
+    let panel_ids: BTreeSet<&str> = contributes
+        .panels
+        .iter()
+        .map(|item| item.id.as_str())
+        .collect();
+    for sidebar in &contributes.sidebar {
+        if !panel_ids.contains(sidebar.panel.as_str()) {
+            return Err(format!(
+                "sidebar contribution {} references unknown panel {}",
+                sidebar.id, sidebar.panel
+            ));
         }
     }
     Ok(())
@@ -271,7 +383,7 @@ fn install_from_directory(source: &Path) -> Result<PluginInfo, String> {
     let mut bytes = 0u64;
     inspect_tree(source, source, &mut files, &mut bytes)?;
 
-    let root = plugins_root()?;
+    let root = plugins_root_for_runtime()?;
     fs::create_dir_all(&root).map_err(|error| error.to_string())?;
     let source_canonical = fs::canonicalize(source).map_err(|error| error.to_string())?;
     let root_canonical = fs::canonicalize(&root).map_err(|error| error.to_string())?;
@@ -319,7 +431,7 @@ fn install_from_directory(source: &Path) -> Result<PluginInfo, String> {
 }
 
 fn discover_plugins() -> Result<Vec<PluginInfo>, String> {
-    let root = plugins_root()?;
+    let root = plugins_root_for_runtime()?;
     fs::create_dir_all(&root).map_err(|error| error.to_string())?;
     let state = load_state()?;
     let mut plugins = Vec::new();
@@ -389,8 +501,17 @@ pub fn plugin_list() -> Result<Vec<PluginInfo>, String> {
     discover_plugins()
 }
 #[tauri::command]
-pub fn plugin_set_enabled(id: String, enabled: bool) -> Result<(), String> {
-    require_installed(&id)?;
+pub fn plugin_set_enabled(
+    id: String,
+    enabled: bool,
+    runtime: tauri::State<'_, crate::plugin_runtime::PluginRuntimeState>,
+) -> Result<(), String> {
+    let plugin = require_installed(&id)?;
+    if enabled {
+        runtime.start(&plugin)?;
+    } else {
+        runtime.stop(&id)?;
+    }
     let mut state = load_state()?;
     state.enabled.insert(id.clone(), enabled);
     save_state(&state)?;
@@ -401,13 +522,31 @@ pub fn plugin_set_enabled(id: String, enabled: bool) -> Result<(), String> {
     );
     Ok(())
 }
+
+pub fn start_enabled_plugins(
+    runtime: &crate::plugin_runtime::PluginRuntimeState,
+) -> Result<(), String> {
+    for plugin in discover_plugins()? {
+        if plugin.enabled {
+            if let Err(error) = runtime.start(&plugin) {
+                log::error!(
+                    "Failed to start enabled plugin {}: {}",
+                    plugin.manifest.id,
+                    error
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn plugin_remove(id: String) -> Result<(), String> {
     let plugin = require_installed(&id)?;
     if plugin.enabled {
         return Err("disable the plugin before removing it".to_string());
     }
-    let root = plugins_root()?;
+    let root = plugins_root_for_runtime()?;
     let path = root.join(&plugin.directory);
     if path.parent() != Some(root.as_path()) {
         return Err("refusing unsafe plugin path".to_string());
@@ -426,7 +565,7 @@ pub fn plugin_remove(id: String) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn manifest(id: &str, capabilities: &[&str]) -> PluginManifest {
+    fn manifest(id: &str, permissions: &[&str]) -> PluginManifest {
         PluginManifest {
             id: id.to_string(),
             name: "Test Plugin".to_string(),
@@ -434,7 +573,12 @@ mod tests {
             api_version: PLUGIN_API_VERSION,
             author: "RemoteHand tests".to_string(),
             description: "test".to_string(),
-            capabilities: capabilities.iter().map(|value| value.to_string()).collect(),
+            runtime: PluginRuntime {
+                kind: "executable".to_string(),
+                entrypoint: "bin/plugin".to_string(),
+            },
+            permissions: permissions.iter().map(|value| value.to_string()).collect(),
+            contributes: PluginContributions::default(),
         }
     }
     #[test]
@@ -447,8 +591,8 @@ mod tests {
     #[test]
     fn accepts_valid_manifest() {
         assert!(validate_manifest(&manifest(
-            "remotehand.vnc",
-            &["connection-type", "dock-panel", "network"]
+            "remotehand.test",
+            &["network.connect", "storage.plugin"]
         ))
         .is_ok());
     }
@@ -460,16 +604,19 @@ mod tests {
     }
 
     #[test]
-    fn rejects_unknown_capability() {
+    fn rejects_unknown_permission() {
         let error = validate_manifest(&manifest("remotehand.test", &["shell-exec"])).unwrap_err();
-        assert!(error.contains("unsupported plugin capability"));
+        assert!(error.contains("unsupported plugin permission"));
     }
 
     #[test]
-    fn rejects_duplicate_capability() {
-        let error =
-            validate_manifest(&manifest("remotehand.test", &["network", "network"])).unwrap_err();
-        assert!(error.contains("duplicate plugin capability"));
+    fn rejects_duplicate_permission() {
+        let error = validate_manifest(&manifest(
+            "remotehand.test",
+            &["network.connect", "network.connect"],
+        ))
+        .unwrap_err();
+        assert!(error.contains("duplicate plugin permission"));
     }
 
     #[test]

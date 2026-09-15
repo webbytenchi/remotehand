@@ -1,119 +1,144 @@
-RemoteHand Plugins
-RemoteHand v1.0.3 introduces Plugin API v1 as the foundation for optional protocol and workspace extensions.
-Goals
-
-Keep major connection protocols out of the core when they can be delivered as add-ons.
-
-Keep RemoteHand portable by storing plugins beside the executable in plugins/.
-
-Keep plugin state under data/config/plugins.json.
-
-Use a small, versioned core API instead of allowing plugins to reach into internal modules.
-
-Apply least privilege to sensitive capabilities.
-
-Current v1.0.3 scope
-The first release is intentionally conservative.
-RemoteHand can:
-
-discover installed plugins,
-
-strictly validate plugin.json,
-
-install from a selected folder,
-
-keep newly installed plugins disabled by default,
-
-enable or disable plugins,
-
-remove disabled plugins,
-
-display declared capabilities in the Plugin Manager,
-
-reject incompatible API versions,
-
-reject unknown or duplicate capabilities,
-
-reject symlinked plugin roots, manifests, and package entries,
-
-reject unsafe paths,
-
-reject oversized plugin packages,
-
-reject packages with too many files,
-
-prevent installs that overlap RemoteHand's own plugin directory.
-
-RemoteHand v1.0.3 does not dynamically execute arbitrary native plugin binaries or libraries. Plugin execution and host-mediated protocol APIs are a later phase.
-Directory layout
-RemoteHand/
-RemoteHand.exe
-plugins/
-remotehand.vnc/
-plugin.json
-...
-data/
-config/
-plugins.json
-Manifest format
+# RemoteHand Plugins
+RemoteHand v1.0.3 introduced the plugin-management foundation. RemoteHand v1.0.4 evolves that foundation into Plugin Runtime v1: an out-of-process executable plugin model intended for independently distributed first-party and third-party plugins.
+Design rule
+RemoteHand core owns infrastructure. Plugins own functionality.
+Core may understand plugin lifecycle, generic UI contributions, permissions, storage, credentials, IPC, and process supervision. Core must not contain protocol-specific knowledge such as VNC, RDP, RFB, framebuffer decoding, or protocol-specific connection schemas.
+Package layout
+A production plugin is distributed independently from RemoteHand core.
 Example:
+remotehand.example/
+├── plugin.json
+├── icon.svg
+├── bin/
+│   └── remotehand-example.exe
+└── ui/
+└── index.html
+Installed plugins live in RemoteHand's portable plugins/ directory. Plugin enable/disable state remains under data/config/plugins.json.
+Manifest v1 direction
 JSON{
-"id": "remotehand.vnc",
-"name": "RemoteHand VNC",
+"id": "remotehand.example",
+"name": "Example",
 "version": "1.0.0",
 "apiVersion": 1,
-"author": "RemoteHand",
-"description": "VNC connection support.",
-"capabilities": [
-"connection-type",
-"dock-panel",
-"network",
-"credential-use",
-"clipboard-read",
-"clipboard-write"
-]
+"author": "Example Developer",
+"description": "Example RemoteHand plugin.",
+"runtime": {
+"kind": "executable",
+"entrypoint": "bin/remotehand-example.exe"
+},
+"permissions": [
+"network.connect",
+"credentials.use",
+"storage.plugin"
+],
+"contributes": {
+"sidebar": [
+{
+"id": "connections",
+"title": "Example",
+"icon": "icon.svg",
+"panel": "connections"
 }
-Unknown manifest fields are rejected.
-Plugin IDs must use lowercase ASCII letters, digits, ., -, or _.
-Capability model
-API v1 recognizes these declared capabilities:
+],
+"panels": [
+{
+"id": "connections",
+"title": "Example Connections",
+"entry": "ui/index.html"
+}
+],
+"commands": []
+}
+}
+Unknown manifest fields are rejected. Runtime and asset paths must remain inside the plugin package.
+Permissions
+Plugin Runtime v1 currently recognizes:
 
-connection-type
+network.connect
 
-dock-panel
+clipboard.read
 
-settings
+clipboard.write
 
-network
+credentials.use
 
-clipboard-read
+storage.plugin
 
-clipboard-write
+Contribution declarations such as panels and sidebar items are metadata, not permissions.
+Permissions are intended to become host-enforced capabilities. Until stronger OS-level sandboxing exists, declarations must not be described as a complete security boundary for arbitrary native executables.
+credentials.use must never mean unrestricted vault export. Credential APIs should broker approved operations and keep secret exposure as narrow as possible.
+UI contributions
+Initial contribution kinds are:
 
-filesystem-read
+sidebar items
 
-filesystem-write
+dock panels
 
-credential-use
+commands
 
-credential-use is intentionally different from direct vault access. Future plugin APIs should ask the RemoteHand core to use a credential for an approved operation instead of exposing decrypted secret material to plugin code.
-Capabilities in v1.0.3 are validated declarations. They are the contract for future host-mediated enforcement; no arbitrary plugin code is executed in this foundation release.
-Installation limits
-Folder installation is deliberately bounded:
+Plugins own their UI. RemoteHand will host plugin-provided web assets in an isolated environment with a controlled bridge. Plugin UI must not receive unrestricted Tauri or filesystem access.
+Runtime
+Plugins run out of process.
+RemoteHand launches the configured executable, establishes a versioned IPC session, validates plugin identity/API compatibility, supervises process lifetime, and tears down runtime resources when a plugin stops or crashes.
+The runtime transport and handshake are part of Plugin API v1 and will be documented as they stabilize.
+Installation safety
+The existing plugin manager keeps these protections:
 
-maximum 2,048 files,
+newly installed plugins are disabled by default
 
-maximum 64 MiB total file size,
+strict manifest parsing
 
-maximum 512 scanned plugin entries,
+API-version validation
 
-maximum 64 KiB manifest,
+path traversal rejection
 
-maximum 1 MiB plugin-state file.
+symlink rejection
 
-Symbolic links and unsupported filesystem entry types are rejected.
-Removal safety
-Plugins must be disabled before removal.
-Removal walks the plugin tree without following symbolic links. Plugin-owned data outside the installed plugin directory is not removed automatically.
-Planned next step
-The first serious protocol plugin is expected to be VNC. VNC should be implemented only after Plugin API v1 behavior and the Plugin Manager have completed runtime acceptance on Windows and Linux.
+bounded file count and package size
+
+bounded manifest and state files
+
+safe removal of disabled plugins only
+
+Current package limits remain:
+
+maximum 2,048 files
+
+maximum 64 MiB package size
+
+maximum 512 scanned plugin entries
+
+maximum 64 KiB manifest
+
+maximum 1 MiB plugin-state file
+
+Reference plugin
+The first production reference plugin will be maintained separately in:
+webbytenchi/remotehand-plugin-vnc
+VNC-specific backend and frontend code must live in that repository, not RemoteHand core.
+Developer documentation
+The long-term public Plugin SDK documentation will cover:
+
+manifest schema
+
+package layout
+
+executable entrypoint contract
+
+IPC framing
+
+handshake and API negotiation
+
+lifecycle and crash supervision
+
+UI hosting and contribution points
+
+Host API
+
+permissions
+
+plugin-scoped storage
+
+credential brokering
+
+packaging, signing, testing, and distribution

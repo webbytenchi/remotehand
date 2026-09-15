@@ -8,7 +8,7 @@ version: string;
 apiVersion: number;
 author: string;
 description: string;
-capabilities: string[];
+permissions: string[];
 };
 type PluginInfo = {
 manifest: PluginManifest;
@@ -109,7 +109,7 @@ focusActions={false}
 <div>
 <strong>Installed add-ons</strong>
 <span>
-Plugins are disabled by default and only receive capabilities declared in their manifest.
+Plugins are disabled by default and only receive permissions declared in their manifest.
 </span>
 </div>
 <div className="plugin-manager-toolbar">
@@ -124,8 +124,8 @@ Install from folder
 <div className="plugin-security-note">
 <strong>Plugin API v1 security model</strong>
 <span>
-RemoteHand validates manifests and manages plugin lifecycle. v1.0.3 does not load arbitrary
-native plugin code.
+RemoteHand validates manifests, permissions, and contributions. Executable plugins run out of
+process through the Plugin Runtime v1 host.
 </span>
 </div>
 
@@ -156,12 +156,12 @@ v{plugin.manifest.version} · {plugin.manifest.author} · API {plugin.manifest.a
 </span>
 {plugin.manifest.description ? <p>{plugin.manifest.description}</p> : null}
 <div className="plugin-capabilities">
-{plugin.manifest.capabilities.length ? (
-plugin.manifest.capabilities.map((capability) => (
-<span key={capability}>{capability}</span>
+{plugin.manifest.permissions.length ? (
+plugin.manifest.permissions.map((permission) => (
+<span key={permission}>{permission}</span>
 ))
 ) : (
-<span>no sensitive capabilities</span>
+<span>no sensitive permissions</span>
 )}
 </div>
 </div>
