@@ -5,7 +5,11 @@ mod storage;
 mod terminal;
 mod vault;
 mod window_state;
-use tauri::Manager;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+use tauri::{webview::PageLoadEvent, Manager};
 use terminal::TerminalState;
 
 #[tauri::command]
@@ -14,6 +18,13 @@ fn local_os() -> &'static str {
 }
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let window_restored = Arc::new(AtomicBool::new(false));
+    let page_loaded = Arc::new(AtomicBool::new(false));
+    let load_window_restored = window_restored.clone();
+    let load_page_loaded = page_loaded.clone();
+    let setup_window_restored = window_restored.clone();
+    let setup_page_loaded = page_loaded.clone();
+
     tauri::Builder::default()
         .manage(TerminalState::default())
         .manage(sftp_native::PersistentSftpState::default())
@@ -63,12 +74,30 @@ pub fn run() {
             terminal::terminal_close,
             local_os,
         ])
-        .setup(|app| {
+        .on_page_load(move |webview, payload| {
+            if webview.label() == "main" && payload.event() == PageLoadEvent::Finished {
+                load_page_loaded.store(true, Ordering::Release);
+                if load_window_restored.load(Ordering::Acquire) {
+                    if let Err(error) = webview.window().show() {
+                        log::error!("Failed to show main window: {error}");
+                    }
+                }
+            }
+        })
+        .setup(move |app| {
             app.handle()
                 .plugin(logging::builder().map_err(std::io::Error::other)?.build())?;
             let tracker = window_state::WindowStateTracker::default();
             app.manage(tracker.clone());
             window_state::restore(app, &tracker).map_err(std::io::Error::other)?;
+            setup_window_restored.store(true, Ordering::Release);
+            if setup_page_loaded.load(Ordering::Acquire) {
+                if let Some(window) = app.get_webview_window("main") {
+                    if let Err(error) = window.show() {
+                        log::error!("Failed to show main window: {error}");
+                    }
+                }
+            }
             log::info!("RemoteHand started");
             Ok(())
         })
