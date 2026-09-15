@@ -161,7 +161,7 @@ select {
   flex-basis: 20px;
 }
 .workspace.sidebar-collapsed .sidebar-divider {
-  margin: 7px 0 14px;
+  margin: 0 0 7px;
 }
 .sidebar-action:hover,
 .new-connection:hover {
