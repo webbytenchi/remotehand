@@ -157,6 +157,11 @@ fn read_manifest(plugin_dir: &Path) -> Result<PluginManifest, String> {
     Ok(manifest)
 }
 
+fn strip_utf8_bom(value: &str) -> &str {
+    let bom = char::from_u32(0xfeff).expect("valid BOM code point");
+    value.strip_prefix(bom).unwrap_or(value)
+}
+
 fn remove_tree_safe(path: &Path) -> Result<(), String> {
     let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
     if metadata.file_type().is_symlink() {
