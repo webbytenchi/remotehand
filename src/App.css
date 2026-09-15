@@ -2178,17 +2178,3 @@ color: #b7c1cf;
 font-size: 13px;
 font-weight: 600;
 }
-.workspace-empty button {
-border: 1px solid #2a3544;
-border-radius: 7px;
-background: #0f151e;
-color: #c8d1dc;
-padding: 8px 12px;
-font: inherit;
-font-size: 12px;
-cursor: pointer;
-}
-.workspace-empty button:hover {
-background: #151d28;
-border-color: #39465a;
-}

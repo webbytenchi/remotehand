@@ -375,16 +375,11 @@ onCancel={() => setNotice(null)}
 function WorkspaceWatermark({ containerApi }: IWatermarkPanelProps) {
 const popouts = containerApi.getPopouts();
 if (popouts.length === 0) return null;
-const dockAllBack = () => {
-for (const popout of [...containerApi.getPopouts()]) {
-popout.window.close();
-}
-};
 return (
 <div className="workspace-empty">
 <div className="workspace-empty-icon" aria-hidden="true">↙</div>
 <strong>All workspace panels are popped out.</strong>
-<button type="button" onClick={dockAllBack}>Dock all back</button>
+<span>Close a popped-out window to dock it back.</span>
 </div>
 );
 }
