@@ -37,7 +37,7 @@ pub struct PluginManifest {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PluginRuntime {
     pub kind: String,
-    pub entrypoint: String,
+    pub entrypoints: BTreeMap<String, String>,
 }
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -157,7 +157,17 @@ fn validate_manifest(manifest: &PluginManifest) -> Result<(), String> {
     if manifest.runtime.kind != "executable" {
         return Err("plugin runtime kind must be 'executable'".to_string());
     }
-    validate_relative_package_path(&manifest.runtime.entrypoint, "plugin runtime entrypoint")?;
+    if manifest.runtime.entrypoints.is_empty() || manifest.runtime.entrypoints.len() > 16 {
+        return Err(
+            "plugin runtime must declare between 1 and 16 platform entrypoints".to_string(),
+        );
+    }
+    for (target, entrypoint) in &manifest.runtime.entrypoints {
+        if !valid_identifier(target) {
+            return Err(format!("invalid plugin runtime target: {target}"));
+        }
+        validate_relative_package_path(entrypoint, "plugin runtime entrypoint")?;
+    }
     if manifest.permissions.len() > 32 {
         return Err("plugin declares too many permissions".to_string());
     }
@@ -575,7 +585,10 @@ mod tests {
             description: "test".to_string(),
             runtime: PluginRuntime {
                 kind: "executable".to_string(),
-                entrypoint: "bin/plugin".to_string(),
+                entrypoints: BTreeMap::from([(
+                    format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH),
+                    "bin/plugin".to_string(),
+                )]),
             },
             permissions: permissions.iter().map(|value| value.to_string()).collect(),
             contributes: PluginContributions::default(),

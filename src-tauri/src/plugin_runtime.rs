@@ -70,7 +70,14 @@ fn resolve_entrypoint(
     plugin: &PluginInfo,
 ) -> Result<(std::path::PathBuf, std::path::PathBuf), String> {
     let plugin_root = crate::plugins::plugins_root_for_runtime()?.join(&plugin.directory);
-    let entrypoint = Path::new(&plugin.manifest.runtime.entrypoint);
+    let target = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
+    let configured = plugin
+        .manifest
+        .runtime
+        .entrypoints
+        .get(&target)
+        .ok_or_else(|| format!("plugin does not provide a runtime entrypoint for {target}"))?;
+    let entrypoint = Path::new(configured);
     if entrypoint.is_absolute()
         || entrypoint
             .components()

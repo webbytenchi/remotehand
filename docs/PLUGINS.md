@@ -10,7 +10,12 @@ remotehand.example/
 ├── plugin.json
 ├── icon.svg
 ├── bin/
-│   └── remotehand-example.exe
+│   ├── windows-x86_64/
+│   │   └── remotehand-example.exe
+│   ├── linux-x86_64/
+│   │   └── remotehand-example
+│   └── linux-aarch64/
+│       └── remotehand-example
 └── ui/
 └── index.html
 Installed plugins live in RemoteHand's portable plugins/ directory. Plugin enable/disable state remains under data/config/plugins.json.
@@ -24,7 +29,11 @@ JSON{
 "description": "Example RemoteHand plugin.",
 "runtime": {
 "kind": "executable",
-"entrypoint": "bin/remotehand-example.exe"
+"entrypoints": {
+"windows-x86_64": "bin/windows-x86_64/remotehand-example.exe",
+"linux-x86_64": "bin/linux-x86_64/remotehand-example",
+"linux-aarch64": "bin/linux-aarch64/remotehand-example"
+}
 },
 "permissions": [
 "network.connect",
@@ -51,6 +60,7 @@ JSON{
 }
 }
 Unknown manifest fields are rejected. Runtime and asset paths must remain inside the plugin package.
+Runtime entrypoint keys use `<os>-<arch>` values reported by Rust `std::env::consts`, such as `windows-x86_64`, `linux-x86_64`, and `linux-aarch64`. A plugin package may contain multiple platform executables; RemoteHand launches only the exact entrypoint matching the current host.
 Permissions
 Plugin Runtime v1 currently recognizes:
 
