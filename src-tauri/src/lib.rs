@@ -9,7 +9,7 @@ mod terminal;
 mod vault;
 mod window_state;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
     Arc,
 };
 use tauri::{webview::PageLoadEvent, Manager};
@@ -27,6 +27,7 @@ pub fn run() {
     let load_page_loaded = page_loaded.clone();
     let setup_window_restored = window_restored.clone();
     let setup_page_loaded = page_loaded.clone();
+    let popout_counter = Arc::new(AtomicU64::new(0));
 
     tauri::Builder::default()
         .manage(TerminalState::default())
@@ -96,6 +97,42 @@ pub fn run() {
             }
         })
         .setup(move |app| {
+            let main_config = app
+                .config()
+                .app
+                .windows
+                .first()
+                .cloned()
+                .ok_or_else(|| std::io::Error::other("missing main window config"))?;
+            let popout_app = app.handle().clone();
+            let popout_counter = popout_counter.clone();
+            tauri::WebviewWindowBuilder::from_config(app.handle(), &main_config)
+                .map_err(std::io::Error::other)?
+                .on_new_window(move |url, features| {
+                    let sequence = popout_counter.fetch_add(1, Ordering::Relaxed) + 1;
+                    let label = format!("panel-popout-{sequence}");
+                    let builder = tauri::WebviewWindowBuilder::new(
+                        &popout_app,
+                        label,
+                        tauri::WebviewUrl::External(
+                            "about:blank".parse().expect("valid about:blank URL"),
+                        ),
+                    )
+                    .window_features(features)
+                    .title("RemoteHand Panel")
+                    .on_document_title_changed(|window, title| {
+                        let _ = window.set_title(&title);
+                    });
+                    match builder.build() {
+                        Ok(window) => tauri::webview::NewWindowResponse::Create { window },
+                        Err(error) => {
+                            log::error!("Failed to create panel popout for {url}: {error}");
+                            tauri::webview::NewWindowResponse::Deny
+                        }
+                    }
+                })
+                .build()
+                .map_err(std::io::Error::other)?;
             app.handle()
                 .plugin(logging::builder().map_err(std::io::Error::other)?.build())?;
             if let Some(runtime) = app.try_state::<plugin_runtime::PluginRuntimeState>() {
