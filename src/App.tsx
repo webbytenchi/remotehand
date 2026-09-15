@@ -627,11 +627,11 @@ onSftp={openSftp}
 }),
 [recentActivities, homeMessageIndex, openRecentActivity, addConnection, updateConnection, removeConnection, connectSsh, openSftp],
 );
-const popoutActive = useCallback(() => {
+const popoutActive = useCallback(async () => {
 const api = apiRef.current;
 const panel = api?.activePanel;
 if (!api || !panel) return;
-api.addFloatingGroup(panel);
+try { await api.addPopoutGroup(panel); } catch (error) { console.error("Failed to pop out active panel", error); }
 }, []);
 const resetLayout = useCallback(async () => {
 const api = apiRef.current;
@@ -955,8 +955,8 @@ aria-label="Settings"
 <button className="sidebar-action" type="button" onClick={() => addTerminal("below")} title="Split below">
 <span className="sidebar-icon">⇣</span><span className="sidebar-label">Split below</span>
 </button>
-<button className="sidebar-action" type="button" onClick={popoutActive} title="Float active panel">
-<span className="sidebar-icon">↗</span><span className="sidebar-label">Float active</span>
+<button className="sidebar-action" type="button" onClick={popoutActive} title="Open active panel in new window">
+<span className="sidebar-icon">↗</span><span className="sidebar-label">Pop out active</span>
 </button>
 
 <div className="sidebar-divider" />
