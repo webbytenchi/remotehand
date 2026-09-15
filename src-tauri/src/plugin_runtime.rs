@@ -250,7 +250,7 @@ impl PluginRuntimeState {
         let mut sessions = self
             .sessions
             .lock()
-            .map_err(|| "plugin runtime lock poisoned".to_string())?;
+            .map_err(|_poison| "plugin runtime lock poisoned".to_string())?;
         let session = sessions
             .get_mut(id)
             .ok_or_else(|| "plugin runtime is not running".to_string())?;
