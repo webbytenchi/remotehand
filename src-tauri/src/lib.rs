@@ -137,6 +137,9 @@ pub fn run() {
             app.handle()
                 .plugin(logging::builder().map_err(std::io::Error::other)?.build())?;
             if let Some(runtime) = app.try_state::<plugin_runtime::PluginRuntimeState>() {
+                runtime
+                    .set_app_handle(app.handle().clone())
+                    .map_err(std::io::Error::other)?;
                 if let Err(error) = plugins::start_enabled_plugins(&runtime) {
                     log::error!("Failed to restore enabled plugins: {error}");
                 }
