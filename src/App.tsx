@@ -55,22 +55,55 @@ terminalFontSize: 13,
 const UI_FONT_OPTIONS = ["Inter", "IBM Plex Sans", "Segoe UI", "System Default"] as const;
 const TERMINAL_FONT_OPTIONS = ["JetBrains Mono", "IBM Plex Mono", "Cascadia Mono", "Consolas", "System Monospace"] as const;
 const initialConnections: Connection[] = [];
+type RecentActivity = {
+id: string;
+kind: "powershell" | "cmd" | "terminal" | "wsl" | "ssh" | "sftp";
+title: string;
+detail: string;
+timestamp: number;
+connection?: Connection;
+};
+type HomePanelParams = {
+activities?: RecentActivity[];
+onOpen?: (activity: RecentActivity) => void;
+};
 type ConnectionsPanelParams = {
 connections?: Connection[];
 };
-function WelcomePanel() {
+const HOME_MESSAGES = [
+"Welcome back. Here is your recent activity.",
+"Good to see you again. Pick up where you left off.",
+"Your workspace is ready. Continue a recent session.",
+"Ready when you are. Open a recent activity below.",
+];
+function HomePanel({ activities, onOpen }: { activities: RecentActivity[]; onOpen: (activity: RecentActivity) => void }) {
+const [messageIndex, setMessageIndex] = useState(0);
+useEffect(() => {
+const timer = window.setInterval(() => setMessageIndex((current) => (current + 1) % HOME_MESSAGES.length), 7000);
+return () => window.clearInterval(timer);
+}, []);
 return (
-<section className="panel-content welcome-panel">
+<section className="panel-content home-panel">
+<div className="home-hero">
+<p className="eyebrow">Home</p>
 <h1>RemoteHand</h1>
-<p>
-Your portable remote workstation manager. Work with local terminals and remote systems
-from one dockable workspace, with SSH, SFTP, saved credentials, and persistent layouts.
-</p>
-<div className="feature-list">
-<div><strong>Local terminals</strong><span>Launch the shells available on the computer running RemoteHand.</span></div>
-<div><strong>Remote connections</strong><span>Connect to remote systems over SSH and keep your hosts organized.</span></div>
-<div><strong>SFTP and credentials</strong><span>Browse and transfer remote files while keeping saved secrets in the local vault.</span></div>
-<div><strong>Flexible workspace</strong><span>Arrange tools into tabs, splits, floating windows, or popouts and restore your layout later.</span></div>
+<p>{HOME_MESSAGES[messageIndex]}</p>
+</div>
+<div className="home-section">
+<div className="home-section-heading">
+<h2>Recent activity</h2>
+<span>{activities.length ? "Continue where you left off." : "Activities you open will appear here."}</span>
+</div>
+<div className="activity-list">
+{activities.length === 0 ? <div className="activity-empty">Open a terminal, SSH connection, or SFTP session to start building your recent activity.</div> : null}
+{activities.map((activity) => (
+<button className="activity-card" type="button" key={activity.id} onClick={() => onOpen(activity)}>
+<span className="activity-icon">{activity.kind === "ssh" ? "◈" : activity.kind === "sftp" ? "⇅" : "⌘"}</span>
+<span className="activity-copy"><strong>{activity.title}</strong><small>{activity.detail}</small></span>
+<span className="activity-action">{activity.kind === "ssh" ? "Reconnect" : activity.kind === "sftp" ? "Reopen" : "Open"}</span>
+</button>
+))}
+</div>
 </div>
 </section>
 );
@@ -329,6 +362,7 @@ onCancel={() => setNotice(null)}
 }
 function App() {
 const [connections, setConnections] = useState(initialConnections);
+const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
 const [connectionsLoaded, setConnectionsLoaded] = useState(() => !isTauri());
 const [settings, setSettings] = useState<Settings>(() => {
 if (isTauri()) return DEFAULT_SETTINGS;
@@ -445,6 +479,13 @@ setConnections((current) => current.map((item) => item.id === connection.id ? co
 const removeConnection = useCallback((connection: Connection) => {
 setConnections((current) => current.filter((item) => item.id !== connection.id));
 }, []);
+const recordActivity = useCallback((activity: Omit<RecentActivity, "id" | "timestamp">) => {
+setRecentActivities((current) => {
+const key = activity.kind + ":" + (activity.connection?.id ?? activity.title);
+const next = current.filter((item) => item.kind + ":" + (item.connection?.id ?? item.title) !== key);
+return [{ ...activity, id: key, timestamp: Date.now() }, ...next].slice(0, 8);
+});
+}, []);
 const connectSsh = useCallback((connection: Connection) => {
 const api = apiRef.current;
 if (!api) return;
@@ -461,7 +502,13 @@ name: connection.name,
 },
 },
 });
-}, []);
+recordActivity({
+kind: "ssh",
+title: connection.name,
+detail: connection.user + "@" + connection.host + ":" + connection.port,
+connection,
+});
+}, [recordActivity]);
 const openSftp = useCallback((connection: Connection) => {
 const api = apiRef.current;
 if (!api) return;
@@ -479,10 +526,73 @@ credentialRef: connection.credentialRef,
 },
 },
 });
-}, []);
+recordActivity({
+kind: "sftp",
+title: connection.name + " Files",
+detail: connection.user + "@" + connection.host + ":" + connection.port,
+connection,
+});
+}, [recordActivity]);
+const addTerminal = useCallback((position?: "right" | "below", shell: "default" | "powershell" | "cmd" | "wsl" = "default") => {
+const api = apiRef.current;
+if (!api) return;
+const resolvedShell = shell === "default" && localOs === "windows" ? "cmd" : shell;
+const id = `terminal-${Date.now()}`;
+const activePanel = api.activePanel;
+const title = resolvedShell === "default" ? "Terminal" : resolvedShell === "powershell" ? "PowerShell" : resolvedShell === "cmd" ? "Command Prompt" : "WSL";
+api.addPanel({
+id,
+component: "terminal",
+title,
+params: { shell: resolvedShell },
+...(position && activePanel
+? { position: { referencePanel: activePanel.id, direction: position } }
+: {}),
+});
+recordActivity({
+kind: resolvedShell === "default" ? "terminal" : resolvedShell,
+title,
+detail: "Local shell",
+});
+}, [localOs, recordActivity]);
+const addConnections = useCallback(() => {
+apiRef.current?.addPanel({
+id: `connections-${Date.now()}`,
+component: "connections",
+title: "Connections",
+params: { connections },
+});
+}, [connections]);
+const openRecentActivity = useCallback((activity: RecentActivity) => {
+if (activity.kind === "ssh" && activity.connection) {
+connectSsh(activity.connection);
+return;
+}
+if (activity.kind === "sftp" && activity.connection) {
+openSftp(activity.connection);
+return;
+}
+addTerminal(undefined, activity.kind === "terminal" ? "default" : activity.kind);
+}, [addTerminal, connectSsh, openSftp]);
+const openHome = useCallback(() => {
+const api = apiRef.current;
+if (!api) return;
+const existing = api.panels.find((panel) => panel.api.component === "welcome");
+if (existing) {
+existing.api.setTitle("Home");
+existing.api.setActive();
+return;
+}
+api.addPanel({ id: "home-" + Date.now(), component: "welcome", title: "Home", params: { activities: recentActivities } });
+}, [recentActivities]);
 const components = useMemo(
 () => ({
-welcome: WelcomePanel,
+welcome: (props: IDockviewPanelProps<HomePanelParams>) => (
+<HomePanel
+activities={props.params?.activities ?? recentActivities}
+onOpen={openRecentActivity}
+/>
+),
 terminal: LocalTerminalPanel,
 sftp: SftpPanel,
 connections: (props: IDockviewPanelProps<ConnectionsPanelParams>) => (
@@ -496,32 +606,8 @@ onSftp={openSftp}
 />
 ),
 }),
-[addConnection, updateConnection, removeConnection, connectSsh, openSftp],
+[recentActivities, openRecentActivity, addConnection, updateConnection, removeConnection, connectSsh, openSftp],
 );
-const addTerminal = useCallback((position?: "right" | "below", shell: "default" | "powershell" | "cmd" | "wsl" = "default") => {
-const api = apiRef.current;
-if (!api) return;
-const resolvedShell = shell === "default" && localOs === "windows" ? "cmd" : shell;
-const id = `terminal-${Date.now()}`;
-const activePanel = api.activePanel;
-api.addPanel({
-id,
-component: "terminal",
-title: resolvedShell === "default" ? "Terminal" : resolvedShell === "powershell" ? "PowerShell" : resolvedShell === "cmd" ? "Command Prompt" : "WSL",
-params: { shell: resolvedShell },
-...(position && activePanel
-? { position: { referencePanel: activePanel.id, direction: position } }
-: {}),
-});
-}, [localOs]);
-const addConnections = useCallback(() => {
-apiRef.current?.addPanel({
-id: `connections-${Date.now()}`,
-component: "connections",
-title: "Connections",
-params: { connections },
-});
-}, [connections]);
 const popoutActive = useCallback(() => {
 const api = apiRef.current;
 const panel = api?.activePanel;
@@ -543,7 +629,7 @@ return;
 localStorage.removeItem(WORKSPACE_KEY);
 }
 api.clear();
-api.addPanel({ id: "welcome", component: "welcome", title: "Welcome" });
+api.addPanel({ id: "welcome", component: "welcome", title: "Home", params: { activities: recentActivities } });
 api.addPanel({
 id: "terminal",
 component: "terminal",
@@ -557,7 +643,7 @@ title: "Connections",
 params: { connections },
 position: { referencePanel: "welcome", direction: "right" },
 });
-}, [connections]);
+}, [[connections, recentActivities]]);
 useEffect(() => {
 if (!isTauri()) return;
 void invoke<Connection[]>("load_connections")
@@ -639,6 +725,15 @@ panel.api.updateParameters({ connections });
 }
 }, [connections]);
 useEffect(() => {
+const api = apiRef.current;
+if (!api) return;
+for (const panel of api.panels) {
+if (panel.api.component !== "welcome") continue;
+panel.api.setTitle("Home");
+panel.api.updateParameters({ activities: recentActivities });
+}
+}, [recentActivities]);
+useEffect(() => {
 const onKeyDown = (event: KeyboardEvent) => {
 if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
 event.preventDefault();
@@ -683,7 +778,7 @@ localStorage.removeItem(WORKSPACE_KEY);
 }
 }
 if (!restoredRef.current) {
-event.api.addPanel({ id: "welcome", component: "welcome", title: "Welcome" });
+event.api.addPanel({ id: "welcome", component: "welcome", title: "Home", params: { activities: recentActivities } });
 event.api.addPanel({
 id: "terminal",
 component: "terminal",
@@ -698,8 +793,11 @@ position: { referencePanel: "welcome", direction: "right" },
 });
 }
 for (const panel of event.api.panels) {
-if (panel.api.component !== "connections") continue;
-panel.api.updateParameters({ connections });
+if (panel.api.component === "connections") panel.api.updateParameters({ connections });
+if (panel.api.component === "welcome") {
+panel.api.setTitle("Home");
+panel.api.updateParameters({ activities: recentActivities });
+}
 }
 captureLayout(event.api);
 event.api.onDidMutateLayout(() => {
@@ -720,6 +818,7 @@ void invoke("terminal_close", { sessionId }).catch(() => undefined);
 setWorkspaceReady(true);
 };
 const commands = [
+{ label: "Open Home", hint: "Panel", run: openHome },
 ...(localOs === "windows"
 ? [
 { label: "New PowerShell", hint: "Local", run: () => addTerminal(undefined, "powershell") },
@@ -776,6 +875,15 @@ aria-label="Settings"
 </span>
 </button>
 </div>
+<button className="sidebar-action" type="button" onClick={openHome} title="Home">
+<span className="sidebar-icon" aria-hidden="true">
+<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+<path d="M3 9.2L10 3l7 6.2" />
+<path d="M5 8.2V17h10V8.2" />
+<path d="M8 17v-5h4v5" />
+</svg>
+</span><span className="sidebar-label">Home</span>
+</button>
 {localOs === "windows" ? (
 <>
 <button className="sidebar-action" type="button" onClick={() => addTerminal(undefined, "powershell")} title="PowerShell">
