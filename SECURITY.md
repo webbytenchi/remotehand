@@ -1,67 +1,83 @@
 # Security Policy
 
-Security Philosophy
-RemoteHand is a remote-access application. Security-sensitive design is therefore a core product requirement rather than a later hardening task.
-Rules
+RemoteHand is a remote-access application. Security-sensitive behavior is a core product requirement rather than a later hardening task.
 
-Do not implement custom cryptography.
+## Security Rules
 
-Do not silently disable SSH host-key verification.
+- Do not implement custom cryptography.
+- Do not silently disable SSH/SFTP host-key verification.
+- Do not persist plaintext passwords in ordinary profile/configuration files.
+- Do not embed private-key contents in normal connection-profile files.
+- Do not log credentials, private keys, vault passphrases, authentication tokens, or sensitive terminal contents by default.
+- Do not enable analytics or telemetry without an explicit user-visible decision.
+- Treat filenames, hostnames, URLs, terminal escape sequences, clipboard contents, remote paths, and remote protocol data as untrusted input.
+- Protocol and cryptography dependencies must be reviewed for advisories and maintenance status.
 
-Do not persist plaintext passwords by default.
+## Current V1 Authentication Model
 
-Do not embed private-key contents in normal connection-profile files.
+RemoteHand V1 has two distinct SSH-related paths.
 
-Do not log credentials, private keys, authentication tokens, or sensitive terminal contents by default.
+### SSH terminal sessions
 
-Do not enable analytics or telemetry without a clear user-visible decision.
+Interactive SSH terminals launch the operating system's `ssh` client inside a PTY. Host-key verification, SSH config, private keys, agents, and interactive authentication therefore follow the behavior and policy of the installed client.
 
-Do not make remote connections merely by rendering/importing untrusted content.
+The portable RemoteHand vault is not currently injected into SSH terminal authentication. This avoids silently passing saved passwords to an external SSH process without an explicit design for that behavior.
 
-Treat filenames, hostnames, URLs, escape sequences, clipboard contents, and remote protocol data as untrusted input.
+### SFTP
 
-Protocol/library updates must be reviewed for security advisories.
+The native SFTP path uses `russh` and `russh-sftp`. Password credentials can be resolved from the portable vault through an opaque credential reference. The native client checks host keys through known-hosts handling and must not silently accept an unknown or changed key without the intended verification path.
 
-Dependency Review
-Before adding a security-sensitive dependency, review:
+Compatibility SFTP helpers also exist in the codebase and must preserve the same rule that secrets are resolved separately from saved profile JSON.
 
-License
-
-Maintainer activity
-
-Recent releases
-
-Known vulnerabilities/security advisories
-
-Platform support
-
-Transitive dependency risk
-
-Whether safer maintained alternatives exist
-
-Credential Storage
-The final credential system is not yet selected.
-The design must support a credential reference separate from ordinary connection-profile serialization.
-Portable-only distribution must not quietly downgrade secrets to plaintext storage.
-
-Normal configuration files may travel with the RemoteHand directory, but credentials must remain separate. Initial releases should prefer prompting for passwords over persisting them insecurely. A future portable credential vault must use established cryptographic libraries and a documented threat model.
-Reporting Vulnerabilities
-Until a dedicated security-reporting channel is configured, please avoid publishing exploitable details in a public issue.
-For private deployments of this repository, contact the repository owner directly.
-This policy will be updated before the first public production release.
 ## Portable Credential Vault Threat Model
-RemoteHand's portable vault is designed to protect persisted credentials when the application directory is copied, lost, backed up, or inspected while RemoteHand is not unlocked.
 
-Vault data is stored separately from connection profiles in data/vault/credentials.enc.
+RemoteHand's portable vault protects persisted credentials when the application directory is copied, lost, backed up, or inspected while the vault is locked.
 
-The vault uses the established age file format with passphrase-based encryption rather than custom cryptographic primitives.
+Vault data is stored separately from connection profiles at:
 
-Connection profiles may contain only an opaque credentialRef; they must not contain the corresponding secret.
+```text
+data/vault/credentials.enc
+```
 
-The master passphrase and decrypted secrets exist in process memory only while the vault is unlocked and are never written to logs.
+The vault uses the established `age` file format with passphrase-based encryption rather than custom cryptographic primitives.
 
-Locking the vault drops RemoteHand's in-memory unlocked vault state.
+Connection profiles may contain only an opaque `credentialRef`; they must not contain the corresponding secret.
 
-This design does not protect secrets from a process or user that can inspect RemoteHand's memory while the vault is unlocked.
+The master passphrase and decrypted secrets exist in process memory only while the vault is unlocked. Locking the vault drops RemoteHand's in-memory unlocked vault state.
 
-RemoteHand does not automatically persist SSH passwords in this foundation slice. Credential capture and user-visible persistence controls must be implemented separately.
+The vault does **not** protect secrets from a process, debugger, malware, or user that can inspect RemoteHand's memory while the vault is unlocked. It also cannot protect a passphrase captured by a compromised operating system or input environment.
+
+## Portable Data
+
+Normal V1 state is stored relative to the executable directory under `data/`. Because portable data may be copied or synchronized as a unit, all non-vault JSON files should be treated as non-secret material.
+
+Do not write credentials into:
+
+- `data/config/settings.json`
+- `data/connections/connections.json`
+- `data/activity/recent.json`
+- `data/workspaces/default.json`
+
+Recent Activity may include connection metadata such as host and username, so users should treat the portable directory as potentially sensitive even when secrets remain encrypted.
+
+## Clipboard and Terminal Safety
+
+Terminal paste can execute remote or local commands. V1 includes configurable multi-line paste confirmation/protection. Changes to clipboard behavior should preserve a clear path for preventing accidental execution of multi-line content.
+
+Remote terminal output is untrusted. Escape-sequence handling is delegated to the terminal rendering stack and should be kept current with upstream security fixes.
+
+## Dependency Review
+
+Before adding or upgrading a security-sensitive dependency, review:
+
+- License
+- Maintainer activity
+- Recent releases
+- Known vulnerabilities/security advisories
+- Windows/Linux support
+- Transitive dependency risk
+- Whether a safer maintained alternative exists
+
+## Reporting Vulnerabilities
+
+Until a dedicated private security-reporting channel is configured, avoid publishing exploitable details in a public issue. For private deployments of this repository, contact the repository owner directly.

@@ -1,111 +1,212 @@
 # RemoteHand
 
-RemoteHand is a modern, open-source remote workstation manager designed for people who regularly work across servers, virtual machines, development systems, and desktops.
+RemoteHand is an open-source, portable remote workstation manager for Windows and Linux. It combines local terminals, SSH sessions, SFTP file management, saved connections, encrypted portable credentials, and a dockable multi-pane workspace in one desktop application.
 
-The goal is simple: provide a clean, modern interface for remote access without rebuilding mature network protocols from scratch.
+RemoteHand V1 is intentionally focused on the workflows needed for day-to-day terminal and file-based remote administration. Later protocols such as RDP, VNC, and X11 remain roadmap items.
 
-RemoteHand will combine a native desktop shell with proven open-source protocol libraries and a flexible dockable workspace.
+## V1 Highlights
 
-## Vision
-
-RemoteHand should feel like a modern development tool rather than a legacy administration utility.
-
-Core principles:
-
-- Modern, uncluttered desktop UI
-- Multiple tabs and split panes
-- Drag-and-drop docking and layout persistence
-- Portable-only Windows and Linux distribution
-- Cross-platform architecture
-- Open-source components wherever practical
-- Security-conscious credential and connection handling
-- Reuse mature protocol implementations instead of reinventing SSH, RDP, VNC, or X11
-- Progressive complexity: common tasks stay simple, advanced settings stay available when needed
-
-## Planned Capabilities
-
-### V1
-
+- Portable-only desktop application: extract and run, with no installer required
+- Local terminal sessions through a native PTY
+- Windows PowerShell and Command Prompt shortcuts
+- SSH terminal sessions in dockable tabs and panes
 - Saved connection profiles
-- SSH terminal sessions
-- Multiple tabs
-- Horizontal and vertical split panes
-- Drag-and-drop docking
-- Detachable/popout panels
-- Saved workspace layouts
+- SFTP browser and file operations
+- Portable encrypted credential vault
+- Dockable tabs, drag/drop groups, splits, and popout windows
+- Workspace layout persistence
+- Main-window size and position persistence
+- Home dashboard with persistent Recent Activity
 - Dark, light, and system themes
-- Portable-only application model
-- Local terminal support
-- MobaXterm-style terminal mouse workflow: auto-copy selection and right-click paste
-- Configurable multi-line paste protection
-- SSH key and password authentication
-- SSH port forwarding
+- Configurable color scheme, UI font, and terminal appearance
+- Terminal selection auto-copy, right-click paste, and multi-line paste confirmation
+- Responsive Connections and Recent Activity cards
 
-### Later
-
-- SFTP file management
-- RDP sessions
-- VNC sessions
-- X11 forwarding/integration
-- Connection groups and workspaces
-- Reconnect/session recovery
-- Per-host notes
-- Session logging
-- Tailscale-aware conveniences
-- Server health/status indicators
-- Command palette and advanced keyboard navigation
-
-## Proposed Technology Stack
+## Current V1 Architecture
 
 | Layer | Technology |
 | --- | --- |
-| Desktop shell | Tauri |
-| Frontend | React + TypeScript |
-| Styling / UI | Tailwind CSS + shadcn/ui |
+| Desktop shell | Tauri 2 |
+| Frontend | React 19 + TypeScript |
+| Build tooling | Vite |
 | Docking / layout | Dockview |
 | Terminal renderer | xterm.js |
-| Application state | Zustand |
-| Native / backend layer | Rust |
-| SSH / SFTP | Mature open-source library; final selection after security/license review |
-| RDP | Existing open-source implementation such as FreeRDP |
-| VNC | Existing open-source VNC implementation |
-| X11 | Existing X server / forwarding integration rather than a new implementation |
+| Shared frontend state | Zustand |
+| Native backend | Rust |
+| Local terminal / SSH PTY | portable-pty |
+| SSH terminal transport | System `ssh` client launched inside a PTY |
+| Native SFTP | `russh` + `russh-sftp` |
+| Portable credential vault | `age` passphrase encryption |
 
-The exact protocol libraries are intentionally not locked yet. Each dependency must pass a license, maintenance, security, and platform-fit review before adoption.
+RemoteHand deliberately reuses mature protocol implementations rather than implementing SSH or cryptography from scratch.
 
-## UI Direction
+## Workspace
 
-RemoteHand uses a protocol-neutral pane model. A workspace pane may eventually contain:
+The application shell uses Dockview so sessions and tools can be arranged as tabs or split panes. V1 supports:
 
-- SSH terminal
-- Local terminal
-- SFTP browser
-- RDP desktop
-- VNC desktop
-- X11-forwarded application
+- Multiple terminal, SSH, SFTP, Connections, and Home panels
+- Horizontal and vertical splits
+- Drag-and-drop tab/pane movement
+- Popout windows
+- Layout undo, redo, and reset
+- Automatic workspace save/restore
 
-This allows layouts such as an SSH shell beside an RDP desktop, or several SSH sessions arranged across split panes.
+The Home panel shows recent local-terminal, SSH, and SFTP activity. Recent Activity is persisted and can reopen or reconnect a previous item. The welcome message is randomized when the app starts and when Home is opened; it does not continuously rotate.
 
-## Portable Mode
+## Terminal and SSH
 
-RemoteHand is distributed as a portable application only on Windows and Linux. There is no installer.
+Local terminals are backed by a native PTY and rendered with xterm.js.
 
-The normal workflow is **extract → run**. Normal operation must not require administrator/root privileges.
+On Windows, RemoteHand exposes quick actions for PowerShell and Command Prompt. Other supported local shells use the platform's normal shell path.
 
-Non-sensitive configuration, themes, connection profiles, and workspace layouts live inside the RemoteHand directory so the application can be moved as a unit. Sensitive credentials must not be stored as plaintext merely to support portability.
+SSH terminal sessions currently launch the operating system's `ssh` client inside a PTY. This means host-key handling, key files, agents, SSH configuration, and interactive authentication follow the installed SSH client's behavior. RemoteHand does not currently inject portable-vault passwords into SSH terminal sessions.
 
-Initial target release formats:
+Terminal interaction includes:
 
-- **Windows x64:** ZIP containing `RemoteHand.exe` and the portable data directory
-- **Linux x86_64:** compressed archive containing the `remotehand` binary and portable data directory
+- Automatic clipboard copy when terminal text is selected
+- Right-click paste workflow
+- Multi-line paste confirmation/protection
+- Resize propagation to the native PTY
+- Configurable terminal font and theme
 
-Installers and native package formats such as MSI, DEB, RPM, or AppImage are not project goals.
+## SFTP
 
-## Project Status
+V1 includes SFTP file management with a native Rust implementation based on `russh` and `russh-sftp`, plus supporting compatibility paths used by the application.
 
-**Status:** Planning / bootstrap
+Current operations include:
 
-The repository currently contains the initial product, architecture, security, and roadmap documentation. Implementation has not started yet.
+- Directory listing and navigation
+- File upload and download
+- Multi-file / multi-entry transfers
+- Create directory
+- Rename and move entries
+- Delete entries
+- Permission changes where supported
+- Transfer cancellation in the native path
+- Native host-key verification through known-hosts handling
+
+SFTP password credentials can be stored in the portable encrypted vault and referenced from saved connection profiles.
+
+## Saved Connections
+
+Saved profiles currently contain:
+
+- Friendly name
+- Host
+- Port
+- Username
+- Optional credential reference
+
+Connection profiles never contain the corresponding saved secret. Passwords stored for SFTP are kept separately in the encrypted vault.
+
+## Portable Data
+
+RemoteHand resolves application data relative to the executable directory. A typical V1 portable layout is:
+
+```text
+RemoteHand/
+├── RemoteHand.exe            # Windows build
+└── data/
+    ├── activity/
+    │   └── recent.json
+    ├── config/
+    │   └── settings.json
+    ├── connections/
+    │   └── connections.json
+    ├── vault/
+    │   └── credentials.enc
+    └── workspaces/
+        └── default.json
+```
+
+Window state is also persisted by the native application so the main window can reopen at its previous size and position.
+
+The portable model is a core product requirement: normal operation should not require administrator/root privileges, an installer, or a cloud account.
+
+## Credential Vault
+
+RemoteHand includes a portable encrypted credential vault at:
+
+```text
+data/vault/credentials.enc
+```
+
+The vault uses the established `age` format with passphrase-based encryption. Saved connection profiles store only an opaque credential reference. The master passphrase and decrypted secrets are held in process memory only while the vault is unlocked.
+
+See [SECURITY.md](SECURITY.md) for the threat model and limitations.
+
+## Settings
+
+V1 settings include:
+
+- Dark, light, or system theme
+- Accent/color scheme
+- UI font family and size
+- Terminal theme
+- Custom terminal foreground/background
+- Terminal font family and size
+
+Settings are stored portably under `data/config/settings.json`.
+
+## Development
+
+Prerequisites:
+
+- Node.js and npm
+- Rust toolchain compatible with Tauri 2
+- Platform prerequisites required by Tauri
+- An `ssh` client available on the host for SSH terminal sessions
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Run the desktop app in development mode:
+
+```bash
+npm run tauri dev
+```
+
+Run frontend checks:
+
+```bash
+npm run check
+```
+
+Build the frontend:
+
+```bash
+npm run build
+```
+
+RemoteHand is configured as portable-only. Tauri bundling/installers are disabled in `src-tauri/tauri.conf.json`.
+
+## V1 Status
+
+**Status: V1 feature baseline complete.**
+
+The current V1 has been exercised on the Windows Tauri build for the primary workspace, terminal, connection, Home, persistence, credential-vault, and SFTP workflows. Remaining work belongs to post-V1 expansion and hardening rather than the original bootstrap phase.
+
+## Post-V1 Direction
+
+Planned areas include:
+
+- Richer SSH-native integration and authentication UX
+- SSH port forwarding management
+- RDP
+- VNC
+- X11 integration/forwarding
+- Connection groups, favorites, notes, and templates
+- Session logging
+- Connection health/status information
+- Tailscale-aware conveniences
+- More advanced transfer queue UX
+- Command palette and broader keyboard workflows
+- Additional automated integration and packaging validation
+
+See [docs/ROADMAP.md](docs/ROADMAP.md) for the current sequencing.
 
 ## Documentation
 
@@ -119,4 +220,4 @@ The repository currently contains the initial product, architecture, security, a
 
 RemoteHand is licensed under the [MIT License](LICENSE).
 
-Third-party components retain their own licenses. Dependencies must be reviewed before inclusion to ensure their licenses are compatible with the project and distribution model.
+Third-party components retain their own licenses. Security-sensitive and protocol dependencies should continue to be reviewed for license compatibility, maintenance, security history, and platform fit.

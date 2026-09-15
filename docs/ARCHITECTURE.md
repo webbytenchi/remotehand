@@ -1,193 +1,182 @@
 # RemoteHand Architecture
 
-Overview
-RemoteHand is planned as a Tauri desktop application with a React/TypeScript frontend and a Rust/native backend.
-The architecture intentionally separates presentation, workspace management, connection profiles, protocol adapters, and credential handling.
+## Overview
+
+RemoteHand V1 is a Tauri 2 desktop application with a React/TypeScript frontend and a Rust native backend. The architecture separates workspace/UI concerns from native process, terminal, file-transfer, persistence, and credential operations.
+
+```text
 RemoteHand
-|
-+-- Tauri desktop shell
-|   |
-|   +-- React / TypeScript UI
-|       +-- shadcn/ui
-|       +-- Tailwind CSS
-|       +-- Dockview
-|       +-- xterm.js
-|       +-- Zustand
-|
-+-- Native/backend services
-+-- Connection manager
-+-- Credential abstraction
-+-- SSH adapter
-+-- SFTP adapter
-+-- RDP adapter
-+-- VNC adapter
-+-- X11 integration adapter
-+-- Local terminal adapter
-Architectural Principles
-1. Protocol-neutral workspace panes
-The layout layer should not care whether a pane contains SSH, RDP, VNC, SFTP, or another view.
-Each pane is a host for a session/view component identified by type and state.
-2. Protocol adapters
-Every remote protocol should sit behind an internal adapter boundary.
-For example:
-ConnectionProfile
-|
-ConnectionManager
-|
-+------+------+------+------+
-| SSH  | RDP  | VNC  | ...  |
-+------+------+------+------+
-This prevents the UI from becoming tightly coupled to one library.
-3. Mature libraries over protocol reimplementation
-RemoteHand should orchestrate mature open-source implementations.
-Candidates must be evaluated on:
+├── Tauri desktop shell
+│   ├── React + TypeScript UI
+│   │   ├── Dockview workspace
+│   │   ├── xterm.js terminal renderer
+│   │   ├── Home / Recent Activity
+│   │   ├── Connections
+│   │   ├── SFTP browser
+│   │   └── Settings
+│   └── Rust backend
+│       ├── Portable persistence
+│       ├── Window-state persistence
+│       ├── Local PTY sessions
+│       ├── SSH PTY sessions
+│       ├── Native SFTP
+│       ├── Portable credential vault
+│       └── Logging
+└── data/ beside executable
+```
 
-License
+## Frontend
 
-Security history
-
-Maintenance activity
-
-Windows support
-
-Linux support
-
-API stability
-
-Packaging complexity
-
-Tauri/Rust integration cost
-
-4. Frontend/backend separation
 The frontend owns:
 
-Layout
+- Application shell and sidebar
+- Dockview panels, tabs, splits, drag/drop, and popouts
+- Home dashboard and Recent Activity presentation
+- Connection/profile editing
+- SFTP UI
+- Terminal rendering and interaction
+- Theme, font, and color-scheme settings
+- Layout undo/redo/reset actions
 
-Tabs
+Current frontend technologies:
 
-Themes
+- React 19
+- TypeScript
+- Vite
+- Dockview
+- xterm.js
+- Zustand
+- CSS-based application styling
 
-Forms
+The original bootstrap plan mentioned Tailwind/shadcn/ui, but V1 does not depend on them; the shipped UI is implemented with the current React/CSS component set.
 
-Connection/profile editing
+## Native Backend
 
-User interaction
+The Rust backend owns operations that need native APIs or must remain outside the browser sandbox:
 
-Terminal rendering
+- Portable filesystem paths and persistence
+- Native window geometry tracking/restoration
+- PTY process creation and lifecycle
+- System `ssh` process startup inside a PTY
+- SFTP networking and filesystem transfer operations
+- Credential-vault encryption/decryption
+- Native file/folder pickers
+- Application logging
 
-The backend owns:
+## Workspace Model
 
-Network sessions
+Dockview provides the protocol-neutral pane model. V1 panels include Home, terminals, SSH sessions, Connections, and SFTP.
 
-Process spawning
+Saved layouts are serialized to:
 
-Secure credential access
+```text
+data/workspaces/default.json
+```
 
-Protocol libraries
+The visible Home panel retains its original internal Dockview component key (`welcome`) for compatibility with layouts created before the panel was renamed from Welcome to Home.
 
-File-system operations requiring native APIs
+Workspace behavior includes:
 
-Platform-specific integration
+- Multiple groups and tabs
+- Horizontal/vertical splits
+- Drag/drop docking
+- Popouts
+- Layout persistence
+- Undo/redo/reset
 
-5. Portable-only distribution
-RemoteHand is portable-only on Windows and Linux. Portability is the default runtime model, not an alternate installation mode.
+## Home and Recent Activity
 
-The application should resolve non-sensitive configuration and application data relative to the RemoteHand directory rather than relying on an installer-created system location.
-The portable directory should resemble:
-RemoteHand/
-+-- RemoteHand.exe
-+-- data/
-+-- config/
-+-- layouts/
-+-- themes/
-+-- logs/
-Secrets must remain separate from ordinary profile/configuration files.
+Recent Activity records local terminal, SSH, and SFTP activity. Entries are deduplicated by activity/session identity and capped by the UI to a short recent list.
 
-V1 should not persist passwords by default. A later portable encrypted vault may allow credentials to travel with the application. OS credential storage may also be supported as an optional non-portable secret backend, but it must never be required for normal portable operation.
+Persistence path:
 
-Official packaging targets are archive-based only: ZIP for Windows and a compressed archive for Linux. Native installers/packages are intentionally out of scope.
-Proposed Frontend Stack
-Tauri
-Provides the native desktop shell and Rust backend while keeping application size and resource use lower than a typical Electron application.
-React + TypeScript
-Used for application UI and strong component ecosystem.
-shadcn/ui + Tailwind CSS
-Provides modern components and theme flexibility without requiring us to build common controls from scratch.
-Dockview
-Provides:
+```text
+data/activity/recent.json
+```
 
-Dockable tabs
+Home selects a random greeting at application startup and another different greeting when Home is explicitly opened/focused. There is no timer-based greeting rotation.
 
-Split panes
+## Terminal Architecture
 
-Drag/drop
+`portable-pty` provides the native PTY layer. The backend exposes start/write/resize/close commands and emits terminal output/exit events to the frontend.
 
-Floating groups
+Local terminals launch the platform's shell or an explicitly selected shell such as PowerShell or Command Prompt on Windows.
 
-Popout groups/windows
+### SSH terminal path
 
-Layout serialization
+SSH terminal sessions currently launch the host operating system's `ssh` executable in the PTY. This deliberately delegates SSH config, keys, agents, host-key behavior, and interactive auth to the installed SSH client.
 
-Custom panel/header components
+This path is distinct from the native Rust SFTP stack.
 
-xterm.js
-Provides terminal rendering. It is not the SSH implementation; it displays terminal input/output provided by the backend.
-Zustand
-Provides lightweight shared application state without forcing protocol/business logic into UI components.
-Session Lifecycle
-User selects connection
-|
-v
-ConnectionManager validates profile
-|
-v
-Credential provider resolves authentication
-|
-v
-Protocol adapter opens session
-|
-v
-Session event stream
-|
-+--> terminal / desktop / file UI
-|
-v
-Disconnect / reconnect / close
-Data Model Direction
-Likely high-level entities:
+## SFTP Architecture
 
-ConnectionProfile
+V1 contains a native persistent SFTP path using:
 
-ConnectionGroup
+- `russh`
+- `russh-sftp`
 
-Workspace
+It supports persistent sessions and operations such as listing, mkdir, rename, upload, download, and cancellation.
 
-Pane
+The codebase also contains compatibility/helper SFTP operations used for additional file actions. Both paths must preserve the credential-separation and host-verification security rules.
 
-Session
+The native SFTP client verifies server keys through known-hosts handling.
 
-CredentialReference
+## Credential Architecture
 
-PortForward
+Saved connections contain an optional opaque `credentialRef`, never the secret itself.
 
-ApplicationSettings
+The portable credential vault is stored at:
 
-Credentials should be referenced, not embedded directly inside ordinary profile serialization.
-Testing Strategy
-Testing should be layered:
+```text
+data/vault/credentials.enc
+```
 
-Pure unit tests for profile/layout/state logic
+The vault uses `age` passphrase encryption. While unlocked, the backend holds the decrypted vault document in process memory. Locking clears the in-memory unlocked state.
 
-Adapter contract tests
+SFTP can resolve passwords through a credential reference. SSH terminal sessions currently do not consume the portable vault.
 
-Mock protocol-session tests
+## Portable Persistence
 
-Local integration tests
+The executable directory is the root of the portable data model:
 
-Live SSH integration against disposable test hosts
+```text
+<executable-dir>/
+└── data/
+    ├── activity/recent.json
+    ├── config/settings.json
+    ├── connections/connections.json
+    ├── vault/credentials.enc
+    └── workspaces/default.json
+```
 
-UI tests for tab/split/docking behavior
+This is intentional: portable operation should not depend on installer-created registry keys or system-wide directories.
 
-Platform packaging tests
+## Window State
 
-Human acceptance for real remote workflows
+The native window-state tracker restores the main window on startup and tracks changes during runtime. V1 persists client-area size in a way that matches Tauri's restore API, avoiding cumulative titlebar/frame growth on Windows.
+
+## Data Model
+
+Current persisted high-level entities include:
+
+- `Settings`
+- `SavedConnection`
+- `RecentActivity`
+- Dockview workspace JSON
+- Vault document keyed by credential reference
+
+Future entities such as groups, favorites, notes, templates, RDP/VNC sessions, and richer SSH settings should extend this model without embedding secrets in ordinary profile serialization.
+
+## Testing Strategy
+
+Testing should remain layered:
+
+- Frontend unit/component tests through Vitest
+- TypeScript build validation
+- Lint and formatting checks
+- Rust unit tests where applicable
+- Native integration checks for PTY/SFTP/vault/window-state behavior
+- Human acceptance on real Windows and Linux desktop builds
+- Disposable-host testing for remote protocols
+
+Native/portable behavior should always be validated on the affected target platform, because path, PTY, window-frame, shell, and SSH-client behavior differs across operating systems.

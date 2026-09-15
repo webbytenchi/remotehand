@@ -1,193 +1,152 @@
 # RemoteHand Roadmap
 
-This roadmap describes intended sequencing, not fixed release dates.
-Phase 0 - Foundation
-
-Create repository
-
-Establish product vision
-
-Establish initial architecture
-
-Establish security principles
-
-Scaffold Tauri + React + TypeScript
-
-Add coding standards and automated checks
-
-Add CI
-
-Validate portable-only Windows and Linux archive layout
-
-Phase 1 - Workspace Shell
-Goal: create the application experience before networking complexity.
-
-Application shell
-
-Light/dark/system themes
-
-Connection sidebar
-
-Dockview integration
-
-Multiple tabs
-
-Horizontal/vertical splits
-
-Nested layouts
-
-Drag/drop docking
-
-Layout save/restore
-
-Popout/detachable panels
-
-Command palette
-
-Keyboard navigation
-
-Acceptance target: a polished desktop shell with mock session panes.
-Phase 2 - Local Terminal
-
-xterm.js integration
-
-Backend PTY integration
-
-Local PowerShell
-
-Local Command Prompt
-
-WSL integration where available
-
-Resize handling
-
-Copy/paste
-
-Auto-copy terminal selection to the system clipboard
-
-Right-click paste with configurable context-menu behavior
-
-Alternate modifier/mouse action for paste or context menu
-
-Configurable multi-line paste confirmation/protection
-
-Search
-
-Terminal themes
-
-Acceptance target: RemoteHand is useful as a local terminal even before SSH ships.
-Phase 3 - SSH V1
-
-Select and document SSH library
-
-Host-key verification
-
-Password authentication
-
-Private-key authentication
-
-SSH agent support where practical
-
-Saved profiles
-
-Reconnect/disconnect
-
-Port forwarding
-
-Connection-state UI
-
-Known-host management
-
-Security-focused integration tests
-
-Acceptance target: daily-use SSH client with tabs and splits.
-Phase 4 - Portable Data and Credential UX
-
-Finalize Windows/Linux portable storage rules
-
-Credential abstraction
-
-Encrypted secret storage strategy
-
-Import/export
-
-Clear portable-only security documentation
-
-Backup/restore configuration
-
-Phase 5 - SFTP
-
-Remote file browser
-
-Upload/download
-
-Drag/drop
-
-Transfer queue
-
-Conflict handling
-
-Progress/speed/ETA
-
-Permission editing where supported
-
-Phase 6 - Remote Desktop
-VNC
-
-Select VNC library
-
-Embedded viewer
-
-Clipboard handling
-
-Scaling/fullscreen
-
-Authentication
-
-RDP
-
-Evaluate FreeRDP integration
-
-Embedded vs orchestrated-client decision
-
-Clipboard
-
-Display scaling
-
-Multi-monitor strategy
-
-Credential integration
-
-Phase 7 - X11
-
-Evaluate Windows X11 strategies
-
-Evaluate WSLg integration
-
-X11 forwarding UX
-
-Document limitations/security model
-
-Phase 8 - Advanced Productivity
-
-Host groups
-
-Favorites
-
-Per-host notes
-
-Saved workspace templates
-
-Session logging
-
-Connection health/status
-
-Tailscale-aware conveniences
-
-Quick project/server shortcuts
-
-Optional plugin architecture
-
-Guiding Rule
-A later protocol should not delay delivery of a polished SSH-first application.
-RemoteHand should become useful early and grow incrementally.
+This roadmap records what V1 has completed and what remains for later releases. It describes intended sequencing rather than fixed dates.
+
+## V1 - Complete Baseline
+
+### Phase 0 - Foundation — Complete
+
+- Repository and product vision
+- Tauri + React + TypeScript scaffold
+- Security principles
+- Portable-only architecture
+- Frontend checks and test tooling
+- Windows/Linux-oriented native structure
+
+### Phase 1 - Workspace Shell — Complete
+
+- Application shell
+- Dark/light/system themes
+- Color schemes and typography settings
+- Sidebar with expanded/collapsed modes
+- Dockview integration
+- Multiple tabs
+- Horizontal/vertical splits
+- Drag/drop docking
+- Layout save/restore
+- Popout panels
+- Layout undo/redo/reset
+- Home dashboard
+- Persistent Recent Activity
+- Responsive Connections/Activity cards
+- Main-window geometry persistence
+
+### Phase 2 - Local Terminal — Complete for V1
+
+- xterm.js integration
+- Native PTY backend
+- Windows PowerShell
+- Windows Command Prompt
+- Platform shell support
+- Resize handling
+- Selection auto-copy
+- Right-click paste workflow
+- Multi-line paste confirmation/protection
+- Terminal appearance settings
+
+Additional shell-specific convenience features can continue post-V1.
+
+### Phase 3 - SSH Terminal — Complete for V1 Scope
+
+- Saved SSH connection profiles
+- Host/port/user connection launch
+- SSH sessions in dockable terminal panels
+- Reconnect/open from Recent Activity
+- System `ssh` client integration inside native PTY
+
+Deferred beyond V1:
+
+- RemoteHand-native SSH auth configuration
+- Rich known-host management UI
+- Explicit key/agent management UI
+- Port-forward management UI
+
+### Phase 4 - Portable Data and Credentials — Complete for V1
+
+- Settings persisted beside executable
+- Saved connections persisted beside executable
+- Workspace persistence
+- Recent Activity persistence
+- Main-window state persistence
+- Credential references separated from profiles
+- Portable encrypted vault using `age`
+- Vault initialize/unlock/lock/store/get/delete commands
+
+Still desirable post-V1:
+
+- Import/export UX
+- Backup/restore UX
+- Passphrase rotation/recovery design
+
+### Phase 5 - SFTP — Complete for V1
+
+- Native Rust SFTP path with `russh`/`russh-sftp`
+- Known-host verification
+- Password credentials through portable vault
+- Directory browsing
+- Upload/download
+- Multi-entry operations
+- Create directory
+- Rename/move
+- Delete
+- Permission changes where supported
+- Native transfer cancellation
+
+Further transfer queue polish and richer progress/ETA UX can continue later.
+
+## Post-V1 Roadmap
+
+### Phase 6 - SSH and Productivity Expansion
+
+- Native/richer SSH authentication UX
+- Key and agent management
+- Port-forward manager
+- Connection groups
+- Favorites
+- Per-host notes
+- Reusable connection templates
+- Command palette
+- Broader keyboard navigation
+- Session logging
+- Connection health/status
+- Tailscale-aware conveniences
+
+### Phase 7 - Remote Desktop
+
+#### VNC
+
+- Select and review VNC library
+- Embedded viewer
+- Clipboard handling
+- Scaling/fullscreen
+- Authentication
+
+#### RDP
+
+- Evaluate FreeRDP integration
+- Embedded vs orchestrated-client decision
+- Clipboard
+- Display scaling
+- Multi-monitor strategy
+- Credential integration
+
+### Phase 8 - X11
+
+- Evaluate Windows X11 strategies
+- Evaluate WSLg integration
+- X11 forwarding UX
+- Document limitations and security model
+
+### Phase 9 - Hardening and Distribution
+
+- Broader automated native integration tests
+- Cross-platform packaging/archive validation
+- Dependency/security review automation
+- Backup/restore UX
+- Import/export that does not expose secrets
+- Failure/recovery UX for corrupt portable state
+- Performance and long-session soak testing
+
+## Guiding Rule
+
+RemoteHand should remain useful as a focused SSH/SFTP/terminal workstation manager even as later protocols are added. New protocol work should not destabilize the clean portable V1 baseline.

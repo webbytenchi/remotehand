@@ -1,200 +1,196 @@
 # RemoteHand Requirements
 
-Product Goal
-Build a modern, open-source desktop application for managing remote computer sessions while keeping everyday use simple.
-RemoteHand should provide the convenience of an all-in-one remote administration application without forcing users into an enterprise infrastructure-management workflow.
-Core UX Requirements
-Tabs
+## Product Goal
+
+RemoteHand is a modern, open-source desktop application for local and remote workstation workflows. V1 focuses on portable terminal, SSH, SFTP, connection, and workspace management without requiring an installer, cloud account, or enterprise infrastructure service.
+
+## V1 Functional Baseline
+
+The following are part of the current V1 baseline.
+
+### Desktop and Portability
+
+- Windows and Linux desktop architecture
+- Tauri-based native shell
+- Portable-only runtime model
+- Normal operation without administrator/root privileges
+- Application state stored relative to the executable
+- No required installer or cloud account
+- Main-window geometry persistence
+
+### Workspace
+
+- Multiple tabs/panels
+- Horizontal and vertical splits
+- Drag-and-drop docking
+- Popout windows
+- Workspace serialization and restoration
+- Layout undo, redo, and reset
+- Home dashboard
+- Persistent Recent Activity
+- Responsive narrow-panel behavior
+
+### Local Terminal
+
+- Native PTY-backed terminal sessions
+- xterm.js rendering
+- PowerShell shortcut on Windows
+- Command Prompt shortcut on Windows
+- Platform shell support
+- Terminal resize handling
+- Selection auto-copy
+- Right-click paste workflow
+- Configurable multi-line paste protection
+- Configurable terminal appearance
+
+### SSH Terminal
 
-Multiple sessions may be open simultaneously.
+- SSH sessions inside terminal panels
+- Host, port, and username from saved connection profiles
+- System `ssh` client executed inside a PTY
+- Interactive authentication through the installed SSH client
+- Installed-client host-key, key-file, config, and agent behavior
+- Reopen/reconnect actions from recent activity
 
-Each session can live in its own tab.
+V1 does not claim an independent native SSH-terminal authentication stack. Rich native SSH auth configuration and explicit port-forward management are post-V1 work.
+
+### Saved Connections
 
-Tabs can be reordered by drag and drop.
+Each V1 saved connection supports:
 
-Tabs can move between pane groups.
+- ID
+- Friendly display name
+- Host/IP
+- Port
+- Username
+- Optional credential reference
 
-A tab may be detachable into another window when supported by the desktop/layout stack.
+Credentials must not be embedded directly in connection JSON.
 
-Split View
+### SFTP
 
-Horizontal and vertical splits are required.
-
-Nested splits are required.
-
-Pane sizes must be adjustable interactively.
-
-Different protocols may coexist in one workspace.
-
-Layout state should be serializable and restorable.
-
-Workspaces
-
-Users can save useful arrangements of connections and panes.
-
-Reopening a workspace should restore its layout.
-
-Session reconnection behavior must be explicit and configurable.
-
-Connections
-Each connection profile should support:
-
-Friendly display name
-
-Hostname/IP
-
-Port
-
-Protocol
-
-Username where applicable
-
-Authentication method
-
-Optional tags/groups
-
-Optional notes
-
-Protocol-specific advanced settings
-
-V1 Functional Requirements
-
-Windows and Linux desktop application.
-
-Portable-only distribution on Windows and Linux.
-
-SSH connections.
-
-Local terminal sessions.
-
-Saved connection profiles.
-
-Multiple tabs.
-
-Split panes.
-
-Docking and tab movement.
-
-Workspace layout persistence.
-
-Dark/light/system themes.
-
-SSH key authentication.
-
-SSH password authentication.
-
-SSH port forwarding.
-
-Clear connection-state indicators.
-
-Safe disconnect/reconnect behavior.
-
-Keyboard-first navigation.
-
-Terminal mouse interaction must support MobaXterm-style behavior:
-
-- Selecting terminal text with the mouse automatically copies the selection to the system clipboard.
-- Right-clicking the terminal pastes the current clipboard contents into the active terminal session by default.
-- Right-click behavior must be configurable so users may choose a context menu instead of immediate paste.
-- An alternate mouse/modifier action should remain available for the action not assigned to plain right-click.
-- Multi-line paste protection must be configurable and able to require confirmation before potentially executable multi-line text is sent to a terminal.
-- These interaction preferences should be available globally and may later support per-profile overrides.
-
-Command palette.
-
-Settings import/export that does not silently expose credentials.
-
-Post-V1 Functional Requirements
-
-SFTP browser
-
-RDP
-
-VNC
-
-X11 integration/forwarding
-
-File transfer queue
-
-Session logging
-
-Connection health information
-
-Tailscale-aware host conveniences
-
-Host groups
-
-Favorites
-
-Reusable connection templates
-
-Optional synchronized configuration
-
-Non-Functional Requirements
-Security
-
-Never implement custom cryptography.
-
-Do not store passwords or private keys in plaintext by default.
-
-Clearly identify when credentials are persisted.
-
-Host-key verification must not be silently disabled.
-
-Security-sensitive defaults should favor safety over convenience.
-
-Protocol libraries must have active maintenance and an acceptable security history.
-
-Performance
-
-Opening a new terminal should feel immediate.
-
-UI responsiveness must remain smooth with multiple active sessions.
-
-Background protocol activity must not block rendering.
-
-Idle sessions should have low CPU use.
-
-Portability
-
-RemoteHand must not require installation on Windows or Linux.
-
-Normal portable operation must not require administrator or root privileges.
-
-Non-sensitive application state should remain inside the RemoteHand directory by default.
-
-The product must not depend on MSI, DEB, RPM, AppImage, system package managers, registry installation, or privileged installation steps.
-
-If an OS credential store is supported later, the application must clearly state that those secrets do not travel with the portable directory.
-
-Maintainability
-
-Protocol implementations should be isolated behind interfaces/adapters.
-
-UI components should not depend directly on protocol-library internals.
-
-Core application state should be testable without launching real remote sessions.
-
-Dependency licensing must be documented.
-
-Explicit Non-Goals for V1
-
-Implementing SSH from scratch
-
-Implementing RDP from scratch
-
-Implementing VNC from scratch
-
-Building a new X server
-
-Enterprise asset discovery
-
-Centralized fleet policy management
-
-Remote monitoring/management agent deployment
-
-Cloud account requirement
-
-Windows or Linux installers
-
-MSI, DEB, RPM, or AppImage packaging as official distribution formats
+- SFTP file browser
+- Directory listing/navigation
+- Upload/download
+- Multi-entry transfer operations
+- Create directory
+- Rename
+- Move
+- Delete
+- Permission changes where supported
+- Native transfer cancellation path
+- Known-host verification in the native Rust SFTP path
+- Password retrieval from the encrypted portable credential vault
+
+### Credential Vault
+
+- Portable encrypted secret storage
+- Passphrase-based unlock
+- Explicit lock
+- Store/get/delete by opaque credential reference
+- `age` encryption format
+- Vault stored separately from ordinary profile/configuration JSON
+
+### Appearance and Settings
+
+- Dark theme
+- Light theme
+- System theme
+- Accent/color scheme
+- UI font family and size
+- Terminal theme
+- Terminal foreground/background configuration
+- Terminal font family and size
+
+## Core UX Requirements
+
+### Tabs and Panes
+
+- Sessions may be open simultaneously.
+- Tabs can move between Dockview groups.
+- Pane sizes must be interactively adjustable.
+- Different panel types may coexist in one workspace.
+- Saved layouts should reopen without breaking older compatible panel identifiers.
+
+### Home
+
+- Home should remain useful as a stable dashboard rather than an animated distraction.
+- Greeting text is randomized on app start and when Home is opened, not continuously rotated.
+- Recent Activity should survive app restarts.
+- Recent Activity should reopen/reconnect the recorded workflow when possible.
+
+### Sidebar
+
+- Expanded and collapsed modes are required.
+- Icons must remain understandable in collapsed mode through tooltips/titles.
+- Spacing must remain visually consistent when headings become hidden.
+
+### Terminal Safety
+
+- Selecting terminal text automatically copies it to the clipboard.
+- Right-click paste remains available as the fast workflow.
+- Multi-line paste protection must be able to require confirmation before executable multi-line text is sent.
+
+## Non-Functional Requirements
+
+### Security
+
+- Never implement custom cryptography.
+- Do not store passwords/private keys in plaintext profile files.
+- Do not silently disable host-key verification.
+- Do not log vault passphrases or secrets.
+- Security-sensitive defaults should favor safety over convenience.
+
+### Performance
+
+- Local terminals should open quickly.
+- UI rendering must remain responsive with multiple panels.
+- Remote/file activity must not block the UI thread.
+- Idle sessions should use minimal CPU.
+
+### Portability
+
+- No required MSI, DEB, RPM, AppImage, or system package manager.
+- No required registry installation.
+- Normal V1 state stays with the portable application directory.
+- Sensitive secrets remain encrypted separately from ordinary portable JSON.
+
+### Maintainability
+
+- Frontend components should not depend directly on protocol-library internals.
+- Native functions should expose narrow commands/events to the frontend.
+- Saved-state compatibility should be considered when renaming serialized Dockview components or persisted fields.
+- Dependency licensing and security posture must remain reviewable.
+
+## Explicit V1 Non-Goals
+
+- Implementing SSH from scratch
+- Implementing cryptography from scratch
+- RDP
+- VNC
+- X11 server implementation
+- Enterprise asset discovery
+- Fleet policy management
+- Remote monitoring/management agent deployment
+- Required cloud account
+- Installer-based distribution
+
+## Post-V1 Requirements
+
+Candidate post-V1 capabilities include:
+
+- Rich native SSH authentication UX
+- Explicit SSH key/agent/profile management in RemoteHand
+- SSH port-forwarding UI
+- RDP
+- VNC
+- X11 forwarding/integration
+- Connection groups and favorites
+- Per-host notes
+- Reusable templates
+- Session logging
+- Connection health/status
+- Tailscale-aware conveniences
+- More advanced transfer queue/progress controls
+- Command palette and expanded keyboard workflows
+- Import/export and backup/restore UX
