@@ -58,42 +58,46 @@ impl std::fmt::Display for SshClientError {
     }
 }
 impl std::error::Error for SshClientError {}
-#[async_trait::async_trait]
 impl client::Handler for HostVerifier {
     type Error = SshClientError;
-    async fn check_server_key(
+    fn check_server_key(
         &mut self,
         server_public_key: &russh::keys::ssh_key::PublicKey,
-    ) -> Result<bool, Self::Error> {
-        let known_hosts = home::home_dir()
-            .map(|home| home.join(".ssh").join("known_hosts"))
-            .ok_or_else(|| {
-                SshClientError::HostKey(
-                    "SSH host key verification failed: home directory is unavailable".to_string(),
-                )
-            })?;
-        match russh::keys::check_known_hosts_path(
-            &self.host,
-            self.port,
-            server_public_key,
-            &known_hosts,
-        ) {
-            Ok(true) => Ok(true),
-            Ok(false) => Err(SshClientError::HostKey(format!(
-                "SSH host key for {}:{} is not trusted in {}",
-                self.host,
+    ) -> impl std::future::Future<Output = Result<bool, Self::Error>> + Send {
+        async move {
+            let known_hosts = home::home_dir()
+                .map(|home| home.join(".ssh").join("known_hosts"))
+                .ok_or_else(|| {
+                    SshClientError::HostKey(
+                        "SSH host key verification failed: home directory is unavailable"
+                            .to_string(),
+                    )
+                })?;
+
+            match russh::keys::check_known_hosts_path(
+                &self.host,
                 self.port,
-                known_hosts.display()
-            ))),
-            Err(error) => Err(SshClientError::HostKey(format!(
-                "SSH host key verification failed for {}:{} using {}: {error}",
-                self.host,
-                self.port,
-                known_hosts.display()
-            ))),
+                server_public_key,
+                &known_hosts,
+            ) {
+                Ok(true) => Ok(true),
+                Ok(false) => Err(SshClientError::HostKey(format!(
+                    "SSH host key for {}:{} is not trusted in {}",
+                    self.host,
+                    self.port,
+                    known_hosts.display()
+                ))),
+                Err(error) => Err(SshClientError::HostKey(format!(
+                    "SSH host key verification failed for {}:{} using {}: {error}",
+                    self.host,
+                    self.port,
+                    known_hosts.display()
+                ))),
+            }
         }
     }
 }
+
 fn map_sftp_error(activity: &str, error: impl std::fmt::Display) -> String {
     format!("SFTP {activity} failed: {error}")
 }
