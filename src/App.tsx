@@ -4,7 +4,6 @@ import {
 DockviewReact,
 type DockviewApi,
 type DockviewReadyEvent,
-type IDockviewHeaderActionsProps,
 type IWatermarkPanelProps,
 type IDockviewPanelProps,
 themeDark,
@@ -371,21 +370,6 @@ onCancel={() => setNotice(null)}
 <p>{notice?.message}</p>
 </AppModal>
 </section>
-);
-}
-function PanelHeaderActions({ api, location }: IDockviewHeaderActionsProps) {
-if (location?.type !== "popout") return null;
-return (
-<button
-className="panel-dock-back"
-type="button"
-onClick={() => api.getWindow().close()}
-title="Dock back into RemoteHand"
-aria-label="Dock back into RemoteHand">
-
-<span aria-hidden="true">↙</span>
-<span>Dock back</span>
-</button>
 );
 }
 function WorkspaceWatermark({ containerApi }: IWatermarkPanelProps) {
@@ -1012,7 +996,6 @@ className="remotehand-dockview"
 theme={resolvedTheme === "light" ? themeLight : themeDark}
 components={components}
 watermarkComponent={WorkspaceWatermark}
-rightHeaderActionsComponent={PanelHeaderActions}
 onReady={handleReady}
 keyboardNavigation
 dndStrategy="pointer"
