@@ -86,6 +86,71 @@ fn executable_dir() -> Result<PathBuf, String> {
 pub(crate) fn plugins_root_for_runtime() -> Result<PathBuf, String> {
     Ok(executable_dir()?.join("plugins"))
 }
+
+fn plugin_storage_root(plugin_id: &str) -> Result<PathBuf, String> {
+    if !valid_identifier(plugin_id) {
+        return Err("invalid plugin id".to_string());
+    }
+    Ok(executable_dir()?
+        .join("data")
+        .join("plugins")
+        .join(plugin_id))
+}
+
+fn valid_storage_key(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_'))
+}
+
+pub(crate) fn plugin_storage_get(
+    plugin_id: &str,
+    key: &str,
+) -> Result<Option<serde_json::Value>, String> {
+    if !valid_storage_key(key) {
+        return Err("invalid plugin storage key".to_string());
+    }
+    let path = plugin_storage_root(plugin_id)?.join(format!("{key}.json"));
+    if !path.exists() {
+        return Ok(None);
+    }
+    let metadata = fs::symlink_metadata(&path).map_err(|error| error.to_string())?;
+    if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
+        return Err("plugin storage entry must be a regular file".to_string());
+    }
+    if metadata.len() > MAX_STATE_BYTES {
+        return Err("plugin storage entry is too large".to_string());
+    }
+    let contents = fs::read_to_string(path).map_err(|error| error.to_string())?;
+    serde_json::from_str(&contents)
+        .map(Some)
+        .map_err(|error| format!("invalid plugin storage JSON: {error}"))
+}
+
+pub(crate) fn plugin_storage_set(
+    plugin_id: &str,
+    key: &str,
+    value: &serde_json::Value,
+) -> Result<(), String> {
+    if !valid_storage_key(key) {
+        return Err("invalid plugin storage key".to_string());
+    }
+    let root = plugin_storage_root(plugin_id)?;
+    fs::create_dir_all(&root).map_err(|error| error.to_string())?;
+    let contents = serde_json::to_vec_pretty(value).map_err(|error| error.to_string())?;
+    if contents.len() as u64 > MAX_STATE_BYTES {
+        return Err("plugin storage entry is too large".to_string());
+    }
+    let path = root.join(format!("{key}.json"));
+    let temporary = root.join(format!(".{key}.tmp"));
+    fs::write(&temporary, &contents).map_err(|error| error.to_string())?;
+    if path.exists() {
+        fs::remove_file(&path).map_err(|error| error.to_string())?;
+    }
+    fs::rename(&temporary, &path).map_err(|error| error.to_string())
+}
 fn state_path() -> Result<PathBuf, String> {
     Ok(executable_dir()?
         .join("data")

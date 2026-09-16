@@ -241,6 +241,17 @@ struct CredentialStoreParams {
 struct VaultUnlockParams {
     passphrase: String,
 }
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct StorageGetParams {
+    key: String,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct StorageSetParams {
+    key: String,
+    value: serde_json::Value,
+}
 fn permission_granted(permissions: &[String], permission: &str) -> bool {
     permissions.iter().any(|value| value == permission)
 }
@@ -273,6 +284,12 @@ fn validate_plugin_request(permissions: &[String], request: &PluginRequest) -> R
         "vault.unlock" => {
             if !permission_granted(permissions, "vault.unlock") {
                 return Err("plugin lacks vault.unlock permission".to_string());
+            }
+            Ok(())
+        }
+        "storage.get" | "storage.set" => {
+            if !permission_granted(permissions, "storage.plugin") {
+                return Err("plugin lacks storage.plugin permission".to_string());
             }
             Ok(())
         }
@@ -312,6 +329,18 @@ fn handle_plugin_request(
             let vault_state = app_handle.state::<crate::vault::VaultState>();
             crate::vault::unlock_vault(vault_state.inner(), params.passphrase)?;
             Ok(serde_json::json!({ "unlocked": true }))
+        }
+        "storage.get" => {
+            let params: StorageGetParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid storage.get params: {error}"))?;
+            let value = crate::plugins::plugin_storage_get(plugin_id, &params.key)?;
+            Ok(serde_json::json!({ "value": value }))
+        }
+        "storage.set" => {
+            let params: StorageSetParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid storage.set params: {error}"))?;
+            crate::plugins::plugin_storage_set(plugin_id, &params.key, &params.value)?;
+            Ok(serde_json::json!({ "stored": true }))
         }
         _ => unreachable!("validated host API method"),
     }
@@ -749,6 +778,21 @@ mod tests {
         let error = validate_plugin_request(&[], &request).unwrap_err();
         assert_eq!(error, "plugin lacks credentials.store permission");
         assert!(validate_plugin_request(&["credentials.store".to_string()], &request).is_ok());
+    }
+
+    #[test]
+    fn validates_plugin_storage_permission() {
+        for method in ["storage.get", "storage.set"] {
+            let request = PluginRequest {
+                message_type: "plugin.request".to_string(),
+                request_id: 14,
+                method: method.to_string(),
+                params: serde_json::json!({ "key": "profiles" }),
+            };
+            let error = validate_plugin_request(&[], &request).unwrap_err();
+            assert_eq!(error, "plugin lacks storage.plugin permission");
+            assert!(validate_plugin_request(&["storage.plugin".to_string()], &request).is_ok());
+        }
     }
 
     #[test]
