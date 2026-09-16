@@ -72,6 +72,8 @@ clipboard.write
 
 credentials.use
 
+credentials.store
+
 storage.plugin
 
 Contribution declarations such as panels and sidebar items are metadata, not permissions.
@@ -120,6 +122,23 @@ The host replies with:
 ```
 
 On failure, ok is false, result is null, and error contains the failure message. Permission checks happen before vault access. credentials.use is intentionally narrow: plugins request a specific credentialRef rather than enumerate vault contents.
+
+A plugin that declares `credentials.store` may save a secret into the RemoteHand vault by sending:
+
+```json
+{
+  "type": "plugin.request",
+  "requestId": 2,
+  "method": "credentials.store",
+  "params": {
+    "credentialRef": "plugin:example.plugin:profile-1:unique-id",
+    "secret": "..."
+  }
+}
+```
+
+The host returns the stored `credentialRef` on success. Plugin-created credential references must begin with `plugin:<plugin-id>:`; a plugin cannot use `credentials.store` to overwrite another plugin's namespace or core RemoteHand credentials. Plugins should store only the opaque `credentialRef` in their own profile/state and must not persist the secret themselves.
+
 Installation safety
 The existing plugin manager keeps these protections:
 

@@ -14,6 +14,7 @@ const ALLOWED_PERMISSIONS: &[&str] = &[
     "clipboard.read",
     "clipboard.write",
     "credentials.use",
+    "credentials.store",
     "storage.plugin",
 ];
 const ALLOWED_CONTRIBUTION_KINDS: &[&str] = &["sidebar", "panel", "command"];

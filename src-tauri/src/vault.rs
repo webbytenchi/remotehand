@@ -182,9 +182,8 @@ pub fn vault_lock<'a>(state: State<'a, VaultState>) -> Result<(), String> {
     log::info!("Credential vault locked");
     Ok(())
 }
-#[tauri::command]
-pub fn vault_store_secret<'a>(
-    state: State<'a, VaultState>,
+pub(crate) fn store_secret(
+    state: &VaultState,
     credential_ref: String,
     secret: String,
 ) -> Result<(), String> {
@@ -202,6 +201,14 @@ pub fn vault_store_secret<'a>(
     save_document(vault.passphrase.clone(), &vault.document)?;
     log::info!("Credential vault updated");
     Ok(())
+}
+#[tauri::command]
+pub fn vault_store_secret<'a>(
+    state: State<'a, VaultState>,
+    credential_ref: String,
+    secret: String,
+) -> Result<(), String> {
+    store_secret(&state, credential_ref, secret)
 }
 #[tauri::command]
 pub fn vault_delete_secret<'a>(

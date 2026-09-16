@@ -230,8 +230,23 @@ fn fail_pending(
 struct CredentialUseParams {
     credential_ref: String,
 }
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CredentialStoreParams {
+    credential_ref: String,
+    secret: String,
+}
 fn permission_granted(permissions: &[String], permission: &str) -> bool {
     permissions.iter().any(|value| value == permission)
+}
+
+fn validate_plugin_credential_ref(plugin_id: &str, credential_ref: &str) -> Result<(), String> {
+    let expected_prefix = format!("plugin:{plugin_id}:");
+    if credential_ref.starts_with(&expected_prefix) {
+        Ok(())
+    } else {
+        Err("plugin credential ref must use its own namespace".to_string())
+    }
 }
 fn validate_plugin_request(permissions: &[String], request: &PluginRequest) -> Result<(), String> {
     if request.message_type != "plugin.request" {
@@ -244,11 +259,18 @@ fn validate_plugin_request(permissions: &[String], request: &PluginRequest) -> R
             }
             Ok(())
         }
+        "credentials.store" => {
+            if !permission_granted(permissions, "credentials.store") {
+                return Err("plugin lacks credentials.store permission".to_string());
+            }
+            Ok(())
+        }
         other => Err(format!("unsupported host API method: {other}")),
     }
 }
 fn handle_plugin_request(
     app_handle: &AppHandle,
+    plugin_id: &str,
     permissions: &[String],
     request: &PluginRequest,
 ) -> Result<serde_json::Value, String> {
@@ -261,6 +283,17 @@ fn handle_plugin_request(
             let secret = crate::vault::get_secret(&vault_state, &params.credential_ref)?
                 .ok_or_else(|| "credential was not found".to_string())?;
             Ok(serde_json::json!({ "secret": secret }))
+        }
+        "credentials.store" => {
+            let params: CredentialStoreParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid credentials.store params: {error}"))?;
+            if params.secret.is_empty() {
+                return Err("credential secret is required".to_string());
+            }
+            validate_plugin_credential_ref(plugin_id, &params.credential_ref)?;
+            let vault_state = app_handle.state::<crate::vault::VaultState>();
+            crate::vault::store_secret(&vault_state, params.credential_ref.clone(), params.secret)?;
+            Ok(serde_json::json!({ "credentialRef": params.credential_ref }))
         }
         _ => unreachable!("validated host API method"),
     }
@@ -346,22 +379,23 @@ fn start_reader(
                     }
                 };
                 let request_id = request.request_id;
-                let response = match handle_plugin_request(&app_handle, &permissions, &request) {
-                    Ok(result) => HostResponse {
-                        message_type: "host.response",
-                        request_id,
-                        ok: true,
-                        result,
-                        error: String::new(),
-                    },
-                    Err(error) => HostResponse {
-                        message_type: "host.response",
-                        request_id,
-                        ok: false,
-                        result: serde_json::Value::Null,
-                        error,
-                    },
-                };
+                let response =
+                    match handle_plugin_request(&app_handle, &plugin_id, &permissions, &request) {
+                        Ok(result) => HostResponse {
+                            message_type: "host.response",
+                            request_id,
+                            ok: true,
+                            result,
+                            error: String::new(),
+                        },
+                        Err(error) => HostResponse {
+                            message_type: "host.response",
+                            request_id,
+                            ok: false,
+                            result: serde_json::Value::Null,
+                            error,
+                        },
+                    };
                 let write_result = stdin
                     .lock()
                     .map_err(|_| "plugin stdin lock poisoned".to_string())
@@ -666,6 +700,32 @@ mod tests {
         };
         let error = validate_plugin_request(&[], &request).unwrap_err();
         assert_eq!(error, "plugin lacks credentials.use permission");
+    }
+
+    #[test]
+    fn validates_plugin_credential_namespace() {
+        assert!(validate_plugin_credential_ref(
+            "remotehand.vnc",
+            "plugin:remotehand.vnc:profile-1"
+        )
+        .is_ok());
+        let error =
+            validate_plugin_credential_ref("remotehand.vnc", "plugin:other.plugin:profile-1")
+                .unwrap_err();
+        assert_eq!(error, "plugin credential ref must use its own namespace");
+    }
+
+    #[test]
+    fn validates_credentials_store_permission() {
+        let request = PluginRequest {
+            message_type: "plugin.request".to_string(),
+            request_id: 12,
+            method: "credentials.store".to_string(),
+            params: serde_json::json!({ "credentialRef": "cred-1", "secret": "secret" }),
+        };
+        let error = validate_plugin_request(&[], &request).unwrap_err();
+        assert_eq!(error, "plugin lacks credentials.store permission");
+        assert!(validate_plugin_request(&["credentials.store".to_string()], &request).is_ok());
     }
 
     #[test]
