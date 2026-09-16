@@ -74,6 +74,8 @@ credentials.use
 
 credentials.store
 
+vault.unlock
+
 storage.plugin
 
 Contribution declarations such as panels and sidebar items are metadata, not permissions.
@@ -138,6 +140,21 @@ A plugin that declares `credentials.store` may save a secret into the RemoteHand
 ```
 
 The host returns the stored `credentialRef` on success. Plugin-created credential references must begin with `plugin:<plugin-id>:`; a plugin cannot use `credentials.store` to overwrite another plugin's namespace or core RemoteHand credentials. Plugins should store only the opaque `credentialRef` in their own profile/state and must not persist the secret themselves.
+
+A trusted plugin that declares `vault.unlock` may request that RemoteHand unlock the credential vault by sending:
+
+```json
+{
+  "type": "plugin.request",
+  "requestId": 3,
+  "method": "vault.unlock",
+  "params": {
+    "passphrase": "..."
+  }
+}
+```
+
+The passphrase is used transiently by the host to unlock the existing vault and is not persisted by this API. Because the requesting plugin runtime and UI can see the passphrase before it reaches the host, `vault.unlock` is a sensitive explicit permission and should only be granted to trusted plugins.
 
 Installation safety
 The existing plugin manager keeps these protections:

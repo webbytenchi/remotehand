@@ -155,8 +155,7 @@ pub fn vault_initialize(state: State<'_, VaultState>, passphrase: String) -> Res
     log::info!("Credential vault initialized");
     Ok(())
 }
-#[tauri::command]
-pub fn vault_unlock<'a>(state: State<'a, VaultState>, passphrase: String) -> Result<(), String> {
+pub(crate) fn unlock_vault(state: &VaultState, passphrase: String) -> Result<(), String> {
     validate_passphrase(&passphrase)?;
     let encrypted =
         fs::read(vault_path()?).map_err(|_| "credential vault not found".to_string())?;
@@ -172,6 +171,10 @@ pub fn vault_unlock<'a>(state: State<'a, VaultState>, passphrase: String) -> Res
 
     log::info!("Credential vault unlocked");
     Ok(())
+}
+#[tauri::command]
+pub fn vault_unlock<'a>(state: State<'a, VaultState>, passphrase: String) -> Result<(), String> {
+    unlock_vault(state.inner(), passphrase)
 }
 #[tauri::command]
 pub fn vault_lock<'a>(state: State<'a, VaultState>) -> Result<(), String> {

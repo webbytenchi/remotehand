@@ -236,6 +236,11 @@ struct CredentialStoreParams {
     credential_ref: String,
     secret: String,
 }
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct VaultUnlockParams {
+    passphrase: String,
+}
 fn permission_granted(permissions: &[String], permission: &str) -> bool {
     permissions.iter().any(|value| value == permission)
 }
@@ -262,6 +267,12 @@ fn validate_plugin_request(permissions: &[String], request: &PluginRequest) -> R
         "credentials.store" => {
             if !permission_granted(permissions, "credentials.store") {
                 return Err("plugin lacks credentials.store permission".to_string());
+            }
+            Ok(())
+        }
+        "vault.unlock" => {
+            if !permission_granted(permissions, "vault.unlock") {
+                return Err("plugin lacks vault.unlock permission".to_string());
             }
             Ok(())
         }
@@ -294,6 +305,13 @@ fn handle_plugin_request(
             let vault_state = app_handle.state::<crate::vault::VaultState>();
             crate::vault::store_secret(&vault_state, params.credential_ref.clone(), params.secret)?;
             Ok(serde_json::json!({ "credentialRef": params.credential_ref }))
+        }
+        "vault.unlock" => {
+            let params: VaultUnlockParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid vault.unlock params: {error}"))?;
+            let vault_state = app_handle.state::<crate::vault::VaultState>();
+            crate::vault::unlock_vault(vault_state.inner(), params.passphrase)?;
+            Ok(serde_json::json!({ "unlocked": true }))
         }
         _ => unreachable!("validated host API method"),
     }
@@ -726,6 +744,19 @@ mod tests {
         let error = validate_plugin_request(&[], &request).unwrap_err();
         assert_eq!(error, "plugin lacks credentials.store permission");
         assert!(validate_plugin_request(&["credentials.store".to_string()], &request).is_ok());
+    }
+
+    #[test]
+    fn validates_vault_unlock_permission() {
+        let request = PluginRequest {
+            message_type: "plugin.request".to_string(),
+            request_id: 13,
+            method: "vault.unlock".to_string(),
+            params: serde_json::json!({ "passphrase": "secret" }),
+        };
+        let error = validate_plugin_request(&[], &request).unwrap_err();
+        assert_eq!(error, "plugin lacks vault.unlock permission");
+        assert!(validate_plugin_request(&["vault.unlock".to_string()], &request).is_ok());
     }
 
     #[test]
