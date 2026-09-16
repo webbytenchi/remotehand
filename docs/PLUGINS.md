@@ -91,6 +91,38 @@ dock panels
 commands
 
 Plugins own their UI. RemoteHand will host plugin-provided web assets in an isolated environment with a controlled bridge. Plugin UI must not receive unrestricted Tauri or filesystem access.
+
+### Appearance bridge
+
+Hosted plugin panels automatically receive the current RemoteHand appearance after the iframe bridge is ready and whenever the user changes appearance settings. No plugin permission is required.
+
+The bridge applies these values to the plugin document root:
+
+- data-remotehand-theme (dark or light)
+- data-remotehand-scheme (the selected color scheme)
+- --remotehand-ui-font-family
+- --remotehand-ui-font-size
+- --remotehand-background
+- --remotehand-surface
+- --remotehand-surface-raised
+- --remotehand-border
+- --remotehand-text
+- --remotehand-muted-text
+- --remotehand-input-background
+- --remotehand-button-background
+- --remotehand-button-hover
+- --remotehand-accent
+- --remotehand-accent-border
+- --remotehand-accent-surface
+- --remotehand-accent-surface-hover
+- --remotehand-danger-text
+- --remotehand-danger-border
+- --remotehand-danger-surface
+- --remotehand-success-text
+- --remotehand-success-surface
+
+Plugin CSS should consume these custom properties with sensible fallbacks so the UI also remains usable outside the RemoteHand host. After applying an initial or updated appearance, the bridge dispatches a remotehand-appearance-change CustomEvent on the plugin window; JavaScript-driven renderers may listen to that event and read event.detail for the full appearance payload.
+
 Runtime
 Plugins run out of process.
 RemoteHand launches the configured executable, establishes a versioned IPC session, validates plugin identity/API compatibility, supervises process lifetime, and tears down runtime resources when a plugin stops or crashes.

@@ -30,6 +30,36 @@ type: "remotehand.plugin.event";
 event: string;
 payload: unknown;
 };
+type PluginAppearance = {
+theme: "dark" | "light";
+colorScheme: string;
+uiFontFamily: string;
+uiFontSize: string;
+colors: {
+background: string;
+surface: string;
+surfaceRaised: string;
+border: string;
+text: string;
+mutedText: string;
+inputBackground: string;
+buttonBackground: string;
+buttonHover: string;
+accent: string;
+accentBorder: string;
+accentSurface: string;
+accentSurfaceHover: string;
+dangerText: string;
+dangerBorder: string;
+dangerSurface: string;
+successText: string;
+successSurface: string;
+};
+};
+type PluginAppearanceMessage = {
+type: "remotehand.appearance";
+appearance: PluginAppearance;
+};
 const PLUGIN_SECURITY_HEAD = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; font-src data:; media-src data: blob:; object-src 'none'; frame-src 'none'; child-src 'none'; form-action 'none'; base-uri 'none';">`;
 const BRIDGE_SCRIPT = `
 <script>
@@ -37,6 +67,23 @@ const BRIDGE_SCRIPT = `
 let sequence = 0;
 const pending = new Map();
 const eventListeners = new Map();
+
+function applyAppearance(appearance) {
+if (!appearance || typeof appearance !== "object") return;
+const root = document.documentElement;
+root.dataset.remotehandTheme = appearance.theme || "dark";
+root.dataset.remotehandScheme = appearance.colorScheme || "blue";
+if (appearance.uiFontFamily) root.style.setProperty("--remotehand-ui-font-family", appearance.uiFontFamily);
+if (appearance.uiFontSize) root.style.setProperty("--remotehand-ui-font-size", appearance.uiFontSize);
+if (appearance.colors && typeof appearance.colors === "object") {
+for (const [name, value] of Object.entries(appearance.colors)) {
+if (typeof value !== "string") continue;
+const cssName = name.replace(/[A-Z]/g, (match) => "-" + match.toLowerCase());
+root.style.setProperty("--remotehand-" + cssName, value);
+}
+}
+window.dispatchEvent(new CustomEvent("remotehand-appearance-change", { detail: appearance }));
+}
 
 window.remotehand = Object.freeze({
 request(method, params = null) {
@@ -72,6 +119,11 @@ window.addEventListener("message", (event) => {
 const message = event.data;
 if (!message) return;
 
+if (message.type === "remotehand.appearance") {
+applyAppearance(message.appearance);
+return;
+}
+
 if (message.type === "remotehand.plugin.response") {
 const pendingRequest = pending.get(message.requestId);
 if (!pendingRequest) return;
@@ -97,6 +149,40 @@ console.error("RemoteHand plugin event listener failed", error);
 parent.postMessage({ type: "remotehand.plugin.ready" }, "*");
 })();
 </script>`;
+
+function readPluginAppearance(): PluginAppearance {
+const root = document.documentElement;
+const computed = getComputedStyle(root);
+const theme = root.dataset.theme === "light" ? "light" : "dark";
+const light = theme === "light";
+const read = (name: string, fallback: string) => computed.getPropertyValue(name).trim() || fallback;
+return {
+theme,
+colorScheme: root.dataset.scheme || "blue",
+uiFontFamily: read("--ui-font-family", 'ui-sans-serif, system-ui, sans-serif'),
+uiFontSize: read("--ui-font-size", "13px"),
+colors: {
+background: light ? "#f4f5f7" : "#11151a",
+surface: light ? "#ffffff" : "#171d24",
+surfaceRaised: light ? "#f8f9fb" : "#1d252f",
+border: light ? "#c8d0da" : "#35404d",
+text: light ? "#20242c" : "#dee5ef",
+mutedText: light ? "#667085" : "#93a1b2",
+inputBackground: light ? "#ffffff" : "#0f141a",
+buttonBackground: light ? "#eef1f4" : "#232c37",
+buttonHover: light ? "#e2e7ec" : "#2a3542",
+accent: read("--accent", light ? "#356fa9" : "#70a7e8"),
+accentBorder: read("--accent-border", light ? "#8fb3d8" : "#3b5f8d"),
+accentSurface: read("--accent-surface", light ? "#e7f0fa" : "#16263a"),
+accentSurfaceHover: read("--accent-surface-hover", light ? "#d9e9f8" : "#1d3550"),
+dangerText: light ? "#a12a2a" : "#ffb7b7",
+dangerBorder: light ? "#d4a1a1" : "#704040",
+dangerSurface: light ? "#fff0f0" : "#2b1818",
+successText: light ? "#27643c" : "#bce5c7",
+successSurface: light ? "#e8f6ed" : "#214c34",
+},
+};
+}
 function injectBridge(html: string) {
 const lower = html.toLowerCase();
 const headStart = lower.indexOf("<head");
@@ -148,10 +234,22 @@ cancelled = true;
 };
 }, [panelId, pluginId]);
 useEffect(() => {
-const onMessage = (event: MessageEvent<PluginBridgeRequest>) => {
+const postAppearance = () => {
+const message: PluginAppearanceMessage = {
+type: "remotehand.appearance",
+appearance: readPluginAppearance(),
+};
+iframeRef.current?.contentWindow?.postMessage(message, "*");
+};
+const onMessage = (event: MessageEvent<PluginBridgeRequest | { type: "remotehand.plugin.ready" }>) => {
 if (event.source !== iframeRef.current?.contentWindow) return;
 const message = event.data;
-if (!message || message.type !== "remotehand.plugin.request") return;
+if (!message) return;
+if (message.type === "remotehand.plugin.ready") {
+postAppearance();
+return;
+}
+if (message.type !== "remotehand.plugin.request") return;
 if (
 typeof message.requestId !== "string" ||
 typeof message.method !== "string"
@@ -191,12 +289,15 @@ ownerWindow = nextWindow;
 ownerWindow.addEventListener("message", onMessage);
 };
 ownerWindow.addEventListener("message", onMessage);
-const locationDisposable = api.onDidLocationChange(() =>
-bind(api.getWindow()),
-);
+window.addEventListener("remotehand-appearance-change", postAppearance);
+const locationDisposable = api.onDidLocationChange(() => {
+bind(api.getWindow());
+postAppearance();
+});
 return () => {
 locationDisposable.dispose();
 ownerWindow.removeEventListener("message", onMessage);
+window.removeEventListener("remotehand-appearance-change", postAppearance);
 };
 }, [api, pluginId]);
 useEffect(() => {
