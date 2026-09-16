@@ -622,13 +622,18 @@ impl PluginRuntimeState {
     }
 }
 #[tauri::command]
-pub fn plugin_runtime_call(
-    runtime: tauri::State<'_, PluginRuntimeState>,
+pub async fn plugin_runtime_call(
+    app: AppHandle,
     id: String,
     method: String,
     params: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
-    runtime.call(&id, &method, params)
+    tauri::async_runtime::spawn_blocking(move || {
+        let runtime = app.state::<PluginRuntimeState>();
+        runtime.call(&id, &method, params)
+    })
+    .await
+    .map_err(|error| format!("Plugin runtime task failed: {error}"))?
 }
 impl Drop for PluginRuntimeState {
     fn drop(&mut self) {
