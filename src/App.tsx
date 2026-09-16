@@ -459,7 +459,17 @@ setPlugins([]);
 return;
 }
 try {
-setPlugins(await invoke<PluginInfo[]>("plugin_list"));
+const nextPlugins = await invoke<PluginInfo[]>("plugin_list");
+setPlugins(nextPlugins);
+const installedIds = new Set(nextPlugins.map((plugin) => plugin.manifest.id));
+const api = apiRef.current;
+if (api) {
+for (const panel of [...api.panels]) {
+if (panel.api.component !== "plugin") continue;
+const pluginId = (panel.params as PluginPanelParams | undefined)?.pluginId;
+if (pluginId && !installedIds.has(pluginId)) api.removePanel(panel);
+}
+}
 } catch (error) {
 console.error("Failed to load plugins", error);
 }
