@@ -10,7 +10,7 @@ use std::{
     thread,
     time::Duration,
 };
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 const MAX_FRAME_BYTES: usize = 1024 * 1024;
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 #[derive(Default)]
@@ -20,7 +20,7 @@ pub struct PluginRuntimeState {
 }
 struct PluginSession {
     child: Child,
-    stdin: ChildStdin,
+    stdin: Arc<Mutex<ChildStdin>>,
     pending: Arc<Mutex<BTreeMap<u64, mpsc::Sender<Result<PluginResponse, String>>>>>,
     next_request_id: u64,
 }
@@ -50,6 +50,26 @@ struct HostRequest<'a> {
     request_id: u64,
     method: &'a str,
     params: serde_json::Value,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PluginRequest {
+    #[serde(rename = "type")]
+    message_type: String,
+    request_id: u64,
+    method: String,
+    #[serde(default)]
+    params: serde_json::Value,
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HostResponse {
+    #[serde(rename = "type")]
+    message_type: &'static str,
+    request_id: u64,
+    ok: bool,
+    result: serde_json::Value,
+    error: String,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -205,10 +225,52 @@ fn fail_pending(
         let _ = sender.send(Err(error.clone()));
     }
 }
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CredentialUseParams {
+    credential_ref: String,
+}
+fn permission_granted(permissions: &[String], permission: &str) -> bool {
+    permissions.iter().any(|value| value == permission)
+}
+fn validate_plugin_request(permissions: &[String], request: &PluginRequest) -> Result<(), String> {
+    if request.message_type != "plugin.request" {
+        return Err("invalid plugin request message type".to_string());
+    }
+    match request.method.as_str() {
+        "credentials.use" => {
+            if !permission_granted(permissions, "credentials.use") {
+                return Err("plugin lacks credentials.use permission".to_string());
+            }
+            Ok(())
+        }
+        other => Err(format!("unsupported host API method: {other}")),
+    }
+}
+fn handle_plugin_request(
+    app_handle: &AppHandle,
+    permissions: &[String],
+    request: &PluginRequest,
+) -> Result<serde_json::Value, String> {
+    validate_plugin_request(permissions, request)?;
+    match request.method.as_str() {
+        "credentials.use" => {
+            let params: CredentialUseParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid credentials.use params: {error}"))?;
+            let vault_state = app_handle.state::<crate::vault::VaultState>();
+            let secret = crate::vault::get_secret(&vault_state, &params.credential_ref)?
+                .ok_or_else(|| "credential was not found".to_string())?;
+            Ok(serde_json::json!({ "secret": secret }))
+        }
+        _ => unreachable!("validated host API method"),
+    }
+}
 fn start_reader(
     plugin_id: String,
     mut stdout: ChildStdout,
+    stdin: Arc<Mutex<ChildStdin>>,
     pending: Arc<Mutex<BTreeMap<u64, mpsc::Sender<Result<PluginResponse, String>>>>>,
+    permissions: Vec<String>,
     app_handle: AppHandle,
 ) {
     thread::spawn(move || loop {
@@ -275,6 +337,41 @@ fn start_reader(
                     log::warn!("Failed to emit plugin event for {plugin_id}: {error}");
                 }
             }
+            "plugin.request" => {
+                let request: PluginRequest = match serde_json::from_value(value) {
+                    Ok(request) => request,
+                    Err(error) => {
+                        log::warn!("Plugin runtime {plugin_id} sent invalid host request: {error}");
+                        continue;
+                    }
+                };
+                let request_id = request.request_id;
+                let response = match handle_plugin_request(&app_handle, &permissions, &request) {
+                    Ok(result) => HostResponse {
+                        message_type: "host.response",
+                        request_id,
+                        ok: true,
+                        result,
+                        error: String::new(),
+                    },
+                    Err(error) => HostResponse {
+                        message_type: "host.response",
+                        request_id,
+                        ok: false,
+                        result: serde_json::Value::Null,
+                        error,
+                    },
+                };
+                let write_result = stdin
+                    .lock()
+                    .map_err(|_| "plugin stdin lock poisoned".to_string())
+                    .and_then(|mut writer| write_frame(&mut *writer, &response));
+                if let Err(error) = write_result {
+                    fail_pending(&pending, error.clone());
+                    log::warn!("Plugin runtime {plugin_id} host response failed: {error}");
+                    break;
+                }
+            }
             other => {
                 log::warn!("Plugin runtime {plugin_id} sent unexpected message type {other}");
             }
@@ -339,11 +436,14 @@ impl PluginRuntimeState {
             }
         };
 
+        let stdin = Arc::new(Mutex::new(stdin));
         let pending = Arc::new(Mutex::new(BTreeMap::new()));
         start_reader(
             plugin.manifest.id.clone(),
             stdout,
+            stdin.clone(),
             pending.clone(),
+            plugin.manifest.permissions.clone(),
             app_handle,
         );
 
@@ -406,7 +506,12 @@ impl PluginRuntimeState {
                 .map_err(|_| "plugin pending request lock poisoned".to_string())?
                 .insert(request_id, sender);
 
-            if let Err(error) = write_frame(&mut session.stdin, &request) {
+            let write_result = session
+                .stdin
+                .lock()
+                .map_err(|_| "plugin stdin lock poisoned".to_string())
+                .and_then(|mut writer| write_frame(&mut *writer, &request));
+            if let Err(error) = write_result {
                 if let Ok(mut pending) = session.pending.lock() {
                     pending.remove(&request_id);
                 }
@@ -510,6 +615,69 @@ mod tests {
         bytes.extend_from_slice(b"x");
         let error = read_frame(&mut bytes.as_slice()).unwrap_err();
         assert!(error.contains("frame length"));
+    }
+
+    #[test]
+    fn decodes_plugin_request() {
+        let json = serde_json::json!({
+            "type": "plugin.request",
+            "requestId": 7,
+            "method": "credentials.use",
+            "params": { "credentialRef": "cred-1" }
+        });
+        let request: PluginRequest = serde_json::from_value(json).unwrap();
+        assert_eq!(request.message_type, "plugin.request");
+        assert_eq!(request.request_id, 7);
+        assert_eq!(request.method, "credentials.use");
+        assert_eq!(request.params["credentialRef"], "cred-1");
+    }
+
+    #[test]
+    fn encodes_host_response() {
+        let response = HostResponse {
+            message_type: "host.response",
+            request_id: 9,
+            ok: true,
+            result: serde_json::json!({ "secret": "value" }),
+            error: String::new(),
+        };
+        let json = serde_json::to_value(response).unwrap();
+        assert_eq!(json["type"], "host.response");
+        assert_eq!(json["requestId"], 9);
+        assert_eq!(json["ok"], true);
+        assert_eq!(json["result"]["secret"], "value");
+    }
+
+    #[test]
+    fn matches_permissions_exactly() {
+        let permissions = vec!["network.connect".to_string(), "credentials.use".to_string()];
+        assert!(permission_granted(&permissions, "credentials.use"));
+        assert!(!permission_granted(&permissions, "credentials"));
+        assert!(!permission_granted(&permissions, "storage.plugin"));
+    }
+
+    #[test]
+    fn rejects_missing_host_api_permission() {
+        let request = PluginRequest {
+            message_type: "plugin.request".to_string(),
+            request_id: 10,
+            method: "credentials.use".to_string(),
+            params: serde_json::json!({ "credentialRef": "cred-1" }),
+        };
+        let error = validate_plugin_request(&[], &request).unwrap_err();
+        assert_eq!(error, "plugin lacks credentials.use permission");
+    }
+
+    #[test]
+    fn rejects_unknown_host_api_method() {
+        let request = PluginRequest {
+            message_type: "plugin.request".to_string(),
+            request_id: 11,
+            method: "unknown.method".to_string(),
+            params: serde_json::Value::Null,
+        };
+        let error = validate_plugin_request(&[], &request).unwrap_err();
+        assert_eq!(error, "unsupported host API method: unknown.method");
     }
 
     #[test]

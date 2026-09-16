@@ -90,7 +90,36 @@ Plugins own their UI. RemoteHand will host plugin-provided web assets in an isol
 Runtime
 Plugins run out of process.
 RemoteHand launches the configured executable, establishes a versioned IPC session, validates plugin identity/API compatibility, supervises process lifetime, and tears down runtime resources when a plugin stops or crashes.
-The runtime transport and handshake are part of Plugin API v1 and will be documented as they stabilize.
+The runtime transport and handshake are part of Plugin API v1. Host-to-plugin RPC uses host.request / plugin.response. Plugins may also call generic host services using plugin.request / host.response.
+
+For credential brokering, a plugin must declare the credentials.use permission and may send:
+
+```json
+{
+  "type": "plugin.request",
+  "requestId": 1,
+  "method": "credentials.use",
+  "params": {
+    "credentialRef": "..."
+  }
+}
+```
+
+The host replies with:
+
+```json
+{
+  "type": "host.response",
+  "requestId": 1,
+  "ok": true,
+  "result": {
+    "secret": "..."
+  },
+  "error": ""
+}
+```
+
+On failure, ok is false, result is null, and error contains the failure message. Permission checks happen before vault access. credentials.use is intentionally narrow: plugins request a specific credentialRef rather than enumerate vault contents.
 Installation safety
 The existing plugin manager keeps these protections:
 
