@@ -367,7 +367,7 @@ export function PluginManager({
     }),
   );
 
-  const managerButtonStyle: React.CSSProperties = {
+  const managerButtonStyle = {
     border: "1px solid var(--accent-border, #39465a)",
     background: "var(--accent-surface, #16263a)",
     color: "var(--accent, #70a7e8)",
@@ -377,7 +377,7 @@ export function PluginManager({
     font: "inherit",
   };
 
-  const managerRemoveStyle: React.CSSProperties = {
+  const managerRemoveStyle = {
     ...managerButtonStyle,
     borderColor: "var(--danger-border, #5a3035)",
     background: "var(--danger-surface, #241316)",
