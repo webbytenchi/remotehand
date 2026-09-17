@@ -320,8 +320,9 @@ export function PluginManager({
       const values = visible.map((entry) => Number(entry.latencyMs) || 0);
       const max = Math.max(1, ...values);
       const severity = topbarSeverity(item.state);
-      const border = severity === "offline" ? "#7d3b3b" : severity === "high-latency" ? "#80622e" : severity === "normal" ? "#355f47" : "#39465a";
-      const background = severity === "offline" ? "#29171a" : severity === "high-latency" ? "#2a2417" : "#111a17";
+      const border = severity === "offline" ? "var(--danger-border, #7d3b3b)" : severity === "high-latency" ? "var(--warning-border, #80622e)" : severity === "normal" ? "var(--success-text, #355f47)" : "var(--border, #39465a)";
+      const background = severity === "offline" ? "var(--danger-surface, #29171a)" : severity === "high-latency" ? "var(--warning-surface, #2a2417)" : severity === "normal" ? "var(--success-surface, #111a17)" : "var(--surface-raised, #1d252f)";
+      const barColor = severity === "offline" ? "var(--danger-text, #efaaaa)" : severity === "high-latency" ? "var(--warning-text, #f1cf87)" : severity === "normal" ? "var(--accent, #70a7e8)" : "var(--muted-text, #a8b4c2)";
       return (
         <button
           key={`${pluginId}:${item.id}`}
@@ -356,7 +357,7 @@ export function PluginManager({
           <span style={{ position: "relative", zIndex: 2, fontSize: 14, fontWeight: 700, lineHeight: 1.05 }}>
             {typeof item.currentLatencyMs === "number" ? `${item.currentLatencyMs.toFixed(item.currentLatencyMs < 10 ? 1 : 0)} ms` : "—"}
           </span>
-          <span aria-hidden="true" style={{ position: "absolute", left: 4, right: 4, bottom: 4, height: 22, display: "flex", alignItems: "flex-end", gap: 1, opacity: 0.72 }}>
+          <span aria-hidden="true" style={{ position: "absolute", left: 4, right: 4, bottom: 4, height: 22, display: "flex", alignItems: "flex-end", gap: 1, opacity: 0.72, color: barColor }}>
             {visible.map((entry, index) => {
               const height = entry.latencyMs == null ? 8 : Math.max(4, Math.round(((Number(entry.latencyMs) || 0) / max) * 20));
               return <span key={`${item.id}:${index}`} style={{ flex: 1, minWidth: 1, height, borderRadius: 1, background: "currentColor" }} />;
