@@ -141,8 +141,9 @@ export function PluginManager({
 
   const primeAudio = useCallback(() => {
     try {
-      const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-      if (!audioContextRef.current && AudioContextCtor) audioContextRef.current = new AudioContextCtor();
+      type AudioContextCtor = new () => AudioContext;
+      const ctor = (window as Window & { webkitAudioContext?: AudioContextCtor }).AudioContext ?? (window as Window & { webkitAudioContext?: AudioContextCtor }).webkitAudioContext;
+      if (!audioContextRef.current && ctor) audioContextRef.current = new ctor();
       if (audioContextRef.current?.state === "suspended") void audioContextRef.current.resume();
     } catch {
       // Audio is best-effort; monitoring must continue even when audio is unavailable.
@@ -166,7 +167,7 @@ export function PluginManager({
       oscillator.start();
       oscillator.stop(context.currentTime + 1.0);
     } catch {
-      // Do not allow audio failures to affect the plugin manager.
+      // Audio failures are intentionally non-fatal.
     }
   }, [primeAudio]);
 
@@ -212,11 +213,8 @@ export function PluginManager({
       if (event.payload.event === "topbar.update") {
         const items = parseTopbarItems(event.payload.payload);
         setTopbarItems((current) => ({ ...current, [event.payload.pluginId]: items }));
-        return;
-      }
-      if (event.payload.event === "monitor.alert") {
-        const payload = event.payload.payload as AlertPayload;
-        void playAlertSound(payload);
+      } else if (event.payload.event === "monitor.alert") {
+        void playAlertSound(event.payload.payload as AlertPayload);
       }
     }).then((dispose) => {
       if (cancelled) dispose();
@@ -227,24 +225,6 @@ export function PluginManager({
       unlisten?.();
     };
   }, [playAlertSound]);
-
-  useEffect(() => {
-    if (!isTauri()) return;
-    let cancelled = false;
-    let unlisten: (() => void) | undefined;
-    void listen<PluginRuntimeEvent>("remotehand-plugin-event", (event) => {
-      if (event.payload.event !== "topbar.update") return;
-      const items = parseTopbarItems(event.payload.payload);
-      setTopbarItems((current) => ({ ...current, [event.payload.pluginId]: items }));
-    }).then((dispose) => {
-      if (cancelled) dispose();
-      else unlisten = dispose;
-    });
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, []);
 
   useEffect(() => {
     const activePluginIds = new Set(plugins.filter((plugin) => plugin.enabled).map((plugin) => plugin.manifest.id));
