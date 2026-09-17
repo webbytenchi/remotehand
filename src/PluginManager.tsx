@@ -20,9 +20,27 @@ type PluginInfo = {
   directory: string;
 };
 
+type TopbarTone = "accent" | "success" | "warning" | "danger" | "muted";
+type TopbarSeriesPoint = { value?: number | null; tone?: TopbarTone };
+type TopbarContent = {
+  type: "text" | "metric" | "metric-sparkline" | "status" | "progress";
+  label?: string;
+  value?: string | number | null;
+  tone?: TopbarTone;
+  series?: TopbarSeriesPoint[];
+};
+type TopbarAction = {
+  type: "open-panel";
+  panel?: string;
+  context?: { targetId?: string; target?: string };
+};
 type TopbarItem = {
   id: string;
   title: string;
+  tooltip?: string;
+  size?: { width?: number; height?: number };
+  content?: TopbarContent;
+  action?: TopbarAction;
   target?: string;
   targetId?: string;
   currentLatencyMs?: number | null;
@@ -50,6 +68,12 @@ type AlertPayload = {
   sound?: { dataUrl?: string; durationMs?: number } | null;
 };
 
+function parseTone(value: unknown): TopbarTone | undefined {
+  return value === "accent" || value === "success" || value === "warning" || value === "danger" || value === "muted"
+    ? value
+    : undefined;
+}
+
 function parseTopbarItems(payload: unknown): TopbarItem[] {
   if (!payload || typeof payload !== "object") return [];
   const items = (payload as TopbarPayload).items;
@@ -58,6 +82,39 @@ function parseTopbarItems(payload: unknown): TopbarItem[] {
     if (!item || typeof item !== "object") return [];
     const value = item as Record<string, unknown>;
     if (typeof value.id !== "string" || typeof value.title !== "string") return [];
+    const sizeValue = value.size && typeof value.size === "object" ? value.size as Record<string, unknown> : undefined;
+    const contentValue = value.content && typeof value.content === "object" ? value.content as Record<string, unknown> : undefined;
+    const actionValue = value.action && typeof value.action === "object" ? value.action as Record<string, unknown> : undefined;
+    let content: TopbarContent | undefined;
+    if (contentValue && (contentValue.type === "text" || contentValue.type === "metric" || contentValue.type === "metric-sparkline" || contentValue.type === "status" || contentValue.type === "progress")) {
+      const rawSeries = Array.isArray(contentValue.series) ? contentValue.series : [];
+      const series = rawSeries.flatMap((entry) => {
+        if (!entry || typeof entry !== "object") return [];
+        const record = entry as Record<string, unknown>;
+        if (record.value != null && typeof record.value !== "number") return [];
+        return [{ value: record.value as number | null | undefined, tone: parseTone(record.tone) }];
+      });
+      content = {
+        type: contentValue.type,
+        label: typeof contentValue.label === "string" ? contentValue.label : undefined,
+        value: typeof contentValue.value === "string" || typeof contentValue.value === "number" ? contentValue.value : null,
+        tone: parseTone(contentValue.tone),
+        series,
+      };
+    }
+    const contextValue = actionValue?.context && typeof actionValue.context === "object" ? actionValue.context as Record<string, unknown> : undefined;
+    const action = actionValue?.type === "open-panel"
+      ? {
+          type: "open-panel" as const,
+          panel: typeof actionValue.panel === "string" ? actionValue.panel : undefined,
+          context: contextValue
+            ? {
+                targetId: typeof contextValue.targetId === "string" ? contextValue.targetId : undefined,
+                target: typeof contextValue.target === "string" ? contextValue.target : undefined,
+              }
+            : undefined,
+        }
+      : undefined;
     const history = Array.isArray(value.history)
       ? value.history.flatMap((entry) => {
           if (!entry || typeof entry !== "object") return [];
@@ -69,10 +126,19 @@ function parseTopbarItems(payload: unknown): TopbarItem[] {
             state: record.state as string | undefined,
           }];
         })
-      : [];
+      : undefined;
     return [{
       id: value.id,
       title: value.title,
+      tooltip: typeof value.tooltip === "string" ? value.tooltip : undefined,
+      size: sizeValue
+        ? {
+            width: typeof sizeValue.width === "number" ? sizeValue.width : undefined,
+            height: typeof sizeValue.height === "number" ? sizeValue.height : undefined,
+          }
+        : undefined,
+      content,
+      action,
       target: typeof value.target === "string" ? value.target : undefined,
       targetId: typeof value.targetId === "string" ? value.targetId : undefined,
       currentLatencyMs: typeof value.currentLatencyMs === "number" ? value.currentLatencyMs : null,
@@ -88,6 +154,23 @@ function topbarSeverity(state?: string) {
   if (state === "HIGH LATENCY") return "high-latency";
   if (state === "NORMAL") return "normal";
   return "ready";
+}
+
+function toneVars(tone: TopbarTone | undefined) {
+  switch (tone) {
+    case "success": return { text: "var(--success-text, #bce5c7)", surface: "var(--success-surface, #15211a)", border: "var(--success-border, #355f47)" };
+    case "warning": return { text: "var(--warning-text, #f1cf87)", surface: "var(--warning-surface, #272116)", border: "var(--warning-border, #6f5a2c)" };
+    case "danger": return { text: "var(--danger-text, #efaaaa)", surface: "var(--danger-surface, #241316)", border: "var(--danger-border, #5a3035)" };
+    case "muted": return { text: "var(--muted-text, #a8b4c2)", surface: "var(--surface-raised, #1d252f)", border: "var(--border, #39465a)" };
+    default: return { text: "var(--accent, #70a7e8)", surface: "var(--accent-surface, #16263a)", border: "var(--accent-border, #3b5f8d)" };
+  }
+}
+
+function clampTopbarSize(size?: { width?: number; height?: number }) {
+  return {
+    width: Math.min(180, Math.max(72, Number.isFinite(size?.width) ? Number(size?.width) : 112)),
+    height: Math.min(64, Math.max(36, Number.isFinite(size?.height) ? Number(size?.height) : 44)),
+  };
 }
 
 export function PluginManager({
@@ -308,7 +391,11 @@ export function PluginManager({
 
   const openTopbarItem = (pluginId: string, item: TopbarItem) => {
     if (!onOpenPluginPanel) return;
-    onOpenPluginPanel(pluginId, item.panel || "host-monitor", {
+    if (item.action?.type === "open-panel") {
+      onOpenPluginPanel(pluginId, item.action.panel || "", item.action.context);
+      return;
+    }
+    onOpenPluginPanel(pluginId, item.panel || "", {
       targetId: item.targetId,
       target: item.target,
     });
@@ -316,19 +403,22 @@ export function PluginManager({
 
   const renderedTopbar = Object.entries(topbarItems).flatMap(([pluginId, items]) =>
     items.map((item) => {
-      const visible = item.history?.slice(-30) ?? [];
-      const values = visible.map((entry) => Number(entry.latencyMs) || 0);
-      const max = Math.max(1, ...values);
-      const severity = topbarSeverity(item.state);
-      const border = severity === "offline" ? "var(--danger-border, #7d3b3b)" : severity === "high-latency" ? "var(--warning-border, #80622e)" : severity === "normal" ? "var(--success-text, #355f47)" : "var(--border, #39465a)";
-      const background = severity === "offline" ? "var(--danger-surface, #29171a)" : severity === "high-latency" ? "var(--warning-surface, #2a2417)" : severity === "normal" ? "var(--success-surface, #111a17)" : "var(--surface-raised, #1d252f)";
-      const barColor = severity === "offline" ? "var(--danger-text, #efaaaa)" : severity === "high-latency" ? "var(--warning-text, #f1cf87)" : severity === "normal" ? "var(--accent, #70a7e8)" : "var(--muted-text, #a8b4c2)";
+      const hasGenericContent = !!item.content;
+      const legacyVisible = item.history?.slice(-30) ?? [];
+      const legacyValues = legacyVisible.map((entry) => Number(entry.latencyMs) || 0);
+      const legacyMax = Math.max(1, ...legacyValues);
+      const legacySeverity = topbarSeverity(item.state);
+      const genericTone = toneVars(item.content?.tone);
+      const size = clampTopbarSize(item.size);
+      const series = item.content?.series?.slice(-60) ?? [];
+      const seriesValues = series.map((entry) => Number(entry.value) || 0);
+      const seriesMax = Math.max(1, ...seriesValues);
       return (
         <button
           key={`${pluginId}:${item.id}`}
           type="button"
-          title={item.target ? `${item.title} · ${item.target}` : item.title}
-          aria-label={item.target ? `${item.title} ${item.target}` : item.title}
+          title={item.tooltip || (item.target ? `${item.title} · ${item.target}` : item.title)}
+          aria-label={item.tooltip || (item.target ? `${item.title} ${item.target}` : item.title)}
           onClick={() => openTopbarItem(pluginId, item)}
           style={{
             order: -1,
@@ -336,8 +426,8 @@ export function PluginManager({
             zIndex: 10,
             pointerEvents: "auto",
             flexShrink: 0,
-            width: 112,
-            height: 44,
+            width: size.width,
+            height: size.height,
             overflow: "hidden",
             display: "flex",
             flexDirection: "column",
@@ -346,23 +436,41 @@ export function PluginManager({
             gap: 1,
             padding: "3px 7px",
             marginLeft: 6,
-            border: `1px solid ${border}`,
+            border: `1px solid ${hasGenericContent ? genericTone.border : (legacySeverity === "offline" ? "var(--danger-border, #7d3b3b)" : legacySeverity === "high-latency" ? "var(--warning-border, #80622e)" : legacySeverity === "normal" ? "var(--success-text, #355f47)" : "var(--border, #39465a)")}`,
             borderRadius: 7,
-            background,
-            color: "#dce4ee",
+            background: hasGenericContent ? genericTone.surface : (legacySeverity === "offline" ? "var(--danger-surface, #29171a)" : legacySeverity === "high-latency" ? "var(--warning-surface, #2a2417)" : legacySeverity === "normal" ? "var(--success-surface, #111a17)" : "var(--surface-raised, #1d252f)"),
+            color: hasGenericContent ? "var(--text, #dce4ee)" : "#dce4ee",
             cursor: "pointer",
             textAlign: "center",
           }}
         >
-          <span style={{ position: "relative", zIndex: 2, fontSize: 14, fontWeight: 700, lineHeight: 1.05 }}>
-            {typeof item.currentLatencyMs === "number" ? `${item.currentLatencyMs.toFixed(item.currentLatencyMs < 10 ? 1 : 0)} ms` : "—"}
-          </span>
-          <span aria-hidden="true" style={{ position: "absolute", left: 4, right: 4, bottom: 4, height: 22, display: "flex", alignItems: "flex-end", gap: 1, opacity: 0.72, color: barColor }}>
-            {visible.map((entry, index) => {
-              const height = entry.latencyMs == null ? 8 : Math.max(4, Math.round(((Number(entry.latencyMs) || 0) / max) * 20));
-              return <span key={`${item.id}:${index}`} style={{ flex: 1, minWidth: 1, height, borderRadius: 1, background: "currentColor" }} />;
-            })}
-          </span>
+          {hasGenericContent ? (
+            <>
+              {item.content?.type === "text" ? <span style={{ position: "relative", zIndex: 2, fontSize: 13, fontWeight: 700, lineHeight: 1.1 }}>{item.content.label ?? item.title}</span> : null}
+              {item.content?.type === "status" ? <span style={{ position: "relative", zIndex: 2, fontSize: 12, fontWeight: 700, lineHeight: 1.1, color: genericTone.text }}>{item.content.label || item.content.value || item.title}</span> : null}
+              {item.content?.type === "metric" || item.content?.type === "metric-sparkline" ? <span style={{ position: "relative", zIndex: 2, fontSize: 14, fontWeight: 700, lineHeight: 1.05 }}>{item.content.value == null ? "—" : String(item.content.value)}</span> : null}
+              {item.content?.type === "progress" ? <div style={{ position: "relative", zIndex: 2, display: "grid", gap: 3 }}><span style={{ fontSize: 12, fontWeight: 700 }}>{item.content.label || item.title}</span><span style={{ display: "block", height: 7, borderRadius: 999, background: "var(--border, #39465a)", overflow: "hidden" }}><span style={{ display: "block", height: "100%", width: `${Math.max(0, Math.min(100, Number(item.content.value) || 0))}%`, background: genericTone.text }} /></span></div> : null}
+              {item.content?.type === "metric-sparkline" && series.length ? <span aria-hidden="true" style={{ position: "absolute", left: 4, right: 4, bottom: 4, height: Math.max(16, Math.min(30, size.height - 22)), display: "flex", alignItems: "flex-end", gap: 1, opacity: 0.78 }}>
+                {series.map((entry, index) => {
+                  const pointTone = toneVars(entry.tone || item.content?.tone);
+                  const height = entry.value == null ? 5 : Math.max(3, Math.round(((Number(entry.value) || 0) / seriesMax) * Math.max(10, size.height - 18)));
+                  return <span key={`${item.id}:${index}`} style={{ flex: 1, minWidth: 1, height, borderRadius: 1, background: pointTone.text }} />;
+                })}
+              </span> : null}
+            </>
+          ) : (
+            <>
+              <span style={{ position: "relative", zIndex: 2, fontSize: 14, fontWeight: 700, lineHeight: 1.05 }}>
+                {typeof item.currentLatencyMs === "number" ? `${item.currentLatencyMs.toFixed(item.currentLatencyMs < 10 ? 1 : 0)} ms` : "—"}
+              </span>
+              <span aria-hidden="true" style={{ position: "absolute", left: 4, right: 4, bottom: 4, height: 22, display: "flex", alignItems: "flex-end", gap: 1, opacity: 0.72 }}>
+                {legacyVisible.map((entry, index) => {
+                  const height = entry.latencyMs == null ? 8 : Math.max(4, Math.round(((Number(entry.latencyMs) || 0) / legacyMax) * 20));
+                  return <span key={`${item.id}:${index}`} style={{ flex: 1, minWidth: 1, height, borderRadius: 1, background: entry.state === "OFFLINE" ? "var(--danger-text, #efaaaa)" : entry.state === "HIGH LATENCY" ? "var(--warning-text, #f1cf87)" : "var(--accent, #70a7e8)" }} />;
+                })}
+              </span>
+            </>
+          )}
         </button>
       );
     }),
@@ -425,22 +533,8 @@ export function PluginManager({
                     <div className="plugin-permissions"><strong>Permissions</strong>{plugin.manifest.permissions.length ? plugin.manifest.permissions.map((permission) => <span key={permission}>{permission}</span>) : <span>None</span>}</div>
                   </div>
                   <div className="plugin-card-actions">
-                    <button
-                      type="button"
-                      onClick={() => void setEnabled(plugin, !plugin.enabled)}
-                      disabled={busy}
-                      style={{ ...managerButtonStyle, opacity: busy ? 0.45 : 1, cursor: busy ? "default" : "pointer" }}
-                    >
-                      {plugin.enabled ? "Disable" : "Enable"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => requestRemove(plugin)}
-                      disabled={busy || plugin.enabled}
-                      style={{ ...managerRemoveStyle, opacity: busy || plugin.enabled ? 0.45 : 1, cursor: busy || plugin.enabled ? "default" : "pointer" }}
-                    >
-                      Remove
-                    </button>
+                    <button type="button" onClick={() => void setEnabled(plugin, !plugin.enabled)} disabled={busy} style={{ ...managerButtonStyle, opacity: busy ? 0.45 : 1, cursor: busy ? "default" : "pointer" }}>{plugin.enabled ? "Disable" : "Enable"}</button>
+                    <button type="button" onClick={() => requestRemove(plugin)} disabled={busy || plugin.enabled} style={{ ...managerRemoveStyle, opacity: busy || plugin.enabled ? 0.45 : 1, cursor: busy || plugin.enabled ? "default" : "pointer" }}>Remove</button>
                   </div>
                 </article>
               );
@@ -448,13 +542,7 @@ export function PluginManager({
           </div>
         </div>
       </AppModal>
-      <AppModal
-        open={removeTarget !== null}
-        title="Remove plugin?"
-        confirmLabel="Remove"
-        onConfirm={() => void confirmRemove()}
-        onCancel={() => setRemoveTarget(null)}
-      >
+      <AppModal open={removeTarget !== null} title="Remove plugin?" confirmLabel="Remove" onConfirm={() => void confirmRemove()} onCancel={() => setRemoveTarget(null)}>
         <p>This removes the selected plugin from RemoteHand&apos;s portable plugin directory.</p>
       </AppModal>
     </>
