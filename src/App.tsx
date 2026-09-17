@@ -652,20 +652,29 @@ return;
 }
 addTerminal(undefined, activity.kind === "terminal" ? "default" : activity.kind);
 }, [addTerminal, connectSsh, openSftp]);
-const openPluginPanel = useCallback((plugin: PluginInfo, sidebar: PluginContribution) => {
+const openPluginPanel = useCallback((plugin: PluginInfo, panelId: string, context?: { targetId?: string; target?: string }) => {
 const api = apiRef.current;
 if (!api) return;
-const panel = plugin.manifest.contributes.panels.find((item) => item.id === sidebar.panel);
+const panel = plugin.manifest.contributes.panels.find((item) => item.id === panelId);
 if (!panel) return;
-api.addPanel({
-id: "plugin-" + plugin.manifest.id + "-" + panel.id + "-" + Date.now(),
-component: "plugin",
-title: panel.title,
-params: {
+const id = "plugin-" + plugin.manifest.id + "-" + panel.id;
+const existing = api.panels.find((current) => current.id === id && current.api.component === "plugin");
+const params = {
 pluginId: plugin.manifest.id,
 panelId: panel.id,
 title: panel.title,
-} satisfies PluginPanelParams,
+context,
+} satisfies PluginPanelParams;
+if (existing) {
+existing.api.updateParameters(params);
+existing.api.setActive();
+return;
+}
+api.addPanel({
+id,
+component: "plugin",
+title: panel.title,
+params,
 });
 }, []);
 const openHome = useCallback(() => {
@@ -741,7 +750,6 @@ api.addPanel({
 id: "connections",
 component: "connections",
 title: "Connections",
-params: { connections },
 position: { referencePanel: "welcome", direction: "right" },
 });
 }, [connections, recentActivities]);
@@ -1040,7 +1048,6 @@ aria-label="Settings"
 <button className="sidebar-action" type="button" onClick={popoutActive} title="Open active panel in new window">
 <span className="sidebar-icon">↗</span><span className="sidebar-label">Pop out active</span>
 </button>
-
 {plugins.flatMap((plugin) =>
 plugin.enabled
 ? plugin.manifest.contributes.sidebar.map((sidebar) => (
@@ -1048,7 +1055,7 @@ plugin.enabled
 className="sidebar-action"
 type="button"
 key={plugin.manifest.id + ":" + sidebar.id}
-onClick={() => openPluginPanel(plugin, sidebar)}
+onClick={() => openPluginPanel(plugin, sidebar.panel)}
 title={sidebar.title}
 >
 <span className="sidebar-icon" aria-hidden="true">◇</span>
@@ -1057,7 +1064,6 @@ title={sidebar.title}
 ))
 : [],
 )}
-
 <div className="sidebar-divider" />
 <div className="sidebar-heading">Layout</div>
 <button className="sidebar-action" type="button" onClick={undoLayout} title="Undo layout change">
@@ -1070,7 +1076,6 @@ title={sidebar.title}
 <span className="sidebar-icon">⟳</span><span className="sidebar-label">Reset layout</span>
 </button>
 </aside>
-
 <section className="canvas">
 <div className="dockview-host">
 <DockviewReact
@@ -1091,6 +1096,10 @@ popoutUrl="popout.html"
 open={pluginsOpen}
 onClose={() => setPluginsOpen(false)}
 onChanged={() => void refreshPlugins()}
+onOpenPluginPanel={(pluginId, panelId, context) => {
+const plugin = plugins.find((item) => item.manifest.id === pluginId);
+if (plugin) openPluginPanel(plugin, panelId, context);
+}}
 />
 <AppModal
 open={settingsOpen}
@@ -1099,7 +1108,6 @@ confirmLabel="Done"
 onConfirm={() => setSettingsOpen(false)}
 onCancel={() => setSettingsOpen(false)}
 focusActions={false}>
-
 <div className="appearance-settings">
 <div className="settings-section-heading">
 <strong>Appearance</strong>
@@ -1109,12 +1117,7 @@ focusActions={false}>
 <span>Theme</span>
 <div className="settings-segmented">
 {(["dark", "light", "system"] as ThemeMode[]).map((mode) => (
-<button
-key={mode}
-type="button"
-className={settings.theme === mode ? "active" : ""}
-onClick={() => setSettings((current) => ({ ...current, theme: mode }))}
->
+<button key={mode} type="button" className={settings.theme === mode ? "active" : ""} onClick={() => setSettings((current) => ({ ...current, theme: mode }))}>
 {mode[0].toUpperCase() + mode.slice(1)}
 </button>
 ))}
@@ -1122,13 +1125,7 @@ onClick={() => setSettings((current) => ({ ...current, theme: mode }))}
 </div>
 <div className="settings-field">
 <label htmlFor="color-scheme">Color scheme</label>
-<select
-id="color-scheme"
-value={settings.colorScheme}
-onChange={(event) =>
-setSettings((current) => ({ ...current, colorScheme: event.target.value as ColorScheme }))
-}
->
+<select id="color-scheme" value={settings.colorScheme} onChange={(event) => setSettings((current) => ({ ...current, colorScheme: event.target.value as ColorScheme }))}>
 <option value="blue">RemoteHand Blue</option>
 <option value="emerald">Emerald</option>
 <option value="violet">Violet</option>
@@ -1138,13 +1135,7 @@ setSettings((current) => ({ ...current, colorScheme: event.target.value as Color
 </div>
 <div className="settings-field settings-font-row">
 <label htmlFor="ui-font">Interface font</label>
-<select
-id="ui-font"
-value={settings.uiFontFamily}
-onChange={(event) =>
-setSettings((current) => ({ ...current, uiFontFamily: event.target.value }))
-}
->
+<select id="ui-font" value={settings.uiFontFamily} onChange={(event) => setSettings((current) => ({ ...current, uiFontFamily: event.target.value }))}>
 {UI_FONT_OPTIONS.map((font) => <option key={font} value={font}>{font}</option>)}
 </select>
 <div className="settings-stepper" aria-label="Interface font size">
@@ -1155,49 +1146,26 @@ setSettings((current) => ({ ...current, uiFontFamily: event.target.value }))
 </div>
 <div className="settings-field">
 <label htmlFor="terminal-theme">Terminal theme</label>
-<select
-id="terminal-theme"
-value={settings.terminalTheme}
-onChange={(event) => {
+<select id="terminal-theme" value={settings.terminalTheme} onChange={(event) => {
 const terminalTheme = event.target.value as TerminalTheme;
 setSettings((current) => {
 if (terminalTheme === "comfort") return { ...current, terminalTheme, terminalBackground: "#11151a", terminalForeground: "#d8dde6" };
 if (terminalTheme === "classic") return { ...current, terminalTheme, terminalBackground: "#05070a", terminalForeground: "#d5dbe5" };
 return { ...current, terminalTheme };
 });
-}}
->
-
+}}>
 <option value="comfort">RemoteHand Comfort</option>
 <option value="classic">RemoteHand Classic</option>
 <option value="custom">Custom</option>
 </select>
 </div>
 <div className="settings-color-row">
-<label>
-<span>Background</span>
-<div className="settings-color-control">
-<input type="color" value={settings.terminalBackground} onChange={(event) => setSettings((current) => ({ ...current, terminalTheme: "custom", terminalBackground: event.target.value }))} />
-<input type="text" value={settings.terminalBackground} maxLength={7} onChange={(event) => setSettings((current) => ({ ...current, terminalTheme: "custom", terminalBackground: event.target.value }))} />
-</div>
-</label>
-<label>
-<span>Foreground</span>
-<div className="settings-color-control">
-<input type="color" value={settings.terminalForeground} onChange={(event) => setSettings((current) => ({ ...current, terminalTheme: "custom", terminalForeground: event.target.value }))} />
-<input type="text" value={settings.terminalForeground} maxLength={7} onChange={(event) => setSettings((current) => ({ ...current, terminalTheme: "custom", terminalForeground: event.target.value }))} />
-</div>
-</label>
+<label><span>Background</span><div className="settings-color-control"><input type="color" value={settings.terminalBackground} onChange={(event) => setSettings((current) => ({ ...current, terminalTheme: "custom", terminalBackground: event.target.value }))} /><input type="text" value={settings.terminalBackground} maxLength={7} onChange={(event) => setSettings((current) => ({ ...current, terminalTheme: "custom", terminalBackground: event.target.value }))} /></div></label>
+<label><span>Foreground</span><div className="settings-color-control"><input type="color" value={settings.terminalForeground} onChange={(event) => setSettings((current) => ({ ...current, terminalTheme: "custom", terminalForeground: event.target.value }))} /><input type="text" value={settings.terminalForeground} maxLength={7} onChange={(event) => setSettings((current) => ({ ...current, terminalTheme: "custom", terminalBackground: event.target.value }))} /></div></label>
 </div>
 <div className="settings-field settings-font-row">
 <label htmlFor="terminal-font">Terminal font</label>
-<select
-id="terminal-font"
-value={settings.terminalFontFamily}
-onChange={(event) =>
-setSettings((current) => ({ ...current, terminalFontFamily: event.target.value }))
-}
->
+<select id="terminal-font" value={settings.terminalFontFamily} onChange={(event) => setSettings((current) => ({ ...current, terminalFontFamily: event.target.value }))}>
 {TERMINAL_FONT_OPTIONS.map((font) => <option key={font} value={font}>{font}</option>)}
 </select>
 <div className="settings-stepper" aria-label="Terminal font size">
@@ -1206,37 +1174,16 @@ setSettings((current) => ({ ...current, terminalFontFamily: event.target.value }
 <button type="button" onClick={() => setSettings((current) => ({ ...current, terminalFontSize: Math.min(24, current.terminalFontSize + 1) }))}>+</button>
 </div>
 </div>
-<button
-type="button"
-className="settings-reset"
-onClick={() => setSettings(DEFAULT_SETTINGS)}>
-
-Reset appearance
-</button>
+<button type="button" className="settings-reset" onClick={() => setSettings(DEFAULT_SETTINGS)}>Reset appearance</button>
 </div>
 </AppModal>
-
 {paletteOpen && (
 <div className="palette-backdrop" role="presentation" onMouseDown={() => setPaletteOpen(false)}>
 <div className="command-palette" role="dialog" aria-modal="true" aria-label="Command palette" onMouseDown={(event) => event.stopPropagation()}>
-<input
-autoFocus
-value={paletteQuery}
-onChange={(event) => setPaletteQuery(event.target.value)}
-placeholder="Type a command…"
-aria-label="Filter commands"
-/>
+<input autoFocus value={paletteQuery} onChange={(event) => setPaletteQuery(event.target.value)} placeholder="Type a command…" aria-label="Filter commands" />
 <div className="command-list">
 {filteredCommands.length ? filteredCommands.map((command) => (
-<button
-key={command.label}
-type="button"
-onClick={() => {
-command.run();
-setPaletteOpen(false);
-setPaletteQuery("");
-}}
->
+<button key={command.label} type="button" onClick={() => { command.run(); setPaletteOpen(false); setPaletteQuery(""); }}>
 <span>{command.label}</span><small>{command.hint}</small>
 </button>
 )) : <div className="empty-command">No matching command</div>}
