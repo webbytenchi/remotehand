@@ -79,6 +79,14 @@ function topbarSeverity(state?: string) {
   return "ready";
 }
 
+function setHostMonitorSidebarHidden(hidden: boolean) {
+  document.querySelectorAll<HTMLButtonElement>(".sidebar .sidebar-action").forEach((button) => {
+    if (button.title !== "Host Monitor") return;
+    button.dataset.pluginTopbarHidden = hidden ? "true" : "false";
+    button.style.display = hidden ? "none" : "";
+  });
+}
+
 export function PluginManager({
   open,
   onClose,
@@ -124,11 +132,7 @@ export function PluginManager({
       const items = parseTopbarItems(event.payload.payload);
       setTopbarItems((current) => ({ ...current, [event.payload.pluginId]: items }));
       if (event.payload.pluginId === "remotehand.host-monitor") {
-        window.setTimeout(() => {
-          document.querySelectorAll<HTMLButtonElement>(".sidebar .sidebar-action").forEach((button) => {
-            if (button.title === "Host Monitor") button.dataset.pluginTopbarHidden = "true";
-          });
-        }, 0);
+        window.setTimeout(() => setHostMonitorSidebarHidden(true), 0);
       }
     }).then((dispose) => {
       if (cancelled) dispose();
@@ -137,8 +141,22 @@ export function PluginManager({
     return () => {
       cancelled = true;
       unlisten?.();
+      setHostMonitorSidebarHidden(false);
     };
   }, []);
+
+  useEffect(() => {
+    const hostMonitor = plugins.find((plugin) => plugin.manifest.id === "remotehand.host-monitor");
+    if (!hostMonitor?.enabled) {
+      setHostMonitorSidebarHidden(false);
+      setTopbarItems((current) => {
+        if (!("remotehand.host-monitor" in current)) return current;
+        const next = { ...current };
+        delete next["remotehand.host-monitor"];
+        return next;
+      });
+    }
+  }, [plugins]);
 
   useEffect(() => {
     const activePluginIds = new Set(plugins.filter((plugin) => plugin.enabled).map((plugin) => plugin.manifest.id));
@@ -181,6 +199,7 @@ export function PluginManager({
           delete next[plugin.manifest.id];
           return next;
         });
+        if (plugin.manifest.id === "remotehand.host-monitor") setHostMonitorSidebarHidden(false);
       }
       await refresh();
       onChanged?.();
@@ -212,6 +231,7 @@ export function PluginManager({
         delete next[plugin.manifest.id];
         return next;
       });
+      if (plugin.manifest.id === "remotehand.host-monitor") setHostMonitorSidebarHidden(false);
       await refresh();
       onChanged?.();
     } catch (cause) {
