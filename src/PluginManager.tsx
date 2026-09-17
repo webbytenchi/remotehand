@@ -1,216 +1,362 @@
+import { createPortal } from "react-dom";
 import { useCallback, useEffect, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { AppModal } from "./AppModal";
+
 type PluginManifest = {
-id: string;
-name: string;
-version: string;
-apiVersion: number;
-author: string;
-description: string;
-permissions: string[];
+  id: string;
+  name: string;
+  version: string;
+  apiVersion: number;
+  author: string;
+  description: string;
+  permissions: string[];
 };
+
 type PluginInfo = {
-manifest: PluginManifest;
-enabled: boolean;
-directory: string;
+  manifest: PluginManifest;
+  enabled: boolean;
+  directory: string;
 };
+
+type TopbarItem = {
+  id: string;
+  title: string;
+  target?: string;
+  currentLatencyMs?: number | null;
+  history?: Array<{ latencyMs?: number | null; state?: string }>;
+  state?: string;
+  panel?: string;
+};
+
+type PluginRuntimeEvent = {
+  pluginId: string;
+  event: string;
+  payload: unknown;
+};
+
+type TopbarPayload = {
+  items?: unknown;
+};
+
+function parseTopbarItems(payload: unknown): TopbarItem[] {
+  if (!payload || typeof payload !== "object") return [];
+  const items = (payload as TopbarPayload).items;
+  if (!Array.isArray(items)) return [];
+  return items.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const value = item as Record<string, unknown>;
+    if (typeof value.id !== "string" || typeof value.title !== "string") return [];
+    const history = Array.isArray(value.history)
+      ? value.history.flatMap((entry) => {
+          if (!entry || typeof entry !== "object") return [];
+          const record = entry as Record<string, unknown>;
+          if (record.latencyMs != null && typeof record.latencyMs !== "number") return [];
+          if (record.state != null && typeof record.state !== "string") return [];
+          return [{
+            latencyMs: record.latencyMs as number | null | undefined,
+            state: record.state as string | undefined,
+          }];
+        })
+      : [];
+    return [{
+      id: value.id,
+      title: value.title,
+      target: typeof value.target === "string" ? value.target : undefined,
+      currentLatencyMs: typeof value.currentLatencyMs === "number" ? value.currentLatencyMs : null,
+      history,
+      state: typeof value.state === "string" ? value.state : undefined,
+      panel: typeof value.panel === "string" ? value.panel : undefined,
+    } satisfies TopbarItem];
+  });
+}
+
+function topbarSeverity(state?: string) {
+  if (state === "OFFLINE") return "offline";
+  if (state === "HIGH LATENCY") return "high-latency";
+  if (state === "NORMAL") return "normal";
+  return "ready";
+}
+
 export function PluginManager({
-open,
-onClose,
-onChanged,
+  open,
+  onClose,
+  onChanged,
 }: {
-open: boolean;
-onClose: () => void;
-onChanged?: () => void;
+  open: boolean;
+  onClose: () => void;
+  onChanged?: () => void;
 }) {
-const [plugins, setPlugins] = useState<PluginInfo[]>([]);
-const [loading, setLoading] = useState(false);
-const [busyId, setBusyId] = useState<string | null>(null);
-const [error, setError] = useState<string | null>(null);
-const [removeTarget, setRemoveTarget] = useState<PluginInfo | null>(null);
-const refresh = useCallback(async () => {
-if (!isTauri()) {
-setPlugins([]);
-return;
-}
-setLoading(true);
-setError(null);
-try {
-setPlugins(await invoke<PluginInfo[]>("plugin_list"));
-} catch (cause) {
-setError(String(cause));
-} finally {
-setLoading(false);
-}
-}, []);
-useEffect(() => {
-if (open) void refresh();
-}, [open, refresh]);
-const install = async () => {
-setLoading(true);
-setError(null);
-try {
-const installed = await invoke<PluginInfo | null>("plugin_install_from_folder");
-if (installed) {
-await refresh();
-onChanged?.();
-}
-} catch (cause) {
-setError(String(cause));
-} finally {
-setLoading(false);
-}
-};
-const setEnabled = async (plugin: PluginInfo, enabled: boolean) => {
-setBusyId(plugin.manifest.id);
-setError(null);
-try {
-await invoke("plugin_set_enabled", {
-id: plugin.manifest.id,
-enabled,
-});
-await refresh();
-onChanged?.();
-} catch (cause) {
-setError(String(cause));
-} finally {
-setBusyId(null);
-}
-};
-const requestRemove = (plugin: PluginInfo) => {
-if (plugin.enabled) {
-setError("Disable the plugin before removing it.");
-return;
-}
-setRemoveTarget(plugin);
-};
-const confirmRemove = async () => {
-const plugin = removeTarget;
-if (!plugin) return;
-setRemoveTarget(null);
-setBusyId(plugin.manifest.id);
-setError(null);
-try {
-await invoke("plugin_remove", { id: plugin.manifest.id });
-await refresh();
-onChanged?.();
-} catch (cause) {
-setError(String(cause));
-} finally {
-setBusyId(null);
-}
-};
-return (
-<>
-<AppModal
-open={open}
-title="Plugins"
-confirmLabel="Done"
-onConfirm={onClose}
-onCancel={onClose}
-focusActions={false}
->
-<div className="plugin-manager">
-<div className="plugin-manager-heading">
-<div>
-<strong>Installed add-ons</strong>
-<span>
-Plugins are disabled by default and only receive permissions declared in their manifest.
-</span>
-</div>
-<div className="plugin-manager-toolbar">
-<button type="button" onClick={() => void install()} disabled={loading}>
-Install from folder
-</button>
-<button type="button" onClick={() => void refresh()} disabled={loading}>
-{loading ? "Refreshing…" : "Refresh"}
-</button>
-</div>
-</div>
-<div className="plugin-security-note">
-<strong>Plugin API v1 security model</strong>
-<span>
-RemoteHand validates manifests, permissions, and contributions. Executable plugins run out of
-process through the Plugin Runtime v1 host.
-</span>
-</div>
+  const [plugins, setPlugins] = useState<PluginInfo[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<PluginInfo | null>(null);
+  const [topbarItems, setTopbarItems] = useState<Record<string, TopbarItem[]>>({});
 
-{error ? <div className="plugin-error">{error}</div> : null}
+  const refresh = useCallback(async () => {
+    if (!isTauri()) {
+      setPlugins([]);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      setPlugins(await invoke<PluginInfo[]>("plugin_list"));
+    } catch (cause) {
+      setError(String(cause));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-{!loading && plugins.length === 0 ? (
-<div className="plugin-empty">
-<strong>No plugins installed</strong>
-<span>
-Choose Install from folder to validate and copy an add-on into RemoteHand&apos;s portable
-plugins directory.
-</span>
-</div>
-) : null}
+  useEffect(() => {
+    if (open) void refresh();
+  }, [open, refresh]);
 
-<div className="plugin-list">
-{plugins.map((plugin) => (
-<article className="plugin-card" key={plugin.manifest.id}>
-<div className="plugin-card-main">
-<div className="plugin-title-row">
-<strong>{plugin.manifest.name}</strong>
-<span className={plugin.enabled ? "plugin-status enabled" : "plugin-status"}>
-{plugin.enabled ? "Enabled" : "Disabled"}
-</span>
-</div>
-<span className="plugin-meta">
-v{plugin.manifest.version} · {plugin.manifest.author} · API {plugin.manifest.apiVersion}
-</span>
-{plugin.manifest.description ? <p>{plugin.manifest.description}</p> : null}
-<div className="plugin-capabilities">
-{plugin.manifest.permissions.length ? (
-plugin.manifest.permissions.map((permission) => (
-<span key={permission}>{permission}</span>
-))
-) : (
-<span>no sensitive permissions</span>
-)}
-</div>
-</div>
+  useEffect(() => {
+    if (!isTauri()) return;
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+    void listen<PluginRuntimeEvent>("remotehand-plugin-event", (event) => {
+      if (event.payload.event !== "topbar.update") return;
+      const items = parseTopbarItems(event.payload.payload);
+      setTopbarItems((current) => ({ ...current, [event.payload.pluginId]: items }));
+    }).then((dispose) => {
+      if (cancelled) dispose();
+      else unlisten = dispose;
+    });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
 
-<div className="plugin-actions">
-<button
-type="button"
-disabled={busyId === plugin.manifest.id}
-onClick={() => void setEnabled(plugin, !plugin.enabled)}
->
-{plugin.enabled ? "Disable" : "Enable"}
-</button>
-<button
-type="button"
-className="danger"
-disabled={plugin.enabled || busyId === plugin.manifest.id}
-onClick={() => requestRemove(plugin)}
-title={plugin.enabled ? "Disable this plugin before removing it" : "Remove plugin"}
->
-Remove
-</button>
-</div>
-</article>
-))}
-</div>
-</div>
-</AppModal>
+  useEffect(() => {
+    const activePluginIds = new Set(plugins.filter((plugin) => plugin.enabled).map((plugin) => plugin.manifest.id));
+    setTopbarItems((current) => {
+      const next: Record<string, TopbarItem[]> = {};
+      for (const [pluginId, items] of Object.entries(current)) {
+        if (activePluginIds.has(pluginId)) next[pluginId] = items;
+      }
+      return next;
+    });
+  }, [plugins]);
 
-<AppModal
-open={removeTarget !== null}
-title="Remove plugin?"
-confirmLabel="Remove"
-cancelLabel="Cancel"
-danger
-onConfirm={() => void confirmRemove()}
-onCancel={() => setRemoveTarget(null)}
->
-<p>
-Remove <strong>{removeTarget?.manifest.name}</strong>? This deletes its plugin directory.
-Plugin-owned data is not removed automatically.
-</p>
-</AppModal>
-</>
-);
+  const install = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const installed = await invoke<PluginInfo | null>("plugin_install_from_folder");
+      if (installed) {
+        await refresh();
+        onChanged?.();
+      }
+    } catch (cause) {
+      setError(String(cause));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const setEnabled = async (plugin: PluginInfo, enabled: boolean) => {
+    setBusyId(plugin.manifest.id);
+    setError(null);
+    try {
+      await invoke("plugin_set_enabled", {
+        id: plugin.manifest.id,
+        enabled,
+      });
+      if (!enabled) {
+        setTopbarItems((current) => {
+          const next = { ...current };
+          delete next[plugin.manifest.id];
+          return next;
+        });
+      }
+      await refresh();
+      onChanged?.();
+    } catch (cause) {
+      setError(String(cause));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const requestRemove = (plugin: PluginInfo) => {
+    if (plugin.enabled) {
+      setError("Disable the plugin before removing it.");
+      return;
+    }
+    setRemoveTarget(plugin);
+  };
+
+  const confirmRemove = async () => {
+    const plugin = removeTarget;
+    if (!plugin) return;
+    setRemoveTarget(null);
+    setBusyId(plugin.manifest.id);
+    setError(null);
+    try {
+      await invoke("plugin_remove", { id: plugin.manifest.id });
+      setTopbarItems((current) => {
+        const next = { ...current };
+        delete next[plugin.manifest.id];
+        return next;
+      });
+      await refresh();
+      onChanged?.();
+    } catch (cause) {
+      setError(String(cause));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const openTopbarItem = (pluginId: string, item: TopbarItem) => {
+    const sidebarButton = Array.from(document.querySelectorAll<HTMLButtonElement>(".sidebar .sidebar-action"))
+      .find((button) => button.title === item.title);
+    if (sidebarButton) {
+      sidebarButton.click();
+    }
+  };
+
+  const renderedTopbar = Object.entries(topbarItems).flatMap(([pluginId, items]) =>
+    items.map((item) => {
+      const visible = item.history?.slice(-30) ?? [];
+      const values = visible.map((entry) => Number(entry.latencyMs) || 0);
+      const max = Math.max(1, ...values);
+      return (
+        <button
+          key={`${pluginId}:${item.id}`}
+          className={`plugin-topbar-widget plugin-topbar-widget-${topbarSeverity(item.state)}`}
+          type="button"
+          title={item.target ? `${item.title} · ${item.target}` : item.title}
+          aria-label={item.target ? `${item.title} ${item.target}` : item.title}
+          onClick={() => openTopbarItem(pluginId, item)}
+        >
+          <span className="plugin-topbar-widget-value">
+            {typeof item.currentLatencyMs === "number" ? `${item.currentLatencyMs.toFixed(item.currentLatencyMs < 10 ? 1 : 0)} ms` : "—"}
+          </span>
+          <span className="plugin-topbar-widget-graph" aria-hidden="true">
+            {visible.map((entry, index) => {
+              const height = entry.latencyMs == null ? 8 : Math.max(8, Math.round(((Number(entry.latencyMs) || 0) / max) * 26));
+              return <span key={`${item.id}:${index}`} style={{ height }} />;
+            })}
+          </span>
+        </button>
+      );
+    }),
+  );
+
+  return (
+    <>
+      {typeof document !== "undefined" && renderedTopbar.length ? createPortal(renderedTopbar, document.querySelector(".topbar-actions")!) : null}
+      <AppModal
+        open={open}
+        title="Plugins"
+        confirmLabel="Done"
+        onConfirm={onClose}
+        onCancel={onClose}
+        focusActions={false}
+      >
+        <div className="plugin-manager">
+          <div className="plugin-manager-heading">
+            <div>
+              <strong>Installed add-ons</strong>
+              <span>
+                Plugins are disabled by default and only receive permissions declared in their manifest.
+              </span>
+            </div>
+            <div className="plugin-manager-toolbar">
+              <button type="button" onClick={() => void install()} disabled={loading}>
+                Install from folder
+              </button>
+              <button type="button" onClick={() => void refresh()} disabled={loading}>
+                {loading ? "Refreshing…" : "Refresh"}
+              </button>
+            </div>
+          </div>
+          <div className="plugin-security-note">
+            <strong>Plugin API v1 security model</strong>
+            <span>
+              RemoteHand validates manifests, permissions, and contributions. Executable plugins run out of
+              process through the Plugin Runtime v1 host.
+            </span>
+          </div>
+          {error ? <div className="plugin-error">{error}</div> : null}
+          {!loading && plugins.length === 0 ? (
+            <div className="plugin-empty">
+              <strong>No plugins installed</strong>
+              <span>
+                Choose Install from folder to validate and copy an add-on into RemoteHand&apos;s portable
+                plugins directory.
+              </span>
+            </div>
+          ) : null}
+          <div className="plugin-list">
+            {plugins.map((plugin) => (
+              <article className="plugin-card" key={plugin.manifest.id}>
+                <div className="plugin-card-main">
+                  <div className="plugin-title-row">
+                    <strong>{plugin.manifest.name}</strong>
+                    <span className={plugin.enabled ? "plugin-status enabled" : "plugin-status"}>
+                      {plugin.enabled ? "Enabled" : "Disabled"}
+                    </span>
+                  </div>
+                  <span className="plugin-meta">
+                    v{plugin.manifest.version} · {plugin.manifest.author} · API {plugin.manifest.apiVersion}
+                  </span>
+                  {plugin.manifest.description ? <p>{plugin.manifest.description}</p> : null}
+                  <div className="plugin-capabilities">
+                    {plugin.manifest.permissions.length ? (
+                      plugin.manifest.permissions.map((permission) => (
+                        <span key={permission}>{permission}</span>
+                      ))
+                    ) : (
+                      <span>no sensitive permissions</span>
+                    )}
+                  </div>
+                </div>
+                <div className="plugin-actions">
+                  <button
+                    type="button"
+                    disabled={busyId === plugin.manifest.id}
+                    onClick={() => void setEnabled(plugin, !plugin.enabled)}
+                  >
+                    {plugin.enabled ? "Disable" : "Enable"}
+                  </button>
+                  <button
+                    type="button"
+                    className="danger"
+                    disabled={plugin.enabled || busyId === plugin.manifest.id}
+                    onClick={() => requestRemove(plugin)}
+                    title={plugin.enabled ? "Disable this plugin before removing it" : "Remove plugin"}
+                  >
+                    Remove
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </AppModal>
+
+      <AppModal
+        open={removeTarget !== null}
+        title="Remove plugin?"
+        confirmLabel="Remove"
+        cancelLabel="Cancel"
+        danger
+        onConfirm={() => void confirmRemove()}
+        onCancel={() => setRemoveTarget(null)}
+      >
+        <p>
+          Remove <strong>{removeTarget?.manifest.name}</strong>? This deletes its plugin directory.
+          Plugin-owned data is not removed automatically.
+        </p>
+      </AppModal>
+    </>
+  );
 }
