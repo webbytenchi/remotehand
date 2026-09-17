@@ -142,7 +142,8 @@ export function PluginManager({
   const primeAudio = useCallback(() => {
     try {
       type AudioContextCtor = new () => AudioContext;
-      const ctor = (window as Window & { webkitAudioContext?: AudioContextCtor }).AudioContext ?? (window as Window & { webkitAudioContext?: AudioContextCtor }).webkitAudioContext;
+      const win = window as Window & { AudioContext?: AudioContextCtor; webkitAudioContext?: AudioContextCtor };
+      const ctor = win.AudioContext ?? win.webkitAudioContext;
       if (!audioContextRef.current && ctor) audioContextRef.current = new ctor();
       if (audioContextRef.current?.state === "suspended") void audioContextRef.current.resume();
     } catch {
@@ -400,23 +401,26 @@ export function PluginManager({
                     <span className={plugin.enabled ? "plugin-status enabled" : "plugin-status"}>{plugin.enabled ? "Enabled" : "Disabled"}</span>
                   </div>
                   <span className="plugin-meta">v{plugin.manifest.version} · {plugin.manifest.author} · API {plugin.manifest.apiVersion}</span>
-                  {plugin.manifest.description ? <p>{plugin.manifest.description}</p> : null}
-                  <div className="plugin-capabilities">
-                    {plugin.manifest.permissions.length ? plugin.manifest.permissions.map((permission) => <span key={permission}>{permission}</span>) : <span>no sensitive permissions</span>}
-                  </div>
+                  <p>{plugin.manifest.description}</p>
+                  <div className="plugin-permissions"><strong>Permissions</strong>{plugin.manifest.permissions.length ? plugin.manifest.permissions.map((permission) => <span key={permission}>{permission}</span>) : <span>None</span>}</div>
                 </div>
-                <div className="plugin-actions">
-                  <button type="button" disabled={busyId === plugin.manifest.id} onClick={() => void setEnabled(plugin, !plugin.enabled)}>{plugin.enabled ? "Disable" : "Enable"}</button>
-                  <button type="button" className="danger" disabled={plugin.enabled || busyId === plugin.manifest.id} onClick={() => requestRemove(plugin)} title={plugin.enabled ? "Disable this plugin before removing it" : "Remove plugin"}>Remove</button>
+                <div className="plugin-card-actions">
+                  <button type="button" onClick={() => void setEnabled(plugin, !plugin.enabled)} disabled={busyId === plugin.manifest.id}>{plugin.enabled ? "Disable" : "Enable"}</button>
+                  <button type="button" onClick={() => requestRemove(plugin)} disabled={busyId === plugin.manifest.id || plugin.enabled}>Remove</button>
                 </div>
               </article>
             ))}
           </div>
         </div>
       </AppModal>
-
-      <AppModal open={removeTarget !== null} title="Remove plugin?" confirmLabel="Remove" cancelLabel="Cancel" danger onConfirm={() => void confirmRemove()} onCancel={() => setRemoveTarget(null)}>
-        <p>Remove <strong>{removeTarget?.manifest.name}</strong>? This deletes its plugin directory. Plugin-owned data is not removed automatically.</p>
+      <AppModal
+        open={removeTarget !== null}
+        title="Remove plugin?"
+        confirmLabel="Remove"
+        onConfirm={() => void confirmRemove()}
+        onCancel={() => setRemoveTarget(null)}
+      >
+        <p>This removes the selected plugin from RemoteHand&apos;s portable plugin directory.</p>
       </AppModal>
     </>
   );
