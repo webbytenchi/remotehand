@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { AppModal } from "./AppModal";
@@ -39,6 +39,15 @@ type PluginRuntimeEvent = {
 
 type TopbarPayload = {
   items?: unknown;
+};
+
+type AlertPayload = {
+  alertType?: string;
+  targetId?: string;
+  target?: string;
+  targetName?: string;
+  fallbackBeep?: boolean;
+  sound?: { dataUrl?: string; durationMs?: number } | null;
 };
 
 function parseTopbarItems(payload: unknown): TopbarItem[] {
@@ -98,6 +107,8 @@ export function PluginManager({
   const [error, setError] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<PluginInfo | null>(null);
   const [topbarItems, setTopbarItems] = useState<Record<string, TopbarItem[]>>({});
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   const refresh = useCallback(async () => {
     if (!isTauri()) {
@@ -118,6 +129,104 @@ export function PluginManager({
   useEffect(() => {
     if (open) void refresh();
   }, [open, refresh]);
+
+  const stopAlertSound = useCallback(() => {
+    const active = activeAudioRef.current;
+    if (active) {
+      active.pause();
+      active.currentTime = 0;
+      activeAudioRef.current = null;
+    }
+  }, []);
+
+  const primeAudio = useCallback(() => {
+    try {
+      const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+      if (!audioContextRef.current && AudioContextCtor) audioContextRef.current = new AudioContextCtor();
+      if (audioContextRef.current?.state === "suspended") void audioContextRef.current.resume();
+    } catch {
+      // Audio is best-effort; monitoring must continue even when audio is unavailable.
+    }
+  }, []);
+
+  const playBeep = useCallback(async () => {
+    primeAudio();
+    const context = audioContextRef.current;
+    if (!context) return;
+    try {
+      if (context.state === "suspended") await context.resume();
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.value = 880;
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.95);
+      oscillator.connect(gain).connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 1.0);
+    } catch {
+      // Do not allow audio failures to affect the plugin manager.
+    }
+  }, [primeAudio]);
+
+  const playAlertSound = useCallback(async (payload: AlertPayload) => {
+    stopAlertSound();
+    const durationMs = Math.min(Math.max(Number(payload.sound?.durationMs) || 1000, 250), 10_000);
+    const dataUrl = typeof payload.sound?.dataUrl === "string" ? payload.sound.dataUrl : "";
+    if (!dataUrl) {
+      await playBeep();
+      return;
+    }
+    try {
+      const audio = new Audio(dataUrl);
+      audio.preload = "auto";
+      activeAudioRef.current = audio;
+      audio.onended = () => {
+        if (activeAudioRef.current === audio) activeAudioRef.current = null;
+      };
+      await audio.play();
+      window.setTimeout(() => {
+        if (activeAudioRef.current !== audio) return;
+        audio.pause();
+        audio.currentTime = 0;
+        activeAudioRef.current = null;
+      }, durationMs);
+    } catch {
+      stopAlertSound();
+      await playBeep();
+    }
+  }, [playBeep, stopAlertSound]);
+
+  useEffect(() => {
+    const onPointerDown = () => primeAudio();
+    window.addEventListener("pointerdown", onPointerDown, { passive: true });
+    return () => window.removeEventListener("pointerdown", onPointerDown);
+  }, [primeAudio]);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+    void listen<PluginRuntimeEvent>("remotehand-plugin-event", (event) => {
+      if (event.payload.event === "topbar.update") {
+        const items = parseTopbarItems(event.payload.payload);
+        setTopbarItems((current) => ({ ...current, [event.payload.pluginId]: items }));
+        return;
+      }
+      if (event.payload.event === "monitor.alert") {
+        const payload = event.payload.payload as AlertPayload;
+        void playAlertSound(payload);
+      }
+    }).then((dispose) => {
+      if (cancelled) dispose();
+      else unlisten = dispose;
+    });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [playAlertSound]);
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -170,6 +279,7 @@ export function PluginManager({
     try {
       await invoke("plugin_set_enabled", { id: plugin.manifest.id, enabled });
       if (!enabled) {
+        stopAlertSound();
         setTopbarItems((current) => {
           const next = { ...current };
           delete next[plugin.manifest.id];
