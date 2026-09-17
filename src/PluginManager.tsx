@@ -163,7 +163,7 @@ export function PluginManager({
       oscillator.frequency.value = 880;
       gain.gain.setValueAtTime(0.0001, context.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.95);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.99);
       oscillator.connect(gain).connect(context.destination);
       oscillator.start();
       oscillator.stop(context.currentTime + 1.0);
@@ -367,6 +367,23 @@ export function PluginManager({
     }),
   );
 
+  const managerButtonStyle: React.CSSProperties = {
+    border: "1px solid var(--accent-border, #39465a)",
+    background: "var(--accent-surface, #16263a)",
+    color: "var(--accent, #70a7e8)",
+    borderRadius: 7,
+    padding: "8px 12px",
+    cursor: "pointer",
+    font: "inherit",
+  };
+
+  const managerRemoveStyle: React.CSSProperties = {
+    ...managerButtonStyle,
+    borderColor: "var(--danger-border, #5a3035)",
+    background: "var(--danger-surface, #241316)",
+    color: "var(--danger-text, #efaaaa)",
+  };
+
   return (
     <>
       {typeof document !== "undefined" && document.querySelector(".topbar-actions") && renderedTopbar.length
@@ -393,23 +410,40 @@ export function PluginManager({
             <div className="plugin-empty"><strong>No plugins installed</strong><span>Choose Install from folder to validate and copy an add-on into RemoteHand&apos;s portable plugins directory.</span></div>
           ) : null}
           <div className="plugin-list">
-            {plugins.map((plugin) => (
-              <article className="plugin-card" key={plugin.manifest.id}>
-                <div className="plugin-card-main">
-                  <div className="plugin-title-row">
-                    <strong>{plugin.manifest.name}</strong>
-                    <span className={plugin.enabled ? "plugin-status enabled" : "plugin-status"}>{plugin.enabled ? "Enabled" : "Disabled"}</span>
+            {plugins.map((plugin) => {
+              const busy = busyId === plugin.manifest.id;
+              return (
+                <article className="plugin-card" key={plugin.manifest.id}>
+                  <div className="plugin-card-main">
+                    <div className="plugin-title-row">
+                      <strong>{plugin.manifest.name}</strong>
+                      <span className={plugin.enabled ? "plugin-status enabled" : "plugin-status"}>{plugin.enabled ? "Enabled" : "Disabled"}</span>
+                    </div>
+                    <span className="plugin-meta">v{plugin.manifest.version} · {plugin.manifest.author} · API {plugin.manifest.apiVersion}</span>
+                    <p>{plugin.manifest.description}</p>
+                    <div className="plugin-permissions"><strong>Permissions</strong>{plugin.manifest.permissions.length ? plugin.manifest.permissions.map((permission) => <span key={permission}>{permission}</span>) : <span>None</span>}</div>
                   </div>
-                  <span className="plugin-meta">v{plugin.manifest.version} · {plugin.manifest.author} · API {plugin.manifest.apiVersion}</span>
-                  <p>{plugin.manifest.description}</p>
-                  <div className="plugin-permissions"><strong>Permissions</strong>{plugin.manifest.permissions.length ? plugin.manifest.permissions.map((permission) => <span key={permission}>{permission}</span>) : <span>None</span>}</div>
-                </div>
-                <div className="plugin-card-actions">
-                  <button type="button" onClick={() => void setEnabled(plugin, !plugin.enabled)} disabled={busyId === plugin.manifest.id}>{plugin.enabled ? "Disable" : "Enable"}</button>
-                  <button type="button" onClick={() => requestRemove(plugin)} disabled={busyId === plugin.manifest.id || plugin.enabled}>Remove</button>
-                </div>
-              </article>
-            ))}
+                  <div className="plugin-card-actions">
+                    <button
+                      type="button"
+                      onClick={() => void setEnabled(plugin, !plugin.enabled)}
+                      disabled={busy}
+                      style={{ ...managerButtonStyle, opacity: busy ? 0.45 : 1, cursor: busy ? "default" : "pointer" }}
+                    >
+                      {plugin.enabled ? "Disable" : "Enable"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => requestRemove(plugin)}
+                      disabled={busy || plugin.enabled}
+                      style={{ ...managerRemoveStyle, opacity: busy || plugin.enabled ? 0.45 : 1, cursor: busy || plugin.enabled ? "default" : "pointer" }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </div>
       </AppModal>
