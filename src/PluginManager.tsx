@@ -24,6 +24,7 @@ type TopbarItem = {
   id: string;
   title: string;
   target?: string;
+  targetId?: string;
   currentLatencyMs?: number | null;
   history?: Array<{ latencyMs?: number | null; state?: string }>;
   state?: string;
@@ -64,6 +65,7 @@ function parseTopbarItems(payload: unknown): TopbarItem[] {
       id: value.id,
       title: value.title,
       target: typeof value.target === "string" ? value.target : undefined,
+      targetId: typeof value.targetId === "string" ? value.targetId : undefined,
       currentLatencyMs: typeof value.currentLatencyMs === "number" ? value.currentLatencyMs : null,
       history,
       state: typeof value.state === "string" ? value.state : undefined,
@@ -147,8 +149,8 @@ export function PluginManager({
 
   useEffect(() => {
     const hostMonitor = plugins.find((plugin) => plugin.manifest.id === "remotehand.host-monitor");
+    setHostMonitorSidebarHidden(Boolean(hostMonitor?.enabled));
     if (!hostMonitor?.enabled) {
-      setHostMonitorSidebarHidden(false);
       setTopbarItems((current) => {
         if (!("remotehand.host-monitor" in current)) return current;
         const next = { ...current };
@@ -199,7 +201,6 @@ export function PluginManager({
           delete next[plugin.manifest.id];
           return next;
         });
-        if (plugin.manifest.id === "remotehand.host-monitor") setHostMonitorSidebarHidden(false);
       }
       await refresh();
       onChanged?.();
@@ -231,7 +232,7 @@ export function PluginManager({
         delete next[plugin.manifest.id];
         return next;
       });
-      if (plugin.manifest.id === "remotehand.host-monitor") setHostMonitorSidebarHidden(false);
+      setHostMonitorSidebarHidden(false);
       await refresh();
       onChanged?.();
     } catch (cause) {
@@ -242,9 +243,35 @@ export function PluginManager({
   };
 
   const openTopbarItem = (_pluginId: string, item: TopbarItem) => {
+    const focusAndSelect = () => {
+      const tabs = Array.from(document.querySelectorAll<HTMLElement>(".dv-tab"));
+      const tab = tabs.find((candidate) => candidate.textContent?.trim() === "Host Monitor");
+      if (tab) tab.click();
+      const frames = Array.from(document.querySelectorAll<HTMLIFrameElement>(".plugin-panel-frame"));
+      const frame = frames.find((candidate) => candidate.title === "Host Monitor");
+      if (frame?.contentWindow) {
+        frame.contentWindow.postMessage({
+          type: "remotehand.plugin.context",
+          context: {
+            targetId: item.targetId,
+            target: item.target,
+          },
+        }, "*");
+      }
+    };
+
+    const hasPanel = document.querySelector(".plugin-panel-frame[title=\"Host Monitor\"]") !== null;
+    if (hasPanel) {
+      focusAndSelect();
+      return;
+    }
+
     const sidebarButton = Array.from(document.querySelectorAll<HTMLButtonElement>(".sidebar .sidebar-action"))
-      .find((button) => button.title === item.title);
-    if (sidebarButton) sidebarButton.click();
+      .find((button) => button.title === "Host Monitor");
+    if (sidebarButton) {
+      sidebarButton.click();
+      window.setTimeout(focusAndSelect, 80);
+    }
   };
 
   const renderedTopbar = Object.entries(topbarItems).flatMap(([pluginId, items]) =>
