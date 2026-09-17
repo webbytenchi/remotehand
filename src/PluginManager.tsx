@@ -123,6 +123,13 @@ export function PluginManager({
       if (event.payload.event !== "topbar.update") return;
       const items = parseTopbarItems(event.payload.payload);
       setTopbarItems((current) => ({ ...current, [event.payload.pluginId]: items }));
+      if (event.payload.pluginId === "remotehand.host-monitor") {
+        window.setTimeout(() => {
+          document.querySelectorAll<HTMLButtonElement>(".sidebar .sidebar-action").forEach((button) => {
+            if (button.title === "Host Monitor") button.dataset.pluginTopbarHidden = "true";
+          });
+        }, 0);
+      }
     }).then((dispose) => {
       if (cancelled) dispose();
       else unlisten = dispose;
@@ -214,12 +221,10 @@ export function PluginManager({
     }
   };
 
-  const openTopbarItem = (pluginId: string, item: TopbarItem) => {
+  const openTopbarItem = (_pluginId: string, item: TopbarItem) => {
     const sidebarButton = Array.from(document.querySelectorAll<HTMLButtonElement>(".sidebar .sidebar-action"))
       .find((button) => button.title === item.title);
-    if (sidebarButton) {
-      sidebarButton.click();
-    }
+    if (sidebarButton) sidebarButton.click();
   };
 
   const renderedTopbar = Object.entries(topbarItems).flatMap(([pluginId, items]) =>
@@ -227,22 +232,44 @@ export function PluginManager({
       const visible = item.history?.slice(-30) ?? [];
       const values = visible.map((entry) => Number(entry.latencyMs) || 0);
       const max = Math.max(1, ...values);
+      const severity = topbarSeverity(item.state);
+      const border = severity === "offline" ? "#7d3b3b" : severity === "high-latency" ? "#80622e" : severity === "normal" ? "#355f47" : "#39465a";
+      const background = severity === "offline" ? "#29171a" : severity === "high-latency" ? "#2a2417" : "#111a17";
       return (
         <button
           key={`${pluginId}:${item.id}`}
-          className={`plugin-topbar-widget plugin-topbar-widget-${topbarSeverity(item.state)}`}
           type="button"
           title={item.target ? `${item.title} · ${item.target}` : item.title}
           aria-label={item.target ? `${item.title} ${item.target}` : item.title}
           onClick={() => openTopbarItem(pluginId, item)}
+          style={{
+            order: -1,
+            position: "relative",
+            width: 112,
+            height: 44,
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "stretch",
+            justifyContent: "center",
+            gap: 1,
+            padding: "3px 7px",
+            marginLeft: 6,
+            border: `1px solid ${border}`,
+            borderRadius: 7,
+            background,
+            color: "#dce4ee",
+            cursor: "pointer",
+            textAlign: "center",
+          }}
         >
-          <span className="plugin-topbar-widget-value">
+          <span style={{ position: "relative", zIndex: 2, fontSize: 14, fontWeight: 700, lineHeight: 1.05 }}>
             {typeof item.currentLatencyMs === "number" ? `${item.currentLatencyMs.toFixed(item.currentLatencyMs < 10 ? 1 : 0)} ms` : "—"}
           </span>
-          <span className="plugin-topbar-widget-graph" aria-hidden="true">
+          <span aria-hidden="true" style={{ position: "absolute", left: 4, right: 4, bottom: 4, height: 22, display: "flex", alignItems: "flex-end", gap: 1, opacity: 0.72 }}>
             {visible.map((entry, index) => {
-              const height = entry.latencyMs == null ? 8 : Math.max(8, Math.round(((Number(entry.latencyMs) || 0) / max) * 26));
-              return <span key={`${item.id}:${index}`} style={{ height }} />;
+              const height = entry.latencyMs == null ? 8 : Math.max(4, Math.round(((Number(entry.latencyMs) || 0) / max) * 20));
+              return <span key={`${item.id}:${index}`} style={{ flex: 1, minWidth: 1, height, borderRadius: 1, background: "currentColor" }} />;
             })}
           </span>
         </button>
@@ -252,7 +279,9 @@ export function PluginManager({
 
   return (
     <>
-      {typeof document !== "undefined" && renderedTopbar.length ? createPortal(renderedTopbar, document.querySelector(".topbar-actions")!) : null}
+      {typeof document !== "undefined" && document.querySelector(".topbar-actions") && renderedTopbar.length
+        ? createPortal(renderedTopbar, document.querySelector(".topbar-actions")!)
+        : null}
       <AppModal
         open={open}
         title="Plugins"
