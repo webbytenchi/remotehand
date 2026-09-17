@@ -81,22 +81,16 @@ function topbarSeverity(state?: string) {
   return "ready";
 }
 
-function setHostMonitorSidebarHidden(hidden: boolean) {
-  document.querySelectorAll<HTMLButtonElement>(".sidebar .sidebar-action").forEach((button) => {
-    if (button.title !== "Host Monitor") return;
-    button.dataset.pluginTopbarHidden = hidden ? "true" : "false";
-    button.style.display = hidden ? "none" : "";
-  });
-}
-
 export function PluginManager({
   open,
   onClose,
   onChanged,
+  onOpenPluginPanel,
 }: {
   open: boolean;
   onClose: () => void;
   onChanged?: () => void;
+  onOpenPluginPanel?: (pluginId: string, panelId: string, context?: { targetId?: string; target?: string }) => void;
 }) {
   const [plugins, setPlugins] = useState<PluginInfo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -133,9 +127,6 @@ export function PluginManager({
       if (event.payload.event !== "topbar.update") return;
       const items = parseTopbarItems(event.payload.payload);
       setTopbarItems((current) => ({ ...current, [event.payload.pluginId]: items }));
-      if (event.payload.pluginId === "remotehand.host-monitor") {
-        window.setTimeout(() => setHostMonitorSidebarHidden(true), 0);
-      }
     }).then((dispose) => {
       if (cancelled) dispose();
       else unlisten = dispose;
@@ -143,22 +134,8 @@ export function PluginManager({
     return () => {
       cancelled = true;
       unlisten?.();
-      setHostMonitorSidebarHidden(false);
     };
   }, []);
-
-  useEffect(() => {
-    const hostMonitor = plugins.find((plugin) => plugin.manifest.id === "remotehand.host-monitor");
-    setHostMonitorSidebarHidden(Boolean(hostMonitor?.enabled));
-    if (!hostMonitor?.enabled) {
-      setTopbarItems((current) => {
-        if (!("remotehand.host-monitor" in current)) return current;
-        const next = { ...current };
-        delete next["remotehand.host-monitor"];
-        return next;
-      });
-    }
-  }, [plugins]);
 
   useEffect(() => {
     const activePluginIds = new Set(plugins.filter((plugin) => plugin.enabled).map((plugin) => plugin.manifest.id));
@@ -191,10 +168,7 @@ export function PluginManager({
     setBusyId(plugin.manifest.id);
     setError(null);
     try {
-      await invoke("plugin_set_enabled", {
-        id: plugin.manifest.id,
-        enabled,
-      });
+      await invoke("plugin_set_enabled", { id: plugin.manifest.id, enabled });
       if (!enabled) {
         setTopbarItems((current) => {
           const next = { ...current };
@@ -232,7 +206,6 @@ export function PluginManager({
         delete next[plugin.manifest.id];
         return next;
       });
-      setHostMonitorSidebarHidden(false);
       await refresh();
       onChanged?.();
     } catch (cause) {
@@ -242,36 +215,12 @@ export function PluginManager({
     }
   };
 
-  const openTopbarItem = (_pluginId: string, item: TopbarItem) => {
-    const focusAndSelect = () => {
-      const tabs = Array.from(document.querySelectorAll<HTMLElement>(".dv-tab"));
-      const tab = tabs.find((candidate) => candidate.textContent?.trim() === "Host Monitor");
-      if (tab) tab.click();
-      const frames = Array.from(document.querySelectorAll<HTMLIFrameElement>(".plugin-panel-frame"));
-      const frame = frames.find((candidate) => candidate.title === "Host Monitor");
-      if (frame?.contentWindow) {
-        frame.contentWindow.postMessage({
-          type: "remotehand.plugin.context",
-          context: {
-            targetId: item.targetId,
-            target: item.target,
-          },
-        }, "*");
-      }
-    };
-
-    const hasPanel = document.querySelector(".plugin-panel-frame[title=\"Host Monitor\"]") !== null;
-    if (hasPanel) {
-      focusAndSelect();
-      return;
-    }
-
-    const sidebarButton = Array.from(document.querySelectorAll<HTMLButtonElement>(".sidebar .sidebar-action"))
-      .find((button) => button.title === "Host Monitor");
-    if (sidebarButton) {
-      sidebarButton.click();
-      window.setTimeout(focusAndSelect, 80);
-    }
+  const openTopbarItem = (pluginId: string, item: TopbarItem) => {
+    if (!onOpenPluginPanel) return;
+    onOpenPluginPanel(pluginId, item.panel || "host-monitor", {
+      targetId: item.targetId,
+      target: item.target,
+    });
   };
 
   const renderedTopbar = Object.entries(topbarItems).flatMap(([pluginId, items]) =>
@@ -292,6 +241,9 @@ export function PluginManager({
           style={{
             order: -1,
             position: "relative",
+            zIndex: 10,
+            pointerEvents: "auto",
+            flexShrink: 0,
             width: 112,
             height: 44,
             overflow: "hidden",
@@ -329,47 +281,25 @@ export function PluginManager({
       {typeof document !== "undefined" && document.querySelector(".topbar-actions") && renderedTopbar.length
         ? createPortal(renderedTopbar, document.querySelector(".topbar-actions")!)
         : null}
-      <AppModal
-        open={open}
-        title="Plugins"
-        confirmLabel="Done"
-        onConfirm={onClose}
-        onCancel={onClose}
-        focusActions={false}
-      >
+      <AppModal open={open} title="Plugins" confirmLabel="Done" onConfirm={onClose} onCancel={onClose} focusActions={false}>
         <div className="plugin-manager">
           <div className="plugin-manager-heading">
             <div>
               <strong>Installed add-ons</strong>
-              <span>
-                Plugins are disabled by default and only receive permissions declared in their manifest.
-              </span>
+              <span>Plugins are disabled by default and only receive permissions declared in their manifest.</span>
             </div>
             <div className="plugin-manager-toolbar">
-              <button type="button" onClick={() => void install()} disabled={loading}>
-                Install from folder
-              </button>
-              <button type="button" onClick={() => void refresh()} disabled={loading}>
-                {loading ? "Refreshing…" : "Refresh"}
-              </button>
+              <button type="button" onClick={() => void install()} disabled={loading}>Install from folder</button>
+              <button type="button" onClick={() => void refresh()} disabled={loading}>{loading ? "Refreshing…" : "Refresh"}</button>
             </div>
           </div>
           <div className="plugin-security-note">
             <strong>Plugin API v1 security model</strong>
-            <span>
-              RemoteHand validates manifests, permissions, and contributions. Executable plugins run out of
-              process through the Plugin Runtime v1 host.
-            </span>
+            <span>RemoteHand validates manifests, permissions, and contributions. Executable plugins run out of process through the Plugin Runtime v1 host.</span>
           </div>
           {error ? <div className="plugin-error">{error}</div> : null}
           {!loading && plugins.length === 0 ? (
-            <div className="plugin-empty">
-              <strong>No plugins installed</strong>
-              <span>
-                Choose Install from folder to validate and copy an add-on into RemoteHand&apos;s portable
-                plugins directory.
-              </span>
-            </div>
+            <div className="plugin-empty"><strong>No plugins installed</strong><span>Choose Install from folder to validate and copy an add-on into RemoteHand&apos;s portable plugins directory.</span></div>
           ) : null}
           <div className="plugin-list">
             {plugins.map((plugin) => (
@@ -377,41 +307,17 @@ export function PluginManager({
                 <div className="plugin-card-main">
                   <div className="plugin-title-row">
                     <strong>{plugin.manifest.name}</strong>
-                    <span className={plugin.enabled ? "plugin-status enabled" : "plugin-status"}>
-                      {plugin.enabled ? "Enabled" : "Disabled"}
-                    </span>
+                    <span className={plugin.enabled ? "plugin-status enabled" : "plugin-status"}>{plugin.enabled ? "Enabled" : "Disabled"}</span>
                   </div>
-                  <span className="plugin-meta">
-                    v{plugin.manifest.version} · {plugin.manifest.author} · API {plugin.manifest.apiVersion}
-                  </span>
+                  <span className="plugin-meta">v{plugin.manifest.version} · {plugin.manifest.author} · API {plugin.manifest.apiVersion}</span>
                   {plugin.manifest.description ? <p>{plugin.manifest.description}</p> : null}
                   <div className="plugin-capabilities">
-                    {plugin.manifest.permissions.length ? (
-                      plugin.manifest.permissions.map((permission) => (
-                        <span key={permission}>{permission}</span>
-                      ))
-                    ) : (
-                      <span>no sensitive permissions</span>
-                    )}
+                    {plugin.manifest.permissions.length ? plugin.manifest.permissions.map((permission) => <span key={permission}>{permission}</span>) : <span>no sensitive permissions</span>}
                   </div>
                 </div>
                 <div className="plugin-actions">
-                  <button
-                    type="button"
-                    disabled={busyId === plugin.manifest.id}
-                    onClick={() => void setEnabled(plugin, !plugin.enabled)}
-                  >
-                    {plugin.enabled ? "Disable" : "Enable"}
-                  </button>
-                  <button
-                    type="button"
-                    className="danger"
-                    disabled={plugin.enabled || busyId === plugin.manifest.id}
-                    onClick={() => requestRemove(plugin)}
-                    title={plugin.enabled ? "Disable this plugin before removing it" : "Remove plugin"}
-                  >
-                    Remove
-                  </button>
+                  <button type="button" disabled={busyId === plugin.manifest.id} onClick={() => void setEnabled(plugin, !plugin.enabled)}>{plugin.enabled ? "Disable" : "Enable"}</button>
+                  <button type="button" className="danger" disabled={plugin.enabled || busyId === plugin.manifest.id} onClick={() => requestRemove(plugin)} title={plugin.enabled ? "Disable this plugin before removing it" : "Remove plugin"}>Remove</button>
                 </div>
               </article>
             ))}
@@ -419,19 +325,8 @@ export function PluginManager({
         </div>
       </AppModal>
 
-      <AppModal
-        open={removeTarget !== null}
-        title="Remove plugin?"
-        confirmLabel="Remove"
-        cancelLabel="Cancel"
-        danger
-        onConfirm={() => void confirmRemove()}
-        onCancel={() => setRemoveTarget(null)}
-      >
-        <p>
-          Remove <strong>{removeTarget?.manifest.name}</strong>? This deletes its plugin directory.
-          Plugin-owned data is not removed automatically.
-        </p>
+      <AppModal open={removeTarget !== null} title="Remove plugin?" confirmLabel="Remove" cancelLabel="Cancel" danger onConfirm={() => void confirmRemove()} onCancel={() => setRemoveTarget(null)}>
+        <p>Remove <strong>{removeTarget?.manifest.name}</strong>? This deletes its plugin directory. Plugin-owned data is not removed automatically.</p>
       </AppModal>
     </>
   );
