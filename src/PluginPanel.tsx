@@ -190,5 +190,5 @@ return () => { cancelled = true; unlisten?.(); };
 const content = useMemo(() => html ?? "", [html]);
 if (error) return <section className="plugin-panel-host plugin-panel-error"><strong>Plugin panel unavailable</strong><span>{error}</span></section>;
 if (!html) return <div className="plugin-panel-host plugin-panel-loading">Loading plugin panel…</div>;
-return <iframe ref={iframeRef} className="plugin-panel-frame" title={params?.title || pluginId} sandbox="allow-scripts" srcDoc={content} />;
+return <iframe ref={iframeRef} className="plugin-panel-frame" title={params?.title || pluginId} sandbox="allow-scripts" allow="autoplay" srcDoc={content} />;
 }
