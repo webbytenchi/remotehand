@@ -135,6 +135,34 @@ The vault uses `age` passphrase encryption. While unlocked, the backend holds th
 
 SFTP can resolve passwords through a credential reference. SSH terminal sessions currently do not consume the portable vault.
 
+## Plugin Architecture
+
+RemoteHand runs plugins as out-of-process native executables. Core owns infrastructure; plugins own functionality.
+
+Each enabled plugin launches as a child process. IPC runs over stdin and stdout as length-prefixed JSON frames (4-byte little-endian length prefix, 16 MiB maximum per frame). The runtime handshake completes within 5 seconds or the plugin is terminated.
+
+### Contributions
+
+Plugins contribute to core through two paths.
+
+**Static** contributions are declared in the manifest:
+
+- Sidebar buttons - open a plugin panel from the workspace sidebar.
+- Dock panels - plugin-provided HTML hosted in a sandboxed iframe.
+- Commands - named actions invokable from RemoteHand UI.
+
+**Dynamic** contributions are published at runtime over events. A running plugin emits topbar.update events carrying an items array, one entry per top-bar widget. Each widget is a 112x44 button by default (clamped to 72-180 wide and 36-64 tall) rendered from generic content primitives: stack, text, metric, sparkline, status, and progress.
+
+Panel HTML is hosted in a sandboxed iframe with no same-origin access and no direct network. All panel-to-host communication is mediated by an injected bridge script.
+
+### Permissions
+
+Plugins declare capabilities in their manifest: network.connect, clipboard.read, clipboard.write, credentials.use, credentials.store, vault.unlock, and storage.plugin. These are declarations of intent, not OS-level sandboxing - plugins run with the host process permissions.
+
+The host gates host-mediated services (vault access, plugin storage) on these declarations and reports granted permissions back to the plugin at handshake.
+
+See PLUGINS.md for the full plugin developer guide.
+
 ## Portable Persistence
 
 The executable directory is the root of the portable data model:
