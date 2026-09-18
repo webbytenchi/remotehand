@@ -490,7 +490,7 @@ impl PluginRuntimeState {
             .current_dir(&plugin_root)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
+            .stderr(Stdio::null())
             .env("REMOTEHAND_PLUGIN_ID", &plugin.manifest.id)
             .env(
                 "REMOTEHAND_PLUGIN_API_VERSION",
