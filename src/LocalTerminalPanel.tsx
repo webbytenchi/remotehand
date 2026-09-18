@@ -86,6 +86,10 @@ async function writeTerminal(sessionId: string, data: string) {
 await invoke("terminal_write", { sessionId, data });
 }
 
+function normalizePaste(text: string): string {
+ return text.replace(/\r\n|\r|\n/g, "\r");
+}
+
 export function LocalTerminalPanel({
 api,
 params,
@@ -318,7 +322,7 @@ setPendingPaste(text);
 return;
 }
 
-await writeTerminal(sessionId, text);
+await writeTerminal(sessionId, normalizePaste(text));
 terminalRef.current?.focus();
 })
 .catch(() => undefined);
@@ -362,7 +366,7 @@ setPendingPaste(text);
 return;
 }
 
-await writeTerminal(sessionId, text);
+await writeTerminal(sessionId, normalizePaste(text));
 terminalRef.current?.focus();
 };
 const search = () => {
@@ -460,7 +464,7 @@ onConfirm={() => {
 const text = pendingPaste;
 setPendingPaste(null);
 if (!text) return;
-void writeTerminal(sessionId, text).finally(() => terminalRef.current?.focus());
+void writeTerminal(sessionId, normalizePaste(text)).finally(() => terminalRef.current?.focus());
 }}
 onCancel={() => {
 setPendingPaste(null);
