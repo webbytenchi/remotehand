@@ -148,6 +148,16 @@ V1 settings include:
 
 Settings are stored portably under `data/config/settings.json`.
 
+## Plugins
+
+RemoteHand supports out-of-process executable plugins that extend the app without modifying core. Plugins can contribute panels, sidebar buttons, commands, and live top-bar widgets.
+
+The plugin system is built on a simple rule: core owns infrastructure, plugins own functionality. RemoteHand core provides lifecycle, permissions, storage, IPC, and generic UI surfaces. Plugins provide protocol-specific behavior - for example, VNC, RDP, or host monitoring - that core does not need to know about.
+
+Plugin API v1 is documented in docs/PLUGINS.md. It covers package layout, the manifest, the IPC protocol, host services, panel hosting, and top-bar contributions.
+
+Plugins are disabled by default after install. Only install plugins you trust - a plugin is a native executable with the host process privileges. See SECURITY.md for the plugin threat model.
+
 ## Development
 
 Prerequisites:
@@ -185,7 +195,7 @@ RemoteHand is configured as portable-only. Tauri bundling/installers are disable
 
 ## V1 Status
 
-**Status: V1 feature baseline complete.**
+**Status: V1 feature baseline complete. Plugin Runtime v1 is now shipping.**
 
 The current V1 has been exercised on the Windows Tauri build for the primary workspace, terminal, connection, Home, persistence, credential-vault, and SFTP workflows. Remaining work belongs to post-V1 expansion and hardening rather than the original bootstrap phase.
 
@@ -193,6 +203,7 @@ The current V1 has been exercised on the Windows Tauri build for the primary wor
 
 Planned areas include:
 
+- Plugin ecosystem expansion: additional contribution surfaces, plugin SDK, and sample plugins
 - Richer SSH-native integration and authentication UX
 - SSH port forwarding management
 - RDP
@@ -211,7 +222,7 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for the current sequencing.
 ## Documentation
 
 - [Requirements](docs/REQUIREMENTS.md)
-- [Architecture](docs/ARCHITECTURE.md)
+- [Plugins](docs/PLUGINS.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Security](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
