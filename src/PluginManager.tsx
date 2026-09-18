@@ -23,11 +23,13 @@ type PluginInfo = {
 type TopbarTone = "accent" | "success" | "warning" | "danger" | "muted";
 type TopbarSeriesPoint = { value?: number | null; tone?: TopbarTone };
 type TopbarContent = {
-  type: "text" | "metric" | "metric-sparkline" | "status" | "progress";
+  type: "text" | "metric" | "sparkline" | "metric-sparkline" | "status" | "progress" | "stack";
   label?: string;
   value?: string | number | null;
   tone?: TopbarTone;
   series?: TopbarSeriesPoint[];
+  children?: TopbarContent[];
+  fontSize?: number;
 };
 type TopbarAction = {
   type: "open-panel";
@@ -74,6 +76,36 @@ function parseTone(value: unknown): TopbarTone | undefined {
     : undefined;
 }
 
+function parseTopbarContent(input: unknown, depth = 0): TopbarContent | undefined {
+  if (!input || typeof input !== "object" || depth > 2) return undefined;
+  const value = input as Record<string, unknown>;
+  if (value.type !== "text" && value.type !== "metric" && value.type !== "sparkline" && value.type !== "metric-sparkline" && value.type !== "status" && value.type !== "progress" && value.type !== "stack") return undefined;
+  const rawSeries = Array.isArray(value.series) ? value.series : [];
+  const series = rawSeries.slice(-60).flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const record = entry as Record<string, unknown>;
+    if (record.value != null && typeof record.value !== "number") return [];
+    return [{ value: record.value as number | null | undefined, tone: parseTone(record.tone) }];
+  });
+  const children = value.type === "stack" && Array.isArray(value.children)
+    ? value.children.slice(0, 6).flatMap((child) => {
+        const parsed = parseTopbarContent(child, depth + 1);
+        return parsed ? [parsed] : [];
+      })
+    : undefined;
+  return {
+    type: value.type,
+    label: typeof value.label === "string" ? value.label.slice(0, 80) : undefined,
+    value: typeof value.value === "string" || typeof value.value === "number" ? value.value : null,
+    tone: parseTone(value.tone),
+    series,
+    children,
+    fontSize: typeof value.fontSize === "number" && Number.isFinite(value.fontSize)
+      ? Math.min(18, Math.max(8, value.fontSize))
+      : undefined,
+  };
+}
+
 function parseTopbarItems(payload: unknown): TopbarItem[] {
   if (!payload || typeof payload !== "object") return [];
   const items = (payload as TopbarPayload).items;
@@ -83,25 +115,8 @@ function parseTopbarItems(payload: unknown): TopbarItem[] {
     const value = item as Record<string, unknown>;
     if (typeof value.id !== "string" || typeof value.title !== "string") return [];
     const sizeValue = value.size && typeof value.size === "object" ? value.size as Record<string, unknown> : undefined;
-    const contentValue = value.content && typeof value.content === "object" ? value.content as Record<string, unknown> : undefined;
+    const content = parseTopbarContent(value.content);
     const actionValue = value.action && typeof value.action === "object" ? value.action as Record<string, unknown> : undefined;
-    let content: TopbarContent | undefined;
-    if (contentValue && (contentValue.type === "text" || contentValue.type === "metric" || contentValue.type === "metric-sparkline" || contentValue.type === "status" || contentValue.type === "progress")) {
-      const rawSeries = Array.isArray(contentValue.series) ? contentValue.series : [];
-      const series = rawSeries.flatMap((entry) => {
-        if (!entry || typeof entry !== "object") return [];
-        const record = entry as Record<string, unknown>;
-        if (record.value != null && typeof record.value !== "number") return [];
-        return [{ value: record.value as number | null | undefined, tone: parseTone(record.tone) }];
-      });
-      content = {
-        type: contentValue.type,
-        label: typeof contentValue.label === "string" ? contentValue.label : undefined,
-        value: typeof contentValue.value === "string" || typeof contentValue.value === "number" ? contentValue.value : null,
-        tone: parseTone(contentValue.tone),
-        series,
-      };
-    }
     const contextValue = actionValue?.context && typeof actionValue.context === "object" ? actionValue.context as Record<string, unknown> : undefined;
     const action = actionValue?.type === "open-panel"
       ? {
@@ -121,22 +136,17 @@ function parseTopbarItems(payload: unknown): TopbarItem[] {
           const record = entry as Record<string, unknown>;
           if (record.latencyMs != null && typeof record.latencyMs !== "number") return [];
           if (record.state != null && typeof record.state !== "string") return [];
-          return [{
-            latencyMs: record.latencyMs as number | null | undefined,
-            state: record.state as string | undefined,
-          }];
+          return [{ latencyMs: record.latencyMs as number | null | undefined, state: record.state as string | undefined }];
         })
       : undefined;
     return [{
       id: value.id,
       title: value.title,
       tooltip: typeof value.tooltip === "string" ? value.tooltip : undefined,
-      size: sizeValue
-        ? {
-            width: typeof sizeValue.width === "number" ? sizeValue.width : undefined,
-            height: typeof sizeValue.height === "number" ? sizeValue.height : undefined,
-          }
-        : undefined,
+      size: sizeValue ? {
+        width: typeof sizeValue.width === "number" ? sizeValue.width : undefined,
+        height: typeof sizeValue.height === "number" ? sizeValue.height : undefined,
+      } : undefined,
       content,
       action,
       target: typeof value.target === "string" ? value.target : undefined,
@@ -401,6 +411,40 @@ export function PluginManager({
     });
   };
 
+  const renderTopbarContent = (content: TopbarContent, key: string, size: { width: number; height: number }): React.ReactNode => {
+    const tone = toneVars(content.tone);
+    const fontSize = content.fontSize;
+    if (content.type === "stack") {
+      return <span style={{ position: "absolute", inset: 3, zIndex: 2, display: "flex", flexDirection: "column", justifyContent: "space-between", minWidth: 0 }}>
+        {(content.children ?? []).map((child, index) => renderTopbarContent(child, `${key}:${index}`, size))}
+      </span>;
+    }
+    if (content.type === "text") {
+      return <span key={key} style={{ position: "relative", zIndex: 2, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: fontSize ?? 11, fontWeight: 600, lineHeight: 1.05, color: tone.text }}>{content.label ?? content.value ?? ""}</span>;
+    }
+    if (content.type === "metric") {
+      return <span key={key} style={{ position: "relative", zIndex: 2, fontSize: fontSize ?? 14, fontWeight: 700, lineHeight: 1.05 }}>{content.value == null ? "—" : String(content.value)}</span>;
+    }
+    if (content.type === "status") {
+      return <span key={key} style={{ position: "relative", zIndex: 2, fontSize: fontSize ?? 12, fontWeight: 700, lineHeight: 1.1, color: tone.text }}>{content.label || content.value || ""}</span>;
+    }
+    if (content.type === "progress") {
+      return <span key={key} style={{ position: "relative", zIndex: 2, display: "grid", gap: 3 }}><span style={{ fontSize: fontSize ?? 12, fontWeight: 700 }}>{content.label || ""}</span><span style={{ display: "block", height: 7, borderRadius: 999, background: "var(--border, #39465a)", overflow: "hidden" }}><span style={{ display: "block", height: "100%", width: `${Math.max(0, Math.min(100, Number(content.value) || 0))}%`, background: tone.text }} /></span></span>;
+    }
+    const series = content.series?.slice(-60) ?? [];
+    const max = Math.max(1, ...series.map((entry) => Number(entry.value) || 0));
+    if (content.type === "sparkline") {
+      return <span key={key} aria-hidden="true" style={{ position: "relative", zIndex: 1, flex: 1, minHeight: 12, display: "flex", alignItems: "flex-end", gap: 1, opacity: 0.78 }}>
+        {series.map((entry, index) => {
+          const pointTone = toneVars(entry.tone || content.tone);
+          const height = entry.value == null ? 4 : Math.max(3, Math.round(((Number(entry.value) || 0) / max) * Math.max(8, size.height - 24)));
+          return <span key={`${key}:${index}`} style={{ flex: 1, minWidth: 1, height, borderRadius: 1, background: pointTone.text }} />;
+        })}
+      </span>;
+    }
+    return <span key={key} style={{ display: "contents" }}><span style={{ position: "relative", zIndex: 2, fontSize: fontSize ?? 14, fontWeight: 700, lineHeight: 1.05 }}>{content.value == null ? "—" : String(content.value)}</span>{series.length ? <span aria-hidden="true" style={{ position: "absolute", left: 4, right: 4, bottom: 4, height: Math.max(16, Math.min(30, size.height - 22)), display: "flex", alignItems: "flex-end", gap: 1, opacity: 0.78 }}>{series.map((entry, index) => { const pointTone = toneVars(entry.tone || content.tone); const height = entry.value == null ? 5 : Math.max(3, Math.round(((Number(entry.value) || 0) / max) * Math.max(10, size.height - 18))); return <span key={`${key}:${index}`} style={{ flex: 1, minWidth: 1, height, borderRadius: 1, background: pointTone.text }} />; })}</span> : null}</span>;
+  };
+
   const renderedTopbar = Object.entries(topbarItems).flatMap(([pluginId, items]) =>
     items.map((item) => {
       const hasGenericContent = !!item.content;
@@ -445,19 +489,7 @@ export function PluginManager({
           }}
         >
           {hasGenericContent ? (
-            <>
-              {item.content?.type === "text" ? <span style={{ position: "relative", zIndex: 2, fontSize: 13, fontWeight: 700, lineHeight: 1.1 }}>{item.content.label ?? item.title}</span> : null}
-              {item.content?.type === "status" ? <span style={{ position: "relative", zIndex: 2, fontSize: 12, fontWeight: 700, lineHeight: 1.1, color: genericTone.text }}>{item.content.label || item.content.value || item.title}</span> : null}
-              {item.content?.type === "metric" || item.content?.type === "metric-sparkline" ? <span style={{ position: "relative", zIndex: 2, fontSize: 14, fontWeight: 700, lineHeight: 1.05 }}>{item.content.value == null ? "—" : String(item.content.value)}</span> : null}
-              {item.content?.type === "progress" ? <div style={{ position: "relative", zIndex: 2, display: "grid", gap: 3 }}><span style={{ fontSize: 12, fontWeight: 700 }}>{item.content.label || item.title}</span><span style={{ display: "block", height: 7, borderRadius: 999, background: "var(--border, #39465a)", overflow: "hidden" }}><span style={{ display: "block", height: "100%", width: `${Math.max(0, Math.min(100, Number(item.content.value) || 0))}%`, background: genericTone.text }} /></span></div> : null}
-              {item.content?.type === "metric-sparkline" && series.length ? <span aria-hidden="true" style={{ position: "absolute", left: 4, right: 4, bottom: 4, height: Math.max(16, Math.min(30, size.height - 22)), display: "flex", alignItems: "flex-end", gap: 1, opacity: 0.78 }}>
-                {series.map((entry, index) => {
-                  const pointTone = toneVars(entry.tone || item.content?.tone);
-                  const height = entry.value == null ? 5 : Math.max(3, Math.round(((Number(entry.value) || 0) / seriesMax) * Math.max(10, size.height - 18)));
-                  return <span key={`${item.id}:${index}`} style={{ flex: 1, minWidth: 1, height, borderRadius: 1, background: pointTone.text }} />;
-                })}
-              </span> : null}
-            </>
+            renderTopbarContent(item.content!, `${pluginId}:${item.id}:content`, size)
           ) : (
             <>
               <span style={{ position: "relative", zIndex: 2, fontSize: 14, fontWeight: 700, lineHeight: 1.05 }}>
