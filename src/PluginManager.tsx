@@ -448,32 +448,7 @@ export function PluginManager({
             <>
               {item.content?.type === "text" ? <span style={{ position: "relative", zIndex: 2, fontSize: 13, fontWeight: 700, lineHeight: 1.1 }}>{item.content.label ?? item.title}</span> : null}
               {item.content?.type === "status" ? <span style={{ position: "relative", zIndex: 2, fontSize: 12, fontWeight: 700, lineHeight: 1.1, color: genericTone.text }}>{item.content.label || item.content.value || item.title}</span> : null}
-              {item.content?.type === "metric" ? <span style={{ position: "relative", zIndex: 2, fontSize: 14, fontWeight: 700, lineHeight: 1.05 }}>{item.content.value == null ? "—" : String(item.content.value)}</span> : null}
-              {item.content?.type === "metric-sparkline" ? (
-                <>
-                  <span
-                    style={{
-                      position: "absolute",
-                      zIndex: 3,
-                      top: 2,
-                      left: 5,
-                      right: 5,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                      fontSize: 9,
-                      fontWeight: 600,
-                      lineHeight: 1.1,
-                      color: "var(--muted-text, #a8b4c2)",
-                    }}
-                  >
-                    {item.content.label || item.title}
-                  </span>
-                  <span style={{ position: "relative", zIndex: 2, marginTop: 7, fontSize: 14, fontWeight: 700, lineHeight: 1.05 }}>
-                    {item.content.value == null ? "—" : String(item.content.value)}
-                  </span>
-                </>
-              ) : null}
+              {item.content?.type === "metric" || item.content?.type === "metric-sparkline" ? <span style={{ position: "relative", zIndex: 2, fontSize: 14, fontWeight: 700, lineHeight: 1.05 }}>{item.content.value == null ? "—" : String(item.content.value)}</span> : null}
               {item.content?.type === "progress" ? <div style={{ position: "relative", zIndex: 2, display: "grid", gap: 3 }}><span style={{ fontSize: 12, fontWeight: 700 }}>{item.content.label || item.title}</span><span style={{ display: "block", height: 7, borderRadius: 999, background: "var(--border, #39465a)", overflow: "hidden" }}><span style={{ display: "block", height: "100%", width: `${Math.max(0, Math.min(100, Number(item.content.value) || 0))}%`, background: genericTone.text }} /></span></div> : null}
               {item.content?.type === "metric-sparkline" && series.length ? <span aria-hidden="true" style={{ position: "absolute", left: 4, right: 4, bottom: 4, height: Math.max(16, Math.min(30, size.height - 22)), display: "flex", alignItems: "flex-end", gap: 1, opacity: 0.78 }}>
                 {series.map((entry, index) => {
