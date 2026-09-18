@@ -454,9 +454,6 @@ export function PluginManager({
       const legacySeverity = topbarSeverity(item.state);
       const genericTone = toneVars(item.content?.tone);
       const size = clampTopbarSize(item.size);
-      const series = item.content?.series?.slice(-60) ?? [];
-      const seriesValues = series.map((entry) => Number(entry.value) || 0);
-      const seriesMax = Math.max(1, ...seriesValues);
       return (
         <button
           key={`${pluginId}:${item.id}`}
