@@ -10,6 +10,8 @@ use std::{
     thread,
     time::Duration,
 };
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use tauri::{AppHandle, Emitter, Manager};
 const MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -486,18 +488,22 @@ impl PluginRuntimeState {
             .ok_or_else(|| "plugin runtime app handle is unavailable".to_string())?;
         let (plugin_root, entrypoint) = resolve_entrypoint(plugin)?;
 
-        let mut child = Command::new(&entrypoint)
-            .current_dir(&plugin_root)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .env("REMOTEHAND_PLUGIN_ID", &plugin.manifest.id)
-            .env(
-                "REMOTEHAND_PLUGIN_API_VERSION",
-                PLUGIN_API_VERSION.to_string(),
-            )
-            .spawn()
-            .map_err(|error| format!("failed to launch plugin runtime: {error}"))?;
+ let mut command = Command::new(&entrypoint);
+ command
+ .current_dir(&plugin_root)
+ .stdin(Stdio::piped())
+ .stdout(Stdio::piped())
+ .stderr(Stdio::null())
+ .env("REMOTEHAND_PLUGIN_ID", &plugin.manifest.id)
+ .env(
+ "REMOTEHAND_PLUGIN_API_VERSION",
+ PLUGIN_API_VERSION.to_string(),
+ );
+#[cfg(windows)]
+ command.creation_flags(0x08000000);
+ let mut child = command
+ .spawn()
+ .map_err(|error| format!("failed to launch plugin runtime: {error}"))?;
 
         let mut stdin = child
             .stdin
