@@ -561,7 +561,7 @@ export function PluginManager({
                     <p>{plugin.manifest.description}</p>
                     <div className="plugin-permissions"><strong>Permissions</strong>{plugin.manifest.permissions.length ? plugin.manifest.permissions.map((permission) => <span key={permission}>{permission}</span>) : <span>None</span>}</div>
                   </div>
-                  <div className="plugin-card-actions">
+                  <div className="plugin-actions">
                     <button type="button" onClick={() => void setEnabled(plugin, !plugin.enabled)} disabled={busy} style={{ ...managerButtonStyle, opacity: busy ? 0.45 : 1, cursor: busy ? "default" : "pointer" }}>{plugin.enabled ? "Disable" : "Enable"}</button>
                     <button type="button" onClick={() => requestRemove(plugin)} disabled={busy || plugin.enabled} style={{ ...managerRemoveStyle, opacity: busy || plugin.enabled ? 0.45 : 1, cursor: busy || plugin.enabled ? "default" : "pointer" }}>Remove</button>
                   </div>

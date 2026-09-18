@@ -2128,8 +2128,8 @@ font-size: 10px;
 }
 .plugin-actions {
 display: flex;
-align-items: flex-start;
-gap: 6px;
+align-items: center;
+gap: 8px;
 }
 .plugin-actions button.danger:not(:disabled) {
 color: #e69a9a;
