@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { AppModal } from "./AppModal";
@@ -411,7 +411,7 @@ export function PluginManager({
     });
   };
 
-  const renderTopbarContent = (content: TopbarContent, key: string, size: { width: number; height: number }): React.ReactNode => {
+  const renderTopbarContent = (content: TopbarContent, key: string, size: { width: number; height: number }): ReactNode => {
     const tone = toneVars(content.tone);
     const fontSize = content.fontSize;
     if (content.type === "stack") {
