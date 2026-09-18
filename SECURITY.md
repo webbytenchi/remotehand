@@ -81,19 +81,41 @@ Before adding or upgrading a security-sensitive dependency, review:
 ## Reporting Vulnerabilities
 
 Until a dedicated private security-reporting channel is configured, avoid publishing exploitable details in a public issue. For private deployments of this repository, contact the repository owner directly.
-Plugin security
-RemoteHand v1.0.3 introduces Plugin API v1 with a conservative trust model.
 
-Plugins are disabled by default.
+## Plugin security
 
-Manifests are strictly validated and incompatible API versions are rejected.
+Plugin API v1 runs plugins as out-of-process native executables with a conservative trust model.
 
-Plugin folder installation rejects symlinks, unsafe paths, oversized packages, excessive file counts, and overlapping source/destination trees.
+Trust model:
 
-Plugin removal requires the plugin to be disabled first and does not follow symbolic links.
+- Plugins are disabled by default after installation.
+- Manifests are strictly validated. Unknown fields, unknown permission strings, and incompatible apiVersion values are rejected.
+- Plugin folder installation rejects symlinks, unsafe paths, oversized packages, excessive file counts, and overlapping source and destination trees.
+- Plugin removal requires the plugin to be disabled first and does not follow symbolic links.
+- Sensitive capabilities are explicit declarations in the manifest, checked by the host before the corresponding host service is invoked.
+- The host reports granted permissions back to the plugin at handshake, so a plugin can verify what it was actually granted.
 
-Sensitive capabilities are explicit declarations.
+Runtime isolation:
 
-credential-use is preferred over direct vault access so future plugins can request core-mediated authentication without receiving decrypted vault secrets.
+- Each plugin runs as a separate OS process, launched by RemoteHand with the host own OS permissions. There is no additional OS-level sandboxing beyond the host own process permissions.
+- Plugin IPC is stdio - no network sockets, no shared memory.
+- Frames are length-prefixed JSON, capped at 16 MiB. Larger frames terminate the session.
+- The handshake has a hard 5-second timeout.
 
-v1.0.3 does not load arbitrary native plugin code. Dynamic plugin execution requires a separate security review and host-mediated permission model.
+UI isolation:
+
+- Plugin panels render in a sandboxed iframe with sandbox=allow-scripts - no same-origin access, no forms, no popups, no top-level navigation.
+- A strict Content-Security-Policy is injected into each panel, including connect-src none. Plugin UI cannot make direct network requests.
+- All panel to host communication flows through an injected bridge that the host validates.
+
+Credential handling:
+
+- credentials.use is preferred over direct vault access. A plugin requests a specific credentialRef and receives only that secret - not a vault export.
+- Plugin-created references must begin with plugin: followed by the plugin id followed by a colon. A plugin cannot overwrite another plugin namespace or core RemoteHand credentials.
+- vault.unlock is a separate, explicit, sensitive permission. A plugin that holds it can observe the passphrase before it reaches the host. Only grant it to trusted plugins.
+
+What the permission model does not do:
+
+Declared permissions are not a complete security boundary. A plugin is a native executable with the host process privileges. A plugin that declares no permissions can still open network sockets, read files, and execute code through its own logic. Permissions exist to make intent explicit and to gate host-mediated capabilities - vault access, plugin storage - not to sandbox the plugin.
+
+Only install plugins you trust.
