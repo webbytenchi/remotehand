@@ -825,15 +825,16 @@ console.error("Failed to load settings", error);
 }, []);
 useEffect(() => {
 const media = window.matchMedia("(prefers-color-scheme: dark)");
-const applyAppearance = () => {
+const applyAppearanceToDocument = (targetDocument: Document) => {
 const resolvedTheme =
 settings.theme === "system" ? (media.matches ? "dark" : "light") : settings.theme;
 setResolvedTheme(resolvedTheme);
-document.documentElement.dataset.theme = resolvedTheme;
-document.documentElement.dataset.scheme = settings.colorScheme;
-document.documentElement.dataset.terminalTheme = settings.terminalTheme;
-document.documentElement.style.setProperty("--terminal-background", settings.terminalBackground);
-document.documentElement.style.setProperty("--terminal-foreground", settings.terminalForeground);
+const root = targetDocument.documentElement;
+root.dataset.theme = resolvedTheme;
+root.dataset.scheme = settings.colorScheme;
+root.dataset.terminalTheme = settings.terminalTheme;
+root.style.setProperty("--terminal-background", settings.terminalBackground);
+root.style.setProperty("--terminal-foreground", settings.terminalForeground);
 const uiFamily =
 settings.uiFontFamily === "System Default"
 ? 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
@@ -842,31 +843,16 @@ const terminalFamily =
 settings.terminalFontFamily === "System Monospace"
 ? 'ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace'
 : '"' + settings.terminalFontFamily + '", ui-monospace, SFMono-Regular, Consolas, monospace';
-document.documentElement.style.setProperty("--ui-font-family", uiFamily);
-document.documentElement.style.setProperty("--ui-font-size", String(settings.uiFontSize) + "px");
-document.documentElement.style.setProperty("--terminal-font-family", terminalFamily);
-document.documentElement.style.setProperty("--terminal-font-size", String(settings.terminalFontSize) + "px");
-
-const applyAppearanceToDocument = (targetDocument: Document) => {
-const root = targetDocument.documentElement;
-root.dataset.theme = resolvedTheme;
-root.dataset.scheme = settings.colorScheme;
-root.dataset.terminalTheme = settings.terminalTheme;
-root.style.setProperty("--terminal-background", settings.terminalBackground);
-root.style.setProperty("--terminal-foreground", settings.terminalForeground);
 root.style.setProperty("--ui-font-family", uiFamily);
 root.style.setProperty("--ui-font-size", String(settings.uiFontSize) + "px");
 root.style.setProperty("--terminal-font-family", terminalFamily);
 root.style.setProperty("--terminal-font-size", String(settings.terminalFontSize) + "px");
 targetDocument.defaultView?.dispatchEvent(new CustomEvent("remotehand-appearance-change"));
 };
-
+const applyAppearance = () => {
 applyAppearanceToDocument(document);
-for (const panel of apiRef.current?.panels ?? []) {
-const panelDocument = panel.api.element?.ownerDocument;
-if (panelDocument && panelDocument !== document) {
-applyAppearanceToDocument(panelDocument);
-}
+for (const popout of apiRef.current?.getPopouts() ?? []) {
+applyAppearanceToDocument(popout.window.document);
 }
 };
 applyAppearance();
@@ -1017,6 +1003,26 @@ captureLayout(event.api);
 });
 event.api.onDidLayoutChange(() => {
 captureLayout(event.api);
+});
+event.api.onDidAddPopoutGroup((popout) => {
+const targetDocument = popout.window.document;
+const root = targetDocument.documentElement;
+const source = document.documentElement;
+root.dataset.theme = source.dataset.theme;
+root.dataset.scheme = source.dataset.scheme;
+root.dataset.terminalTheme = source.dataset.terminalTheme;
+for (const property of [
+"--terminal-background",
+"--terminal-foreground",
+"--ui-font-family",
+"--ui-font-size",
+"--terminal-font-family",
+"--terminal-font-size",
+]) {
+const value = source.style.getPropertyValue(property);
+if (value) root.style.setProperty(property, value);
+}
+popout.window.dispatchEvent(new CustomEvent("remotehand-appearance-change"));
 });
 event.api.onDidRemoveGroup(() => {
 if (!isTauri()) return;
