@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager, Runtime, State, WebviewWindow,
+    AppHandle, Emitter, Manager, Runtime, State, Window,
 };
 use tauri_plugin_autostart::ManagerExt;
 
@@ -48,7 +48,7 @@ impl StartupTrayState {
     }
 }
 
-pub fn install<R: Runtime>(app: &tauri::App<R>, state: &StartupTrayState) -> Result<(), Box<dyn std::error::Error>> {
+pub fn install<R: Runtime>(app: &tauri::App<R>, state: &StartupTrayState) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let show_item = MenuItemBuilder::with_id("show", "Show RemoteHand").build(app)?;
     let home_item = MenuItemBuilder::with_id("home", "Home").build(app)?;
     let hide_item = MenuItemBuilder::with_id("hide", "Hide RemoteHand").build(app)?;
@@ -154,6 +154,6 @@ pub fn should_minimize_at_startup() -> bool {
         && crate::storage::load_settings().map(|settings| settings.start_minimized).unwrap_or(false)
 }
 
-pub fn handle_close<R: Runtime>(_window: &WebviewWindow<R>, state: &StartupTrayState) -> bool {
+pub fn handle_close(_window: &Window<impl Runtime>, state: &StartupTrayState) -> bool {
     state.close_to_tray() && state.show_in_system_tray.lock().map(|guard| *guard).unwrap_or(false)
 }
