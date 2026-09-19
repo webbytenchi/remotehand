@@ -896,7 +896,10 @@ background: rgba(2, 5, 9, 0.72);
 backdrop-filter: blur(3px);
 }
 .app-modal {
-width: min(440px, 100%);
+width: min(560px, calc(100vw - 32px));
+max-height: 90vh;
+display: grid;
+grid-template-rows: auto auto minmax(0, 1fr) auto;
 border: 1px solid #2c3746;
 border-radius: 12px;
 background: #0b1017;
@@ -915,6 +918,8 @@ font-size: 20px;
 color: #e2e8f0;
 }
 .app-modal-body {
+min-height: 0;
+overflow: auto;
 padding: 0 22px 20px;
 color: #a7b2c1;
 line-height: 1.55;
@@ -2245,4 +2250,29 @@ background: transparent;
 .settings-toggle.disabled {
   opacity: .55;
   cursor: default;
+}
+
+
+.settings-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 22px;
+  border-bottom: 1px solid #1d2632;
+}
+.settings-tabs button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #758295;
+  padding: 10px 12px 9px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+.settings-tabs button:hover {
+  color: #b9c4d1;
+}
+.settings-tabs button.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
