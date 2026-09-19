@@ -39,6 +39,10 @@ terminalBackground: string;
 terminalForeground: string;
 terminalFontFamily: string;
 terminalFontSize: number;
+startWithSystem: boolean;
+startMinimized: boolean;
+showInSystemTray: boolean;
+minimizeToTrayOnClose: boolean;
 };
 type WorkspaceLayout = Parameters<DockviewApi["fromJSON"]>[0];
 const WORKSPACE_KEY = "remotehand.workspace";
@@ -55,6 +59,10 @@ terminalBackground: "#11151a",
 terminalForeground: "#d8dde6",
 terminalFontFamily: "JetBrains Mono",
 terminalFontSize: 13,
+startWithSystem: false,
+startMinimized: false,
+showInSystemTray: true,
+minimizeToTrayOnClose: false,
 };
 const UI_FONT_OPTIONS = ["Inter", "IBM Plex Sans", "Segoe UI", "System Default"] as const;
 const TERMINAL_FONT_OPTIONS = ["JetBrains Mono", "IBM Plex Mono", "Cascadia Mono", "Consolas", "System Monospace"] as const;
