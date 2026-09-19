@@ -644,7 +644,15 @@ detail: "Local shell",
 });
 }, [localOs, recordActivity]);
 const addConnections = useCallback(() => {
-apiRef.current?.addPanel({
+const api = apiRef.current;
+if (!api) return;
+const existing = api.panels.find((panel) => panel.api.component === "connections");
+if (existing) {
+existing.api.updateParameters({ connections });
+existing.api.setActive();
+return;
+}
+api.addPanel({
 id: `connections-${Date.now()}`,
 component: "connections",
 title: "Connections",
