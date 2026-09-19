@@ -624,7 +624,7 @@ title: connection.name,
 detail: connection.user + "@" + connection.host + ":" + connection.port,
 connection,
 });
-}, [recordActivity]);
+}, [recordActivity, settings]);
 const openSftp = useCallback((connection: Connection) => {
 const api = apiRef.current;
 if (!api) return;
@@ -670,7 +670,7 @@ kind: resolvedShell === "default" ? "terminal" : resolvedShell,
 title,
 detail: "Local shell",
 });
-}, [localOs, recordActivity]);
+}, [localOs, recordActivity, settings]);
 const addConnections = useCallback(() => {
 const api = apiRef.current;
 if (!api) return;
@@ -826,7 +826,7 @@ component: "connections",
 title: "Connections",
 position: { referencePanel: "welcome", direction: "right" },
 });
-}, [connections, recentActivities]);
+}, [connections, recentActivities, settings]);
 useEffect(() => {
 if (!isTauri()) return;
 void invoke<Connection[]>("load_connections")
