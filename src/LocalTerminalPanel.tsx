@@ -338,7 +338,6 @@ const locationDisposable = api.onDidLocationChange(() => {
 const terminal = terminalRef.current;
 const host = hostRef.current;
 if (!terminal || !host) return;
-terminal.options.documentOverride = host.ownerDocument;
 const nextWindow = host.ownerDocument.defaultView;
 const refreshAppearance = () => {
 applyAppearance();
