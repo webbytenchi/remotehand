@@ -997,12 +997,13 @@ event.api.onDidLayoutChange(() => {
 captureLayout(event.api);
 });
 event.api.onDidRemovePanel((panel) => {
+const wasPopout = panel.api.location.type === "popout";
 const sessionId = panel.id;
 window.setTimeout(() => {
-for (const popout of event.api.getPopouts()) {
-if (popout.group.panels.length === 0) {
-popout.window.close();
-}
+if (wasPopout && event.api.panels.length === 0 && isTauri()) {
+void invoke("close_current_window").catch((error) => {
+console.error("Failed to close empty popout window", error);
+});
 }
 }, 0);
 if (panel.api.component !== "terminal") return;
