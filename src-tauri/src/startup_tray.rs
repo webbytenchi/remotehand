@@ -83,7 +83,7 @@ pub fn install(app: &tauri::AppHandle, state: &StartupTrayState) -> Result<(), B
         .unwrap_or(true);
 
     let window_item = MenuItemBuilder::with_id(
-        if visible { "hide" } else { "show" },
+        "window",
         if visible { "Hide RemoteHand" } else { "Show RemoteHand" },
     ).build(app)?;
     let home_item = MenuItemBuilder::with_id("home", "Home").build(app)?;
@@ -110,11 +110,16 @@ pub fn install(app: &tauri::AppHandle, state: &StartupTrayState) -> Result<(), B
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| {
             match event.id().as_ref() {
-                "show" => {
-                    show_main(app);
-                }
-                "hide" => {
-                    hide_main(app);
+                "window" => {
+                    let visible = app
+                        .get_webview_window("main")
+                        .and_then(|window| window.is_visible().ok())
+                        .unwrap_or(true);
+                    if visible {
+                        hide_main(app);
+                    } else {
+                        show_main(app);
+                    }
                 }
                 "home" => {
                     show_main(app);
