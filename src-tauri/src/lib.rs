@@ -20,6 +20,11 @@ use terminal::TerminalState;
 fn local_os() -> &'static str {
     std::env::consts::OS
 }
+
+#[tauri::command]
+fn close_current_window(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.close().map_err(|error| error.to_string())
+}
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let window_restored = Arc::new(AtomicBool::new(false));
@@ -91,6 +96,7 @@ pub fn run() {
             terminal::terminal_resize,
             terminal::terminal_close,
             local_os,
+            close_current_window,
             startup_tray::set_startup_enabled,
             startup_tray::startup_enabled,
             startup_tray::set_tray_visible,
