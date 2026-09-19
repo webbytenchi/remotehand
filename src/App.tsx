@@ -911,6 +911,35 @@ panel.api.updateParameters({ activities: recentActivities });
 }
 }, [recentActivities]);
 useEffect(() => {
+const api = apiRef.current;
+if (!api) return;
+for (const popout of api.getPopouts()) {
+syncPopoutAppearance(popout.window);
+}
+}, [settings, syncPopoutAppearance]);
+const syncPopoutAppearance = useCallback((popoutWindow: Window) => {
+const source = document.documentElement;
+const target = popoutWindow.document.documentElement;
+const styles = getComputedStyle(source);
+for (const name of [
+"--terminal-background",
+"--terminal-foreground",
+"--terminal-font-family",
+"--terminal-font-size",
+"--ui-font-family",
+"--ui-font-size",
+]) {
+const value = styles.getPropertyValue(name);
+if (value) target.style.setProperty(name, value);
+}
+for (const attribute of ["data-theme", "data-scheme", "data-terminal-theme"]) {
+const value = source.getAttribute(attribute);
+if (value === null) target.removeAttribute(attribute);
+else target.setAttribute(attribute, value);
+}
+}, []);
+
+useEffect(() => {
 if (!settingsOpen || settingsTab !== "startup" || papaTabUnlocked) {
 papaSequenceRef.current = [];
 return;
