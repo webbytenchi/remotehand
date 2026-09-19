@@ -104,6 +104,7 @@ const [status, setStatus] = useState(params?.ssh ? "Connecting SSH..." : "Starti
 const [rightClickPaste, setRightClickPaste] = useState(true);
 const [confirmMultiline, setConfirmMultiline] = useState(true);
 const [pendingPaste, setPendingPaste] = useState<string | null>(null);
+const [diagnostic, setDiagnostic] = useState("");
 const sessionId = api.id;
 const shell = params?.shell ?? "default";
 const ssh = params?.ssh;
@@ -127,6 +128,14 @@ terminalRef.current = terminal;
 terminal.open(host);
 fitAddon.fit();
 terminal.focus();
+
+const updateDiagnostic = () => {
+const element = host.querySelector(".xterm-rows");
+const computed = element ? getComputedStyle(element) : null;
+setDiagnostic(
+`doc=${host.ownerDocument.URL} | location=${String(api.location.type)} | font=${terminal.options.fontFamily} | size=${terminal.options.fontSize}px | rows=${terminal.rows} cols=${terminal.cols} | cssFont=${computed?.fontFamily ?? "n/a"} | cssSize=${computed?.fontSize ?? "n/a"}`,
+);
+};
 
 if (!isTauri()) {
 terminal.writeln("RemoteHand Terminal");
@@ -247,7 +256,10 @@ cols: terminal.cols,
 });
 
 resizeObserver.observe(host);
+updateDiagnostic();
 };
+
+
 
 void start().catch((error) => {
 terminal.writeln(
@@ -419,6 +431,9 @@ title="Paste clipboard"
 >
 Paste
 </button>
+{api.location.type === "popout" ? (
+<span className="terminal-debug" title="Temporary popout diagnostic">{diagnostic || "Collecting popout diagnostics…"}</span>
+) : null}
 
 </div>
 
