@@ -52,6 +52,7 @@ type WorkspaceLayout = Parameters<DockviewApi["fromJSON"]>[0];
 const WORKSPACE_KEY = "remotehand.workspace";
 const THEME_KEY = "remotehand.theme";
 const SETTINGS_KEY = "remotehand.settings";
+const TERMINAL_APPEARANCE_KEY = "remotehand.terminalAppearance";
 const SIDEBAR_COLLAPSED_KEY = "remotehand.sidebarCollapsed";
 const terminalAppearanceFromSettings = (settings: Settings): TerminalAppearance => ({
 terminalTheme: settings.terminalTheme,
@@ -877,6 +878,11 @@ document.documentElement.style.setProperty("--ui-font-family", uiFamily);
 document.documentElement.style.setProperty("--ui-font-size", String(settings.uiFontSize) + "px");
 document.documentElement.style.setProperty("--terminal-font-family", terminalFamily);
 document.documentElement.style.setProperty("--terminal-font-size", String(settings.terminalFontSize) + "px");
+try {
+localStorage.setItem(TERMINAL_APPEARANCE_KEY, JSON.stringify(terminalAppearanceFromSettings(settings)));
+} catch {
+}
+
 window.dispatchEvent(new CustomEvent("remotehand-appearance-change"));
 };
 applyAppearance();
