@@ -143,7 +143,7 @@ pub fn run() {
                 })
                 .build()
                 .map_err(std::io::Error::other)?;
-            startup_tray::install(app, &startup_tray_state).map_err(std::io::Error::other)?;
+            startup_tray::install(&app.handle().clone(), &startup_tray_state).map_err(std::io::Error::other)?;
             let saved = storage::load_settings().map_err(std::io::Error::other)?;
             startup_tray_state.set_close_to_tray(saved.minimize_to_tray_on_close);
             startup_tray_state.set_show_in_tray(app.handle(), saved.show_in_system_tray).map_err(std::io::Error::other)?;
