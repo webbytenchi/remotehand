@@ -748,6 +748,9 @@ height: 100%;
 padding: 0;
 }
 .terminal-host .xterm-screen {
+padding: 0;
+}
+.terminal-host .xterm-rows {
 padding: 6px;
 box-sizing: border-box;
 }
