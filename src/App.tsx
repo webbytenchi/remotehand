@@ -757,9 +757,20 @@ const panel = api?.activePanel;
 if (!api || !panel) return;
 if (panel.api.location.type === "popout") return;
 try {
-panel.api.updateParameters({ appearance: terminalAppearanceFromSettings(settings) });
+const appearance = panel.api.component === "terminal" ? terminalAppearanceFromSettings(settings) : undefined;
+if (appearance) panel.api.updateParameters({ appearance });
 const opened = await api.addPopoutGroup(panel);
-if (opened) poppedOutPanelRef.current = { panelId: panel.id, count: api.getPopouts().length };
+if (!opened) return;
+const popout = api.getPopouts().find((item) =>
+item.group.activePanel?.id === panel.id
+);
+const popoutPanel = popout?.group.activePanel;
+if (popoutPanel && appearance) {
+popoutPanel.api.updateParameters({ appearance });
+}
+popoutPanel?.api.setActive();
+popout?.window.focus();
+poppedOutPanelRef.current = { panelId: panel.id, count: api.getPopouts().length };
 } catch (error) {
 console.error("Failed to pop out active panel", error);
 }
