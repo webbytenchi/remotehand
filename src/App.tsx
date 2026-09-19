@@ -876,15 +876,19 @@ panel.api.updateParameters({ activities: recentActivities });
 useEffect(() => {
 if (!isTauri()) return;
 let cancelled = false;
-let unlisten: (() => void) | undefined;
-void listen("remotehand-tray-home", () => {
-if (!cancelled) openHome();
-}).then((dispose) => {
+const disposables: Array<() => void> = [];
+const bind = (eventName: string, handler: () => void) => {
+void listen(eventName, handler).then((dispose) => {
 if (cancelled) dispose();
-else unlisten = dispose;
+else disposables.push(dispose);
 });
-return () => { cancelled = true; unlisten?.(); };
-}, [openHome]);
+};
+bind("remotehand-tray-home", () => openHome());
+bind("remotehand-tray-connections", () => addConnections());
+bind("remotehand-tray-terminal", () => addTerminal());
+bind("remotehand-tray-settings", () => { setSettingsTab("appearance"); setSettingsOpen(true); });
+return () => { cancelled = true; disposables.forEach((dispose) => dispose()); };
+}, [addConnections, addTerminal, openHome]);
 useEffect(() => {
 const onKeyDown = (event: KeyboardEvent) => {
 if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
