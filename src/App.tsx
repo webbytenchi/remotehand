@@ -1143,7 +1143,6 @@ tabs={<div className="settings-tabs" role="tablist" aria-label="Settings section
 {settingsTab === "appearance" ? (
 <div className="appearance-settings">
 <div className="settings-section-heading">
-<strong>Appearance</strong>
 <span>Customize RemoteHand and terminal typography.</span>
 </div>
 <div className="settings-field">
