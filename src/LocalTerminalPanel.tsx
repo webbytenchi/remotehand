@@ -344,6 +344,8 @@ const host = hostRef.current;
 if (!terminal || !host) return;
 const nextWindow = host.ownerDocument.defaultView;
 const refreshAppearance = () => {
+terminal.open(host);
+applyTerminalDomTypography();
 applyAppearance();
 terminal.refresh(0, terminal.rows - 1);
 terminal.focus();
