@@ -345,7 +345,14 @@ if (!terminal || !host) return;
 const nextWindow = host.ownerDocument.defaultView;
 const refreshAppearance = () => {
 terminal.open(host);
-applyTerminalDomTypography();
+const rows = terminal.element?.querySelector<HTMLElement>(".xterm-rows");
+if (rows) {
+const styles = host.ownerDocument.defaultView?.getComputedStyle(host.ownerDocument.documentElement);
+const fontFamily = styles?.getPropertyValue("--terminal-font-family").trim();
+const fontSize = styles?.getPropertyValue("--terminal-font-size").trim();
+if (fontFamily) rows.style.setProperty("font-family", fontFamily);
+if (fontSize) rows.style.setProperty("font-size", fontSize);
+}
 applyAppearance();
 terminal.refresh(0, terminal.rows - 1);
 terminal.focus();
