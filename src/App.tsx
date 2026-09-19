@@ -442,6 +442,8 @@ const [settingsOpen, setSettingsOpen] = useState(false);
 const [settingsTab, setSettingsTab] = useState<"appearance" | "startup" | "papa">("appearance");
 const [papaTabUnlocked, setPapaTabUnlocked] = useState(false);
 const papaSequenceRef = useRef<string[]>([]);
+const [papaDebugKey, setPapaDebugKey] = useState("");
+const [papaDebugSequence, setPapaDebugSequence] = useState("");
 const [pluginsOpen, setPluginsOpen] = useState(false);
 const [plugins, setPlugins] = useState<PluginInfo[]>([]);
 const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("dark");
@@ -892,16 +894,20 @@ const sequence = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "
 const onKeyDown = (event: KeyboardEvent) => {
 if (!settingsOpen || settingsTab !== "startup") return;
 const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+setPapaDebugKey(key);
 const expected = sequence[papaSequenceRef.current.length];
 if (key === expected) {
 papaSequenceRef.current.push(key);
+setPapaDebugSequence(papaSequenceRef.current.map((item) => item.length === 1 ? item.toUpperCase() : item.replace("Arrow", "")).join(" "));
 if (papaSequenceRef.current.length === sequence.length) {
 setPapaTabUnlocked(true);
 papaSequenceRef.current = [];
+setPapaDebugSequence("UNLOCKED");
 }
 return;
 }
 papaSequenceRef.current = key === sequence[0] ? [key] : [];
+setPapaDebugSequence(papaSequenceRef.current.map((item) => item.length === 1 ? item.toUpperCase() : item.replace("Arrow", "")).join(" "));
 };
 window.addEventListener("keydown", onKeyDown, true);
 return () => window.removeEventListener("keydown", onKeyDown, true);
@@ -1251,6 +1257,7 @@ return { ...current, terminalTheme };
 <div className="appearance-settings startup-settings settings-tab-content">
 <div className="settings-section-heading">
 <span>Control how RemoteHand behaves when Windows or Linux starts it.</span>
+<span className="papa-debug">Debug: key=<strong>{papaDebugKey || "—"}</strong> · sequence=<strong>{papaDebugSequence || "—"}</strong></span>
 </div>
 <label className="settings-toggle">
 <input type="checkbox" checked={settings.startWithSystem} onChange={(event) => {
