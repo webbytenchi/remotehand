@@ -117,6 +117,7 @@ fitAddonRef.current = fitAddon;
 const terminal = new Terminal({
 cursorBlink: true,
 convertEol: false,
+documentOverride: host.ownerDocument,
 fontFamily: getComputedStyle(host.ownerDocument.documentElement).getPropertyValue("--terminal-font-family").trim() || ["JetBrains Mono", "Cascadia Code", "Cascadia Mono", "Consolas", "Liberation Mono", "monospace"].join(", "),
 fontSize: Number.parseInt(getComputedStyle(host.ownerDocument.documentElement).getPropertyValue("--terminal-font-size"), 10) || 13,
 scrollback: 10000,
@@ -334,11 +335,20 @@ attributeFilter: ["data-theme", "data-terminal-theme"],
 });
 ownerWindow.addEventListener("remotehand-appearance-change", applyAppearance);
 const locationDisposable = api.onDidLocationChange(() => {
-const nextWindow = hostRef.current?.ownerDocument.defaultView;
-if (nextWindow) {
-nextWindow.requestAnimationFrame(applyAppearance);
-} else {
+const terminal = terminalRef.current;
+const host = hostRef.current;
+if (!terminal || !host) return;
+terminal.options.documentOverride = host.ownerDocument;
+const nextWindow = host.ownerDocument.defaultView;
+const refreshAppearance = () => {
 applyAppearance();
+terminal.refresh(0, terminal.rows - 1);
+terminal.focus();
+};
+if (nextWindow) {
+nextWindow.requestAnimationFrame(refreshAppearance);
+} else {
+refreshAppearance();
 }
 });
 return () => {
