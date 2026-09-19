@@ -1141,7 +1141,7 @@ tabs={<div className="settings-tabs" role="tablist" aria-label="Settings section
 <button type="button" role="tab" aria-selected={settingsTab === "startup"} className={settingsTab === "startup" ? "active" : ""} onClick={() => setSettingsTab("startup")}>Startup &amp; Tray</button>
 </div>}>
 {settingsTab === "appearance" ? (
-<div className="appearance-settings">
+<div className="appearance-settings settings-tab-content">
 <div className="settings-section-heading">
 <span>Customize RemoteHand and terminal typography.</span>
 </div>
@@ -1209,9 +1209,8 @@ return { ...current, terminalTheme };
 <button type="button" className="settings-reset" onClick={() => setSettings(DEFAULT_SETTINGS)}>Reset appearance</button>
 </div>
 ) : (
-<div className="appearance-settings startup-settings">
+<div className="appearance-settings startup-settings settings-tab-content">
 <div className="settings-section-heading">
-<strong>Startup &amp; system tray</strong>
 <span>Control how RemoteHand behaves when Windows or Linux starts it.</span>
 </div>
 <label className="settings-toggle">
