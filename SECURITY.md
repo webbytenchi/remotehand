@@ -13,6 +13,14 @@ RemoteHand is a remote-access application. Security-sensitive behavior is a core
 - Treat filenames, hostnames, URLs, terminal escape sequences, clipboard contents, remote paths, and remote protocol data as untrusted input.
 - Protocol and cryptography dependencies must be reviewed for advisories and maintenance status.
 
+## Startup and System Tray
+
+RemoteHand remains portable-first. Optional startup registration is an operating-system user-level launch preference, separate from the portable `data/` directory. It should not require administrator/root privileges or silently install a system-wide service.
+
+Startup registration can persist the path to the current executable in the user's OS startup configuration. Users who move or copy the portable RemoteHand directory should be aware that an existing startup registration may need to be refreshed.
+
+System-tray controls do not expand plugin permissions or create a new network or credential capability; they only control the local desktop application's visibility and lifecycle.
+
 ## Current V1 Authentication Model
 
 RemoteHand V1 has two distinct SSH-related paths.
