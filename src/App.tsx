@@ -44,11 +44,23 @@ startMinimized: boolean;
 showInSystemTray: boolean;
 minimizeToTrayOnClose: boolean;
 };
+type TerminalAppearance = Pick<
+Settings,
+"terminalTheme" | "terminalBackground" | "terminalForeground" | "terminalFontFamily" | "terminalFontSize"
+>;
 type WorkspaceLayout = Parameters<DockviewApi["fromJSON"]>[0];
 const WORKSPACE_KEY = "remotehand.workspace";
 const THEME_KEY = "remotehand.theme";
 const SETTINGS_KEY = "remotehand.settings";
 const SIDEBAR_COLLAPSED_KEY = "remotehand.sidebarCollapsed";
+const terminalAppearanceFromSettings = (settings: Settings): TerminalAppearance => ({
+terminalTheme: settings.terminalTheme,
+terminalBackground: settings.terminalBackground,
+terminalForeground: settings.terminalForeground,
+terminalFontFamily: settings.terminalFontFamily,
+terminalFontSize: settings.terminalFontSize,
+});
+
 const DEFAULT_SETTINGS: Settings = {
 theme: "dark",
 colorScheme: "blue",
@@ -75,6 +87,18 @@ detail: string;
 timestamp: number;
 connection?: Connection;
 };
+type TerminalPanelParams = {
+shell?: "default" | "powershell" | "cmd" | "wsl";
+initialCommand?: string;
+ssh?: {
+host: string;
+port: number;
+user: string;
+name: string;
+};
+appearance?: TerminalAppearance;
+};
+
 type HomePanelParams = {
 activities?: RecentActivity[];
 onOpen?: (activity: RecentActivity) => void;
@@ -591,6 +615,7 @@ port: connection.port,
 user: connection.user,
 name: connection.name,
 },
+appearance: terminalAppearanceFromSettings(settings),
 },
 });
 recordActivity({
@@ -635,7 +660,7 @@ api.addPanel({
 id,
 component: "terminal",
 title,
-params: { shell: resolvedShell },
+params: { shell: resolvedShell, appearance: terminalAppearanceFromSettings(settings) },
 ...(position && activePanel
 ? { position: { referencePanel: activePanel.id, direction: position } }
 : {}),
@@ -765,6 +790,7 @@ const panel = api?.activePanel;
 if (!api || !panel) return;
 if (panel.api.location.type === "popout") return;
 try {
+panel.api.updateParameters({ appearance: terminalAppearanceFromSettings(settings) });
 const opened = await api.addPopoutGroup(panel);
 if (opened) poppedOutPanelRef.current = { panelId: panel.id, count: api.getPopouts().length };
 } catch (error) {
@@ -792,6 +818,7 @@ id: "terminal",
 component: "terminal",
 title: "Terminal",
 position: { referencePanel: "welcome", direction: "below" },
+params: { appearance: terminalAppearanceFromSettings(settings) },
 });
 api.addPanel({
 id: "connections",
