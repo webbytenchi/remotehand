@@ -102,6 +102,23 @@ Credentials must not be embedded directly in connection JSON.
 - Terminal foreground/background configuration
 - Terminal font family and size
 
+## Startup and System Tray
+
+RemoteHand v1.2 requires optional, user-controlled startup and tray behavior:
+
+- Start RemoteHand with the operating system at user login
+- Start minimized when launched through the startup registration
+- Show RemoteHand in the system tray
+- Use a single context-aware Show/Hide tray action
+- Provide tray shortcuts for Home, Connections, New Terminal, Settings, and Exit
+- Minimize to tray on close when enabled
+- Keep normal application data portable beside the executable
+- Do not require an installer, service, or administrator/root privileges for normal startup/tray use
+
+### Settings
+
+Startup and system-tray controls belong in their own Settings tab, separate from Appearance controls.
+
 ## Core UX Requirements
 
 ### Tabs and Panes
