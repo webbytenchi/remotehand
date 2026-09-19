@@ -3,6 +3,7 @@ type AppModalProps = {
 open: boolean;
 title: string;
 children: ReactNode;
+tabs?: ReactNode;
 confirmLabel?: string;
 cancelLabel?: string;
 danger?: boolean;
@@ -14,6 +15,7 @@ export function AppModal({
 open,
 title,
 children,
+tabs,
 confirmLabel = "OK",
 cancelLabel,
 danger = false,
@@ -43,6 +45,7 @@ onMouseDown={(event) => event.stopPropagation()}
 <p className="eyebrow">RemoteHand</p>
 <h3 id="app-modal-title">{title}</h3>
 </div>
+{tabs}
 <div className="app-modal-body">{children}</div>
 <div className="app-modal-actions">
 {cancelLabel ? (
