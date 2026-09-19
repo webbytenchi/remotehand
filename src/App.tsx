@@ -738,6 +738,27 @@ onSftp={openSftp}
 }),
 [recentActivities, homeMessageIndex, openRecentActivity, addConnection, updateConnection, removeConnection, connectSsh, openSftp],
 );
+const syncPopoutAppearance = useCallback((popoutWindow: Window) => {
+const source = document.documentElement;
+const target = popoutWindow.document.documentElement;
+for (const name of [
+"--terminal-background",
+"--terminal-foreground",
+"--terminal-font-family",
+"--terminal-font-size",
+"--ui-font-family",
+"--ui-font-size",
+]) {
+const value = getComputedStyle(source).getPropertyValue(name);
+if (value) target.style.setProperty(name, value);
+}
+for (const attribute of ["data-theme", "data-scheme", "data-terminal-theme"]) {
+const value = source.getAttribute(attribute);
+if (value === null) target.removeAttribute(attribute);
+else target.setAttribute(attribute, value);
+}
+popoutWindow.requestAnimationFrame(() => popoutWindow.dispatchEvent(new CustomEvent("remotehand-appearance-change")));
+}, []);
 const popoutActive = useCallback(async () => {
 const api = apiRef.current;
 const panel = api?.activePanel;
@@ -749,7 +770,7 @@ if (opened) poppedOutPanelRef.current = { panelId: panel.id, count: api.getPopou
 } catch (error) {
 console.error("Failed to pop out active panel", error);
 }
-}, []);
+}, [syncPopoutAppearance]);
 const resetLayout = useCallback(async () => {
 const api = apiRef.current;
 if (!api) return;
@@ -997,8 +1018,14 @@ panel.api.updateParameters({ activities: recentActivities });
 }
 captureLayout(event.api);
 event.api.onDidAddPopoutGroup((popout) => {
+syncPopoutAppearance(popout.window);
 popout.group.activePanel?.api.setActive();
 popout.window.focus();
+window.setTimeout(() => {
+syncPopoutAppearance(popout.window);
+popout.group.activePanel?.api.setActive();
+popout.window.focus();
+}, 0);
 poppedOutPanelRef.current = { panelId: popout.group.activePanel?.id ?? poppedOutPanelRef.current?.panelId ?? "", count: event.api.getPopouts().length };
 });
 event.api.onDidRemovePopoutGroup(() => {
