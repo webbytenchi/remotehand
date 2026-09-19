@@ -1281,6 +1281,40 @@ if (isTauri()) void invoke("set_close_to_tray", { value }).catch((error) => cons
 <span><strong>Minimize to tray when closing</strong><small>Keep RemoteHand running when the main window is closed.</small></span>
 </label>
 </div>
+) : settingsTab === "startup" ? (
+<div className="appearance-settings startup-settings settings-tab-content">
+<div className="settings-section-heading">
+<span>Control how RemoteHand behaves when Windows or Linux starts it.</span>
+</div>
+<label className="settings-toggle">
+<input type="checkbox" checked={settings.startWithSystem} onChange={(event) => {
+const enabled = event.target.checked;
+setSettings((current) => ({ ...current, startWithSystem: enabled }));
+if (isTauri()) void invoke("set_startup_enabled", { enabled }).catch((error) => console.error("Failed to update startup preference", error));
+}} />
+<span><strong>Start RemoteHand with system</strong><small>Launch RemoteHand automatically at user login.</small></span>
+</label>
+<label className="settings-toggle">
+<input type="checkbox" checked={settings.startMinimized} onChange={(event) => setSettings((current) => ({ ...current, startMinimized: event.target.checked }))} />
+<span><strong>Start minimized</strong><small>Applies when RemoteHand is launched automatically.</small></span>
+</label>
+<label className="settings-toggle">
+<input type="checkbox" checked={settings.showInSystemTray} onChange={(event) => {
+const visible = event.target.checked;
+setSettings((current) => ({ ...current, showInSystemTray: visible }));
+if (isTauri()) void invoke("set_tray_visible", { visible }).catch((error) => console.error("Failed to update tray visibility", error));
+}} />
+<span><strong>Show RemoteHand in system tray</strong><small>Keep a tray icon available while RemoteHand is running.</small></span>
+</label>
+<label className={"settings-toggle" + (!settings.showInSystemTray ? " disabled" : "")}>
+<input type="checkbox" checked={settings.minimizeToTrayOnClose} disabled={!settings.showInSystemTray} onChange={(event) => {
+const value = event.target.checked;
+setSettings((current) => ({ ...current, minimizeToTrayOnClose: value }));
+if (isTauri()) void invoke("set_close_to_tray", { value }).catch((error) => console.error("Failed to update close-to-tray preference", error));
+}} />
+<span><strong>Minimize to tray when closing</strong><small>Keep RemoteHand running when the main window is closed.</small></span>
+</label>
+</div>
 ) : (
 <div className="settings-tab-content papa-settings">
 <div className="papa-message">
