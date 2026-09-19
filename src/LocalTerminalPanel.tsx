@@ -123,9 +123,20 @@ scrollback: 10000,
 theme: getTheme(),
 });
 
+const applyTerminalDomTypography = () => {
+const rows = terminal.element?.querySelector<HTMLElement>(".xterm-rows");
+if (!rows) return;
+const styles = getComputedStyle(document.documentElement);
+const fontFamily = styles.getPropertyValue("--terminal-font-family").trim();
+const fontSize = styles.getPropertyValue("--terminal-font-size").trim();
+if (fontFamily) rows.style.setProperty("font-family", fontFamily);
+if (fontSize) rows.style.setProperty("font-size", fontSize);
+};
+
 terminal.loadAddon(fitAddon);
 terminalRef.current = terminal;
 terminal.open(host);
+applyTerminalDomTypography();
 fitAddon.fit();
 terminal.focus();
 
@@ -290,6 +301,11 @@ const fontSize = Number.parseInt(styles.getPropertyValue("--terminal-font-size")
 terminal.options.theme = getTheme();
 if (fontFamily) terminal.options.fontFamily = fontFamily;
 if (Number.isFinite(fontSize)) terminal.options.fontSize = fontSize;
+const rows = terminal.element?.querySelector<HTMLElement>(".xterm-rows");
+if (rows) {
+if (fontFamily) rows.style.setProperty("font-family", fontFamily);
+if (Number.isFinite(fontSize)) rows.style.setProperty("font-size", String(fontSize) + "px");
+}
 fitAddonRef.current?.fit();
 if (isTauri()) {
 void invoke("terminal_resize", {
