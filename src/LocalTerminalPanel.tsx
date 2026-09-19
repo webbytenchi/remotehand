@@ -69,10 +69,10 @@ brightMagenta: "#ff55ff",
 brightCyan: "#55ffff",
 brightWhite: "#ffffff",
 };
-function getTheme() {
-const terminalTheme = document.documentElement.dataset.terminalTheme;
+function getTheme(ownerDocument: Document = document) {
+const terminalTheme = ownerDocument.documentElement.dataset.terminalTheme;
 const baseTheme = terminalTheme === "classic" ? CLASSIC_THEME : COMFORT_THEME;
-const styles = getComputedStyle(document.documentElement);
+const styles = ownerDocument.defaultView?.getComputedStyle(ownerDocument.documentElement) ?? getComputedStyle(ownerDocument.documentElement);
 const background = styles.getPropertyValue("--terminal-background").trim();
 const foreground = styles.getPropertyValue("--terminal-foreground").trim();
 return {
@@ -117,16 +117,17 @@ fitAddonRef.current = fitAddon;
 const terminal = new Terminal({
 cursorBlink: true,
 convertEol: false,
-fontFamily: getComputedStyle(document.documentElement).getPropertyValue("--terminal-font-family").trim() || ["JetBrains Mono", "Cascadia Code", "Cascadia Mono", "Consolas", "Liberation Mono", "monospace"].join(", "),
-fontSize: Number.parseInt(getComputedStyle(document.documentElement).getPropertyValue("--terminal-font-size"), 10) || 13,
+fontFamily: getComputedStyle(host.ownerDocument.documentElement).getPropertyValue("--terminal-font-family").trim() || ["JetBrains Mono", "Cascadia Code", "Cascadia Mono", "Consolas", "Liberation Mono", "monospace"].join(", "),
+fontSize: Number.parseInt(getComputedStyle(host.ownerDocument.documentElement).getPropertyValue("--terminal-font-size"), 10) || 13,
 scrollback: 10000,
-theme: getTheme(),
+theme: getTheme(host.ownerDocument),
 });
 
 const applyTerminalDomTypography = () => {
 const rows = terminal.element?.querySelector<HTMLElement>(".xterm-rows");
 if (!rows) return;
-const styles = getComputedStyle(document.documentElement);
+const ownerDocument = host.ownerDocument;
+const styles = ownerDocument.defaultView?.getComputedStyle(ownerDocument.documentElement) ?? getComputedStyle(ownerDocument.documentElement);
 const fontFamily = styles.getPropertyValue("--terminal-font-family").trim();
 const fontSize = styles.getPropertyValue("--terminal-font-size").trim();
 if (fontFamily) rows.style.setProperty("font-family", fontFamily);
@@ -294,11 +295,14 @@ fitAddonRef.current = null;
 useEffect(() => {
 const applyAppearance = () => {
 const terminal = terminalRef.current;
-if (!terminal) return;
-const styles = getComputedStyle(document.documentElement);
+const host = hostRef.current;
+if (!terminal || !host) return;
+const ownerDocument = host.ownerDocument;
+const ownerWindow = ownerDocument.defaultView;
+const styles = ownerWindow?.getComputedStyle(ownerDocument.documentElement) ?? getComputedStyle(ownerDocument.documentElement);
 const fontFamily = styles.getPropertyValue("--terminal-font-family").trim();
 const fontSize = Number.parseInt(styles.getPropertyValue("--terminal-font-size"), 10);
-terminal.options.theme = getTheme();
+terminal.options.theme = getTheme(ownerDocument);
 if (fontFamily) terminal.options.fontFamily = fontFamily;
 if (Number.isFinite(fontSize)) terminal.options.fontSize = fontSize;
 const rows = terminal.element?.querySelector<HTMLElement>(".xterm-rows");
@@ -307,6 +311,12 @@ if (fontFamily) rows.style.setProperty("font-family", fontFamily);
 if (Number.isFinite(fontSize)) rows.style.setProperty("font-size", String(fontSize) + "px");
 }
 fitAddonRef.current?.fit();
+if (api.location.type === "popout") {
+const computed = rows ? ownerWindow?.getComputedStyle(rows) : null;
+setDiagnostic(
+`doc=${ownerDocument.URL} | location=${String(api.location.type)} | font=${terminal.options.fontFamily} | size=${terminal.options.fontSize}px | rows=${terminal.rows} cols=${terminal.cols} | cssFont=${computed?.fontFamily ?? "n/a"} | cssSize=${computed?.fontSize ?? "n/a"}`,
+);
+}
 if (isTauri()) {
 void invoke("terminal_resize", {
 sessionId,
@@ -315,17 +325,28 @@ cols: terminal.cols,
 }).catch(() => undefined);
 }
 };
+const ownerDocument = hostRef.current?.ownerDocument ?? document;
+const ownerWindow = ownerDocument.defaultView ?? window;
 const observer = new MutationObserver(applyAppearance);
-observer.observe(document.documentElement, {
+observer.observe(ownerDocument.documentElement, {
 attributes: true,
 attributeFilter: ["data-theme", "data-terminal-theme"],
 });
-window.addEventListener("remotehand-appearance-change", applyAppearance);
+ownerWindow.addEventListener("remotehand-appearance-change", applyAppearance);
+const locationDisposable = api.onDidLocationChange(() => {
+const nextWindow = hostRef.current?.ownerDocument.defaultView;
+if (nextWindow) {
+nextWindow.requestAnimationFrame(applyAppearance);
+} else {
+applyAppearance();
+}
+});
 return () => {
 observer.disconnect();
-window.removeEventListener("remotehand-appearance-change", applyAppearance);
+ownerWindow.removeEventListener("remotehand-appearance-change", applyAppearance);
+locationDisposable.dispose();
 };
-}, [sessionId]);
+}, [api, sessionId]);
 useEffect(() => {
 const host = hostRef.current;
 if (!host) return;
