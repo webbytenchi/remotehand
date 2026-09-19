@@ -2,6 +2,21 @@
 
 All notable changes to RemoteHand are documented here.
 
+## `1.2.0` - unreleased
+
+### Added
+
+- **System tray integration.** Show RemoteHand in the desktop system tray, show or hide the main window, open Home, and exit from the tray menu.
+- **Startup preference.** Optionally start RemoteHand automatically at user login on supported desktop platforms.
+- **Start minimized.** Autostart launches can open hidden until the user chooses Show RemoteHand from the tray.
+- **Minimize to tray on close.** The main-window close action can hide RemoteHand instead of exiting when the system tray is enabled.
+- **Startup & system tray settings** in the existing Settings dialog.
+
+### Notes
+
+- The application remains portable. Startup registration is maintained by the operating system and does not move RemoteHand's normal data out of the portable directory.
+- Host Monitor and other plugins are unchanged by this feature.
+
 The format is based on `Keep a Changelog` (https://keepachangelog.com/), and this project adheres to `Semantic Versioning` (https://semver.org/).
 
 ## `1.1.0` - 2026-09-19
