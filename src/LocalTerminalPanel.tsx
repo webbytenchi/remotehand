@@ -297,14 +297,6 @@ if (Number.isFinite(fontSize)) terminal.options.fontSize = fontSize;
 terminal.options.cursorStyle = "block";
 terminal.options.cursorInactiveStyle = "block";
 fitAddonRef.current?.fit();
-
-const styles = getComputedStyle(document.documentElement);
-const fontFamily = styles.getPropertyValue("--terminal-font-family").trim();
-const fontSize = Number.parseInt(styles.getPropertyValue("--terminal-font-size"), 10);
-terminal.options.theme = getTheme();
-if (fontFamily) terminal.options.fontFamily = fontFamily;
-if (Number.isFinite(fontSize)) terminal.options.fontSize = fontSize;
-fitAddonRef.current?.fit();
 if (isTauri()) {
 void invoke("terminal_resize", {
 sessionId,
