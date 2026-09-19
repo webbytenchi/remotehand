@@ -917,6 +917,12 @@ for (const popout of api.getPopouts()) {
 syncPopoutAppearance(popout.window);
 }
 }, [settings, syncPopoutAppearance]);
+
+useEffect(() => {
+if (!settingsOpen || settingsTab !== "startup" || papaTabUnlocked) {
+papaSequenceRef.current = [];
+return;
+}
 const sequence = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "b", "a"];
 const onKeyDown = (event: KeyboardEvent) => {
 if (!settingsOpen || settingsTab !== "startup") return;
