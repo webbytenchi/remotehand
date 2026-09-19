@@ -5,6 +5,7 @@ mod sftp;
 mod sftp_native;
 mod sftp_path;
 mod storage;
+mod startup_tray;
 mod terminal;
 mod vault;
 mod window_state;
@@ -27,6 +28,8 @@ pub fn run() {
     let load_page_loaded = page_loaded.clone();
     let setup_window_restored = window_restored.clone();
     let setup_page_loaded = page_loaded.clone();
+    let startup_tray_state = startup_tray::StartupTrayState::default();
+    let start_hidden = startup_tray::should_minimize_at_startup();
     let popout_counter = Arc::new(AtomicU64::new(0));
 
     tauri::Builder::default()
@@ -34,6 +37,8 @@ pub fn run() {
         .manage(plugin_runtime::PluginRuntimeState::default())
         .manage(sftp_native::PersistentSftpState::default())
         .manage(vault::VaultState::default())
+        .manage(startup_tray_state.clone())
+        .plugin(tauri_plugin_autostart::Builder::new().args(["--startup-minimized"]).build())
         .invoke_handler(tauri::generate_handler![
             storage::load_settings,
             storage::save_settings,
@@ -86,6 +91,10 @@ pub fn run() {
             terminal::terminal_resize,
             terminal::terminal_close,
             local_os,
+            startup_tray::set_startup_enabled,
+            startup_tray::startup_enabled,
+            startup_tray::set_tray_visible,
+            startup_tray::set_close_to_tray,
         ])
         .on_page_load(move |webview, payload| {
             if webview.label() == "main" && payload.event() == PageLoadEvent::Finished {
@@ -134,6 +143,10 @@ pub fn run() {
                 })
                 .build()
                 .map_err(std::io::Error::other)?;
+            startup_tray::install(app, &startup_tray_state).map_err(std::io::Error::other)?;
+            let saved = storage::load_settings().map_err(std::io::Error::other)?;
+            startup_tray_state.set_close_to_tray(saved.minimize_to_tray_on_close);
+            startup_tray_state.set_show_in_tray(app.handle(), saved.show_in_system_tray).map_err(std::io::Error::other)?;
             app.handle()
                 .plugin(logging::builder().map_err(std::io::Error::other)?.build())?;
             if let Some(runtime) = app.try_state::<plugin_runtime::PluginRuntimeState>() {
@@ -148,7 +161,7 @@ pub fn run() {
             app.manage(tracker.clone());
             window_state::restore(app, &tracker).map_err(std::io::Error::other)?;
             setup_window_restored.store(true, Ordering::Release);
-            if setup_page_loaded.load(Ordering::Acquire) {
+            if setup_page_loaded.load(Ordering::Acquire) && !start_hidden {
                 if let Some(window) = app.get_webview_window("main") {
                     if let Err(error) = window.show() {
                         log::error!("Failed to show main window: {error}");
