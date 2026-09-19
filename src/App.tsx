@@ -902,7 +902,6 @@ papaSequenceRef.current = [];
 return;
 }
 papaSequenceRef.current = key === sequence[0] ? [key] : [];
-setPapaDebugSequence(papaSequenceRef.current.map((item) => item.length === 1 ? item.toUpperCase() : item.replace("Arrow", "")).join(" "));
 };
 window.addEventListener("keydown", onKeyDown, true);
 return () => window.removeEventListener("keydown", onKeyDown, true);
