@@ -649,13 +649,6 @@ impl PluginRuntimeState {
         Ok(())
     }
 
-    pub fn is_running(&self, id: &str) -> bool {
-        self.sessions
-            .lock()
-            .map(|sessions| sessions.contains_key(id))
-            .unwrap_or(false)
-    }
-}
 #[tauri::command]
 pub async fn plugin_runtime_call(
     app: AppHandle,
