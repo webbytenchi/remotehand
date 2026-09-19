@@ -20,6 +20,8 @@ RemoteHand V1 is intentionally focused on the workflows needed for day-to-day te
 - Dark, light, and system themes
 - Configurable color scheme, UI font, and terminal appearance
 - Optional startup at user login and system-tray integration
+- Start minimized and minimize-to-tray support
+- Tray shortcuts for Home, Connections, New Terminal, and Settings
 - Terminal selection auto-copy, right-click paste, and multi-line paste confirmation
 - Responsive Connections and Recent Activity cards
 
@@ -137,6 +139,19 @@ The vault uses the established `age` format with passphrase-based encryption. Sa
 See [SECURITY.md](SECURITY.md) for the threat model and limitations.
 
 ## Settings
+
+V1.2 adds a separate Startup & Tray settings tab alongside the existing Appearance tab.
+
+Startup & Tray settings include:
+
+- Start RemoteHand with the system at user login
+- Start minimized for automatic launches
+- Show RemoteHand in the system tray
+- Minimize to tray when closing
+
+The tray menu provides context-aware Show/Hide control plus quick access to Home, Connections, New Terminal, Settings, and Exit.
+
+The system-start registration is an operating-system user preference; normal application data remains portable under `data/`.
 
 V1 settings include:
 
