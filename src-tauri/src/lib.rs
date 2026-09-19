@@ -38,7 +38,7 @@ pub fn run() {
         .manage(sftp_native::PersistentSftpState::default())
         .manage(vault::VaultState::default())
         .manage(startup_tray_state.clone())
-        .plugin(tauri_plugin_autostart::Builder::new().args(["--startup-minimized"]).build())
+        .plugin(tauri_plugin_autostart::Builder::new().args(["--autostart"]).build())
         .invoke_handler(tauri::generate_handler![
             storage::load_settings,
             storage::save_settings,
@@ -174,6 +174,14 @@ pub fn run() {
         .on_window_event(|window, event| {
             if window.label() != "main" {
                 return;
+            }
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let tray_state = window.state::<startup_tray::StartupTrayState>();
+                if startup_tray::handle_close(window, &tray_state) {
+                    api.prevent_close();
+                    let _ = window.hide();
+                    return;
+                }
             }
             let tracker = window.state::<window_state::WindowStateTracker>();
             window_state::handle_event(&tracker, window, event);
