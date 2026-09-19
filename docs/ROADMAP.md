@@ -102,6 +102,18 @@ Further transfer queue polish and richer progress/ETA UX can continue later.
 - Plugin-scoped storage and host-mediated permissions - shipping
 - Host Monitor reference plugin - released separately as v0.5.0
 
+## V1.2 - Startup and System Tray — Complete
+
+- Optional OS user-login startup
+- Start minimized for automatic launches
+- Native system tray
+- Context-aware Show/Hide tray action
+- Tray shortcuts for Home, Connections, New Terminal, Settings, and Exit
+- Minimize to tray on close
+- Dedicated Startup & Tray Settings tab
+- Appearance and Startup & Tray settings separated into tabs
+- Manual Windows acceptance validation for startup, minimize, tray menu actions, and exit
+
 ## Post-V1 Roadmap
 
 ### Phase 6 - SSH and Productivity Expansion
