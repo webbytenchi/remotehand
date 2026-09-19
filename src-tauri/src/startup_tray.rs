@@ -48,7 +48,7 @@ impl StartupTrayState {
     }
 }
 
-fn build_menu(app: &AppHandle, visible: bool) -> Result<tauri::menu::Menu<impl Runtime>, Box<dyn std::error::Error + Send + Sync>> {
+fn build_menu(app: &AppHandle, visible: bool) -> Result<tauri::menu::Menu, Box<dyn std::error::Error + Send + Sync>> {
     let window_item = MenuItemBuilder::with_id(
         if visible { "hide" } else { "show" },
         if visible { "Hide RemoteHand" } else { "Show RemoteHand" },
