@@ -515,9 +515,10 @@ A panel contribution points at an HTML file inside the plugin package:
 RemoteHand loads that HTML into a sandboxed iframe with a strict security posture:
 
 - The iframe has sandbox=allow-scripts - no same-origin access, no forms, no popups, no top-level navigation.
-- A Content-Security-Policy meta tag is injected into the panel head before it loads.
+- A plugin-panel Content-Security-Policy meta tag is injected into the panel head before it loads.
+- The desktop release build also preserves the inline-script policy needed by the current srcdoc hosting path. This is a host-side compatibility detail; it does not grant the panel same-origin access or direct network access.
 
-The Content-Security-Policy is:
+The plugin-panel Content-Security-Policy is:
 
 default-src none; script-src unsafe-inline; style-src unsafe-inline; img-src data: blob:; connect-src none; font-src data:; media-src data: blob:; object-src none; frame-src none; child-src none; form-action none; base-uri none;
 
@@ -747,7 +748,7 @@ Currently recognized plugin events:
 
 Event names are matched exactly. A plugin that emits an unrecognized event name is not an error - the event is silently ignored.
 
-Events flow from the plugin runtime to the frontend over a single Tauri channel named remotehand-plugin-event. The frontend dispatches based on the event field.
+Events flow from the plugin runtime to the frontend over a single Tauri channel named remotehand-plugin-event. The panel bridge exposes those runtime events through window.remotehand.onEvent(name, listener). Core may forward event names that it does not interpret itself; UI behavior outside the documented core-handled events is the plugin's responsibility.
 
 ## Installation safety
 
@@ -897,7 +898,7 @@ Reading that plugin source is the fastest way to see a full implementation.
 Plugin API v1 is stable but growing. Current limitations to be aware of:
 
 - Permissions are declared, not enforced at the OS level. A plugin is a native executable with the host privileges. The permission list is a declaration of intent, not a sandbox.
-- The recognized event list is fixed. A plugin can only trigger UI behavior for events RemoteHand already handles (topbar.update, monitor.alert). New event names are silently ignored until core adds support.
+- The recognized event list used by core UI behavior is fixed. topbar.update updates top-bar contributions and monitor.alert drives the built-in alert-sound path. Other plugin events may still be delivered to an installed plugin panel through the panel bridge, but core does not attach generic UI behavior to them.
 - Only open-panel actions are supported for top-bar contributions.
 - Panel communication is limited to request and onEvent. There is no direct panel-to-runtime channel that bypasses the host.
 - No signing or verification. Plugins are not signed. Only install plugins from sources you trust.
