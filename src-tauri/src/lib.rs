@@ -103,6 +103,9 @@ pub fn run() {
                     if let Err(error) = webview.window().show() {
                         log::error!("Failed to show main window: {error}");
                     }
+                    if let Some(tray_state) = webview.app_handle().try_state::<startup_tray::StartupTrayState>() {
+                        tray_state.sync_window_menu(&webview.app_handle());
+                    }
                 }
             }
         })
@@ -165,6 +168,9 @@ pub fn run() {
                 if let Some(window) = app.get_webview_window("main") {
                     if let Err(error) = window.show() {
                         log::error!("Failed to show main window: {error}");
+                    }
+                    if let Some(tray_state) = app.try_state::<startup_tray::StartupTrayState>() {
+                        tray_state.sync_window_menu(app.handle());
                     }
                 }
             }
