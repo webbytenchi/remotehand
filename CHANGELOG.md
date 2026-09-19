@@ -10,7 +10,13 @@ All notable changes to RemoteHand are documented here.
 - **Startup preference.** Optionally start RemoteHand automatically at user login on supported desktop platforms.
 - **Start minimized.** Autostart launches can open hidden until the user chooses Show RemoteHand from the tray.
 - **Minimize to tray on close.** The main-window close action can hide RemoteHand instead of exiting when the system tray is enabled.
-- **Startup & system tray settings** in the existing Settings dialog.
+- **Startup & system tray settings** in the existing Settings dialog, split into Appearance and Startup & Tray tabs.
+- **Tray quick actions.** Context-aware Show/Hide RemoteHand, Home, Connections, New Terminal, Settings, and Exit.
+- **Hidden Papa Easter egg.** Press `↑ ↑ ↓ ↓ ← → ← → B A` while Startup & Tray is active to reveal the Papa tab.
+
+### Verification
+
+- Windows startup, start-minimized, tray, minimize-to-tray, and tray-exit behavior were manually validated on the release build.
 
 ### Notes
 
