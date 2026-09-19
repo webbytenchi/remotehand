@@ -760,6 +760,9 @@ background: var(--terminal-background, #11151a) !important;
 background: var(--terminal-background, #11151a) !important;
 scrollbar-width: thin;
 }
+.terminal-host .xterm-viewport::-webkit-scrollbar-corner {
+background: var(--terminal-background, #11151a);
+}
 .terminal-host .xterm-rows {
 margin: 0;
 }
