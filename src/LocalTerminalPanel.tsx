@@ -431,11 +431,14 @@ title="Paste clipboard"
 >
 Paste
 </button>
-{api.location.type === "popout" ? (
-<span className="terminal-debug" title="Temporary popout diagnostic">{diagnostic || "Collecting popout diagnostics…"}</span>
-) : null}
-
 </div>
+
+{api.location.type === "popout" ? (
+<pre className="terminal-debug-panel">
+POPUP DEBUG
+{diagnostic || "Collecting popout diagnostics…"}
+</pre>
+) : null}
 
 {searchOpen ? (
 <form
