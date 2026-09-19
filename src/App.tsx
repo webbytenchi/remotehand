@@ -1215,6 +1215,82 @@ if (isTauri()) void invoke("set_close_to_tray", { value }).catch((error) => cons
 
 </div>
 )}
+</AppModal<div className="settings-tabs" role="tablist" aria-label="Settings sections">
+<button type="button" role="tab" aria-selected={settingsTab === "appearance"} className={settingsTab === "appearance" ? "active" : ""} onClick={() => setSettingsTab("appearance")}>Appearance</button>
+<button type="button" role="tab" aria-selected={settingsTab === "startup"} className={settingsTab === "startup" ? "active" : ""} onClick={() => setSettingsTab("startup")}>Startup &amp; Tray</button>
+</div>
+{settingsTab === "appearance" ? (
+<div className="appearance-settings">
+<div className="settings-section-heading">
+<strong>Appearance</strong>
+<span>Customize RemoteHand and terminal typography.</span>
+</div>
+<div className="settings-field">
+<span>Theme</span>
+<div className="settings-segmented">
+{(["dark", "light", "system"] as ThemeMode[]).map((mode) => (
+<button key={mode} type="button" className={settings.theme === mode ? "active" : ""} onClick={() => setSettings((current) => ({ ...current, theme: mode }))}>
+{mode[0].toUpperCase() + mode.slice(1)}
+</button>
+))}
+</div>
+</div>
+<div className="settings-field">
+<label htmlFor="color-scheme">Color scheme</label>
+<select id="color-scheme" value={settings.colorScheme} onChange={(event) => setSettings((current) => ({ ...current, colorScheme: event.target.value as ColorScheme }))}>
+<option value="blue">RemoteHand Blue</option>
+<option value="emerald">Emerald</option>
+<option value="violet">Violet</option>
+<option value="amber">Amber</option>
+<option value="neutral">Neutral</option>
+</select>
+</div>
+<div className="settings-field settings-font-row">
+<label htmlFor="ui-font">Interface font</label>
+<select id="ui-font" value={settings.uiFontFamily} onChange={(event) => setSettings((current) => ({ ...current, uiFontFamily: event.target.value }))}>
+{UI_FONT_OPTIONS.map((font) => <option key={font} value={font}>{font}</option>)}
+</select>
+<div className="settings-stepper" aria-label="Interface font size">
+<button type="button" onClick={() => setSettings((current) => ({ ...current, uiFontSize: Math.max(11, current.uiFontSize - 1) }))}>−</button>
+<span>{settings.uiFontSize} px</span>
+<button type="button" onClick={() => setSettings((current) => ({ ...current, uiFontSize: Math.min(18, current.uiFontSize + 1) }))}>+</button>
+</div>
+</div>
+<div className="settings-field">
+<label htmlFor="terminal-theme">Terminal theme</label>
+<select id="terminal-theme" value={settings.terminalTheme} onChange={(event) => {
+const terminalTheme = event.target.value as TerminalTheme;
+setSettings((current) => {
+if (terminalTheme === "comfort") return { ...current, terminalTheme, terminalBackground: "#11151a", terminalForeground: "#d8dde6" };
+if (terminalTheme === "classic") return { ...current, terminalTheme, terminalBackground: "#05070a", terminalForeground: "#d5dbe5" };
+return { ...current, terminalTheme };
+});
+}}>
+<option value="comfort">RemoteHand Comfort</option>
+<option value="classic">RemoteHand Classic</option>
+<option value="custom">Custom</option>
+</select>
+</div>
+<div className="settings-color-row">
+<label><span>Background</span><div className="settings-color-control"><input type="color" value={settings.terminalBackground} onChange={(event) => setSettings((current) => ({ ...current, terminalTheme: "custom", terminalBackground: event.target.value }))} /><input type="text" value={settings.terminalBackground} maxLength={7} onChange={(event) => setSettings((current) => ({ ...current, terminalTheme: "custom", terminalBackground: event.target.value }))} /></div></label>
+<label><span>Foreground</span><div className="settings-color-control"><input type="color" value={settings.terminalForeground} onChange={(event) => setSettings((current) => ({ ...current, terminalTheme: "custom", terminalForeground: event.target.value }))} /><input type="text" value={settings.terminalForeground} maxLength={7} onChange={(event) => setSettings((current) => ({ ...current, terminalTheme: "custom", terminalBackground: event.target.value }))} /></div></label>
+</div>
+<div className="settings-field settings-font-row">
+<label htmlFor="terminal-font">Terminal font</label>
+<select id="terminal-font" value={settings.terminalFontFamily} onChange={(event) => setSettings((current) => ({ ...current, terminalFontFamily: event.target.value }))}>
+{TERMINAL_FONT_OPTIONS.map((font) => <option key={font} value={font}>{font}</option>)}
+</select>
+<div className="settings-stepper" aria-label="Terminal font size">
+<button type="button" onClick={() => setSettings((current) => ({ ...current, terminalFontSize: Math.max(10, current.terminalFontSize - 1) }))}>−</button>
+<span>{settings.terminalFontSize} px</span>
+<button type="button" onClick={() => setSettings((current) => ({ ...current, terminalFontSize: Math.min(24, current.terminalFontSize + 1) }))}>+</button>
+</div>
+</div>
+<button type="button" className="settings-reset" onClick={() => setSettings(DEFAULT_SETTINGS)}>Reset appearance</button>
+
+) : (
+
+)}
 </AppModal>
 {paletteOpen && (
 <div className="palette-backdrop" role="presentation" onMouseDown={() => setPaletteOpen(false)}>
