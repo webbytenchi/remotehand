@@ -1257,8 +1257,11 @@ return { ...current, terminalTheme };
 <div className="appearance-settings startup-settings settings-tab-content">
 <div className="settings-section-heading">
 <span>Control how RemoteHand behaves when Windows or Linux starts it.</span>
-<span className="papa-debug" style={{ color: "#aeb8c6", fontSize: 12, marginTop: 8, display: "block" }} id="papa-debug">Debug: key=<strong>{papaDebugKey || "—"}</strong> · sequence=<strong>{papaDebugSequence || "—"}</strong></span>
-<span className="papa-debug" aria-live="polite">Debug: key=<strong>{papaDebugKey || "—"}</strong> · sequence=<strong>{papaDebugSequence || "—"}</strong></span>
+</div>
+<div className="papa-debug-panel" aria-live="polite">
+<div>KEY DEBUG</div>
+<strong>{papaDebugKey || "—"}</strong>
+<span>Sequence: {papaDebugSequence || "—"}</span>
 </div>
 <label className="settings-toggle">
 <input type="checkbox" checked={settings.startWithSystem} onChange={(event) => {
