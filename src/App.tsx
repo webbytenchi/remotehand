@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import {
 DockviewReact,
 type DockviewApi,
@@ -787,8 +788,14 @@ setSettingsLoaded(true);
 return;
 }
 void invoke<Settings>("load_settings")
-.then((saved) => {
-setSettings({ ...DEFAULT_SETTINGS, ...saved });
+.then(async (saved) => {
+let startWithSystem = false;
+try {
+startWithSystem = await invoke<boolean>("startup_enabled");
+} catch (error) {
+console.error("Failed to load startup preference", error);
+}
+setSettings({ ...DEFAULT_SETTINGS, ...saved, startWithSystem });
 setSettingsLoaded(true);
 })
 .catch((error) => {
@@ -857,6 +864,18 @@ panel.api.setTitle("Home");
 panel.api.updateParameters({ activities: recentActivities });
 }
 }, [recentActivities]);
+useEffect(() => {
+if (!isTauri()) return;
+let cancelled = false;
+let unlisten: (() => void) | undefined;
+void listen("remotehand-tray-home", () => {
+if (!cancelled) openHome();
+}).then((dispose) => {
+if (cancelled) dispose();
+else unlisten = dispose;
+});
+return () => { cancelled = true; unlisten?.(); };
+}, [openHome]);
 useEffect(() => {
 const onKeyDown = (event: KeyboardEvent) => {
 if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
@@ -1144,6 +1163,38 @@ focusActions={false}>
 <button type="button" onClick={() => setSettings((current) => ({ ...current, uiFontSize: Math.min(18, current.uiFontSize + 1) }))}>+</button>
 </div>
 </div>
+<div className="settings-section-heading settings-section-divider">
+<strong>Startup &amp; system tray</strong>
+<span>Control how RemoteHand behaves when Windows or Linux starts it.</span>
+</div>
+<label className="settings-toggle">
+<input type="checkbox" checked={settings.startWithSystem} onChange={(event) => {
+const enabled = event.target.checked;
+setSettings((current) => ({ ...current, startWithSystem: enabled }));
+if (isTauri()) void invoke("set_startup_enabled", { enabled }).catch((error) => console.error("Failed to update startup preference", error));
+}} />
+<span><strong>Start RemoteHand with system</strong><small>Launch RemoteHand automatically at user login.</small></span>
+</label>
+<label className="settings-toggle">
+<input type="checkbox" checked={settings.startMinimized} onChange={(event) => setSettings((current) => ({ ...current, startMinimized: event.target.checked }))} />
+<span><strong>Start minimized</strong><small>Applies when RemoteHand is launched automatically.</small></span>
+</label>
+<label className="settings-toggle">
+<input type="checkbox" checked={settings.showInSystemTray} onChange={(event) => {
+const visible = event.target.checked;
+setSettings((current) => ({ ...current, showInSystemTray: visible }));
+if (isTauri()) void invoke("set_tray_visible", { visible }).catch((error) => console.error("Failed to update tray visibility", error));
+}} />
+<span><strong>Show RemoteHand in system tray</strong><small>Keep a tray icon available while RemoteHand is running.</small></span>
+</label>
+<label className={"settings-toggle" + (!settings.showInSystemTray ? " disabled" : "")}>
+<input type="checkbox" checked={settings.minimizeToTrayOnClose} disabled={!settings.showInSystemTray} onChange={(event) => {
+const value = event.target.checked;
+setSettings((current) => ({ ...current, minimizeToTrayOnClose: value }));
+if (isTauri()) void invoke("set_close_to_tray", { value }).catch((error) => console.error("Failed to update close-to-tray preference", error));
+}} />
+<span><strong>Minimize to tray when closing</strong><small>Keep RemoteHand running when the main window is closed.</small></span>
+</label>
 <div className="settings-field">
 <label htmlFor="terminal-theme">Terminal theme</label>
 <select id="terminal-theme" value={settings.terminalTheme} onChange={(event) => {
