@@ -1269,7 +1269,7 @@ return { ...current, terminalTheme };
 </div>
 <div className="settings-color-row">
 <label><span>Background</span><div className="settings-color-control"><input type="color" value={settings.terminalBackground} onChange={(event) => setSettings((current) => ({ ...current, terminalTheme: "custom", terminalBackground: event.target.value }))} /><input type="text" value={settings.terminalBackground} maxLength={7} onChange={(event) => setSettings((current) => ({ ...current, terminalTheme: "custom", terminalBackground: event.target.value }))} /></div></label>
-<label><span>Foreground</span><div className="settings-color-control"><input type="color" value={settings.terminalForeground} onChange={(event) => setSettings((current) => ({ ...current, terminalTheme: "custom", terminalForeground: event.target.value }))} /><input type="text" value={settings.terminalForeground} maxLength={7} onChange={(event) => setSettings((current) => ({ ...current, terminalTheme: "custom", terminalBackground: event.target.value }))} /></div></label>
+<label><span>Foreground</span><div className="settings-color-control"><input type="color" value={settings.terminalForeground} onChange={(event) => setSettings((current) => ({ ...current, terminalTheme: "custom", terminalForeground: event.target.value }))} /><input type="text" value={settings.terminalForeground} maxLength={7} onChange={(event) => setSettings((current) => ({ ...current, terminalTheme: "custom", terminalForeground: event.target.value }))} /></div></label>
 </div>
 <div className="settings-field settings-font-row">
 <label htmlFor="terminal-font">Terminal font</label>
