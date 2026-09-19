@@ -48,18 +48,53 @@ impl StartupTrayState {
     }
 }
 
-pub fn install(app: &tauri::AppHandle, state: &StartupTrayState) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let show_item = MenuItemBuilder::with_id("show", "Show RemoteHand").build(app)?;
+fn build_menu(app: &AppHandle, visible: bool) -> Result<tauri::menu::Menu<impl Runtime>, Box<dyn std::error::Error + Send + Sync>> {
+    let window_item = MenuItemBuilder::with_id(
+        if visible { "hide" } else { "show" },
+        if visible { "Hide RemoteHand" } else { "Show RemoteHand" },
+    ).build(app)?;
     let home_item = MenuItemBuilder::with_id("home", "Home").build(app)?;
     let connections_item = MenuItemBuilder::with_id("connections", "Connections").build(app)?;
     let terminal_item = MenuItemBuilder::with_id("terminal", "New Terminal").build(app)?;
     let settings_item = MenuItemBuilder::with_id("settings", "Settings").build(app)?;
-    let hide_item = MenuItemBuilder::with_id("hide", "Hide RemoteHand").build(app)?;
     let quit_item = MenuItemBuilder::with_id("quit", "Exit").build(app)?;
     let separator = PredefinedMenuItem::separator(app)?;
-    let menu = MenuBuilder::new(app)
-        .items(&[&show_item, &home_item, &connections_item, &terminal_item, &settings_item, &hide_item, &separator, &quit_item])
-        .build()?;
+    Ok(MenuBuilder::new(app)
+        .items(&[
+            &window_item,
+            &home_item,
+            &connections_item,
+            &terminal_item,
+            &settings_item,
+            &separator,
+            &quit_item,
+        ])
+        .build()?)
+}
+
+fn refresh_menu(app: &AppHandle) {
+    let visible = app
+        .get_webview_window("main")
+        .and_then(|window| window.is_visible().ok())
+        .unwrap_or(true);
+    if let Some(tray) = app.tray_by_id("main-tray") {
+        match build_menu(app, visible) {
+            Ok(menu) => {
+                if let Err(error) = tray.set_menu(Some(menu)) {
+                    log::error!("Failed to refresh tray menu: {error}");
+                }
+            }
+            Err(error) => log::error!("Failed to build tray menu: {error}"),
+        }
+    }
+}
+
+pub fn install(app: &tauri::AppHandle, state: &StartupTrayState) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let visible = app
+        .get_webview_window("main")
+        .and_then(|window| window.is_visible().ok())
+        .unwrap_or(true);
+    let menu = build_menu(app, visible)?;
 
     let icon = app
         .default_window_icon()
@@ -72,22 +107,32 @@ pub fn install(app: &tauri::AppHandle, state: &StartupTrayState) -> Result<(), B
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {
-            "show" => show_main(app),
-            "hide" => hide_main(app),
+            "show" => {
+                show_main(app);
+                refresh_menu(app);
+            }
+            "hide" => {
+                hide_main(app);
+                refresh_menu(app);
+            }
             "home" => {
                 show_main(app);
+                refresh_menu(app);
                 let _ = app.emit("remotehand-tray-home", ());
             }
             "connections" => {
                 show_main(app);
+                refresh_menu(app);
                 let _ = app.emit("remotehand-tray-connections", ());
             }
             "terminal" => {
                 show_main(app);
+                refresh_menu(app);
                 let _ = app.emit("remotehand-tray-terminal", ());
             }
             "settings" => {
                 show_main(app);
+                refresh_menu(app);
                 let _ = app.emit("remotehand-tray-settings", ());
             }
             "quit" => {
@@ -99,13 +144,22 @@ pub fn install(app: &tauri::AppHandle, state: &StartupTrayState) -> Result<(), B
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click {
-                button: MouseButton::Left,
-                button_state: MouseButtonState::Up,
-                ..
-            } = event
-            {
-                show_main(&tray.app_handle());
+            match event {
+                TrayIconEvent::Click {
+                    button: MouseButton::Left,
+                    button_state: MouseButtonState::Up,
+                    ..
+                } => {
+                    show_main(&tray.app_handle());
+                    refresh_menu(&tray.app_handle());
+                }
+                TrayIconEvent::Click {
+                    button: MouseButton::Right,
+                    ..
+                } => {
+                    refresh_menu(&tray.app_handle());
+                }
+                _ => {}
             }
         })
         .build(app)?;
