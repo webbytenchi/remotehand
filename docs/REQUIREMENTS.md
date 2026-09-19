@@ -175,6 +175,19 @@ Credentials must not be embedded directly in connection JSON.
 - Required cloud account
 - Installer-based distribution
 
+## Plugin Runtime and Extensibility
+
+The shipped plugin baseline includes:
+
+- Out-of-process executable plugins
+- Versioned Plugin API v1 handshake and IPC
+- Manifest-declared permissions and plugin-scoped storage
+- Dockable plugin panels hosted in sandboxed iframes
+- Sidebar and command contributions
+- Generic live top-bar widget contributions
+- Plugin Manager install/enable/disable/remove workflows
+- A separate Host Monitor reference plugin using the generic API
+
 ## Post-V1 Requirements
 
 Candidate post-V1 capabilities include:
