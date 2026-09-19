@@ -131,8 +131,10 @@ const ownerDocument = host.ownerDocument;
 const styles = ownerDocument.defaultView?.getComputedStyle(ownerDocument.documentElement) ?? getComputedStyle(ownerDocument.documentElement);
 const fontFamily = styles.getPropertyValue("--terminal-font-family").trim();
 const fontSize = styles.getPropertyValue("--terminal-font-size").trim();
+const foreground = styles.getPropertyValue("--terminal-foreground").trim();
 if (fontFamily) rows.style.setProperty("font-family", fontFamily);
 if (fontSize) rows.style.setProperty("font-size", fontSize);
+if (foreground) rows.style.setProperty("color", foreground);
 };
 
 terminal.loadAddon(fitAddon);
@@ -333,6 +335,8 @@ const rows = terminal.element?.querySelector<HTMLElement>(".xterm-rows");
 if (rows) {
 if (fontFamily) rows.style.setProperty("font-family", fontFamily);
 if (Number.isFinite(fontSize)) rows.style.setProperty("font-size", String(fontSize) + "px");
+const foreground = styles.getPropertyValue("--terminal-foreground").trim();
+if (foreground) rows.style.setProperty("color", foreground);
 }
 fitAddonRef.current?.fit();
 if (api.location.type === "popout") {
@@ -369,8 +373,10 @@ if (rows) {
 const styles = host.ownerDocument.defaultView?.getComputedStyle(host.ownerDocument.documentElement);
 const fontFamily = styles?.getPropertyValue("--terminal-font-family").trim();
 const fontSize = styles?.getPropertyValue("--terminal-font-size").trim();
+const foreground = styles?.getPropertyValue("--terminal-foreground").trim();
 if (fontFamily) rows.style.setProperty("font-family", fontFamily);
 if (fontSize) rows.style.setProperty("font-size", fontSize);
+if (foreground) rows.style.setProperty("color", foreground);
 }
 applyAppearance();
 terminal.refresh(0, terminal.rows - 1);
