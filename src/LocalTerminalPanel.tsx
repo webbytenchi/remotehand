@@ -7,6 +7,13 @@ import { useEffect, useRef, useState } from "react";
 import { AppModal } from "./AppModal";
 import "@xterm/xterm/css/xterm.css";
 type LocalShell = "default" | "powershell" | "cmd" | "wsl";
+type TerminalAppearance = {
+terminalTheme?: "comfort" | "classic" | "custom";
+terminalBackground?: string;
+terminalForeground?: string;
+terminalFontFamily?: string;
+terminalFontSize?: number;
+};
 type TerminalParams = {
 shell?: LocalShell;
 initialCommand?: string;
@@ -16,6 +23,7 @@ port: number;
 user: string;
 name: string;
 };
+appearance?: TerminalAppearance;
 };
 type TerminalOutputEvent = {
 sessionId: string;
@@ -69,16 +77,17 @@ brightMagenta: "#ff55ff",
 brightCyan: "#55ffff",
 brightWhite: "#ffffff",
 };
-function getTheme() {
-const terminalTheme = document.documentElement.dataset.terminalTheme;
+function getTheme(appearance?: TerminalAppearance) {
+const terminalTheme = appearance?.terminalTheme ?? document.documentElement.dataset.terminalTheme;
 const baseTheme = terminalTheme === "classic" ? CLASSIC_THEME : COMFORT_THEME;
 const styles = getComputedStyle(document.documentElement);
-const background = styles.getPropertyValue("--terminal-background").trim();
-const foreground = styles.getPropertyValue("--terminal-foreground").trim();
+const background = appearance?.terminalBackground || styles.getPropertyValue("--terminal-background").trim();
+const foreground = appearance?.terminalForeground || styles.getPropertyValue("--terminal-foreground").trim();
 return {
 ...baseTheme,
 background: background || baseTheme.background,
 foreground: foreground || baseTheme.foreground,
+cursor: foreground || baseTheme.foreground,
 cursorAccent: background || baseTheme.background,
 };
 }
@@ -108,18 +117,25 @@ const sessionId = api.id;
 const shell = params?.shell ?? "default";
 const ssh = params?.ssh;
 const initialCommand = params?.initialCommand;
+const appearance = params?.appearance;
 useEffect(() => {
 const host = hostRef.current;
 if (!host) return;
 const fitAddon = new FitAddon();
 fitAddonRef.current = fitAddon;
 const terminal = new Terminal({
-cursorBlink: true,
 convertEol: false,
-fontFamily: getComputedStyle(document.documentElement).getPropertyValue("--terminal-font-family").trim() || ["JetBrains Mono", "Cascadia Code", "Cascadia Mono", "Consolas", "Liberation Mono", "monospace"].join(", "),
-fontSize: Number.parseInt(getComputedStyle(document.documentElement).getPropertyValue("--terminal-font-size"), 10) || 13,
+fontFamily: appearance?.terminalFontFamily
+|| getComputedStyle(document.documentElement).getPropertyValue("--terminal-font-family").trim()
+|| ["JetBrains Mono", "Cascadia Code", "Cascadia Mono", "Consolas", "Liberation Mono", "monospace"].join(", "),
+fontSize: appearance?.terminalFontSize
+?? Number.parseInt(getComputedStyle(document.documentElement).getPropertyValue("--terminal-font-size"), 10)
+?? 13,
+cursorBlink: true,
+cursorStyle: "block",
+cursorInactiveStyle: "block",
 scrollback: 10000,
-theme: getTheme(),
+theme: getTheme(appearance),
 });
 
 terminal.loadAddon(fitAddon);
@@ -273,6 +289,16 @@ const applyAppearance = () => {
 const terminal = terminalRef.current;
 if (!terminal) return;
 const styles = getComputedStyle(document.documentElement);
+const fontFamily = appearance?.terminalFontFamily || styles.getPropertyValue("--terminal-font-family").trim();
+const fontSize = appearance?.terminalFontSize ?? Number.parseInt(styles.getPropertyValue("--terminal-font-size"), 10);
+terminal.options.theme = getTheme(appearance);
+if (fontFamily) terminal.options.fontFamily = fontFamily;
+if (Number.isFinite(fontSize)) terminal.options.fontSize = fontSize;
+terminal.options.cursorStyle = "block";
+terminal.options.cursorInactiveStyle = "block";
+fitAddonRef.current?.fit();
+
+const styles = getComputedStyle(document.documentElement);
 const fontFamily = styles.getPropertyValue("--terminal-font-family").trim();
 const fontSize = Number.parseInt(styles.getPropertyValue("--terminal-font-size"), 10);
 terminal.options.theme = getTheme();
@@ -297,15 +323,18 @@ return () => {
 observer.disconnect();
 window.removeEventListener("remotehand-appearance-change", applyAppearance);
 };
-}, [sessionId]);
+}, [appearance, sessionId]);
 useEffect(() => {
 const focusTerminal = () => {
 terminalRef.current?.focus();
 };
+const ownerWindow = hostRef.current?.ownerDocument.defaultView;
+ownerWindow?.addEventListener("focus", focusTerminal);
 window.addEventListener("focus", focusTerminal);
 document.addEventListener("visibilitychange", focusTerminal);
 const frame = window.requestAnimationFrame(focusTerminal);
 return () => {
+ownerWindow?.removeEventListener("focus", focusTerminal);
 window.removeEventListener("focus", focusTerminal);
 document.removeEventListener("visibilitychange", focusTerminal);
 window.cancelAnimationFrame(frame);
