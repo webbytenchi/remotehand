@@ -1136,10 +1136,11 @@ confirmLabel="Done"
 onConfirm={() => setSettingsOpen(false)}
 onCancel={() => setSettingsOpen(false)}
 focusActions={false}>
-<div className="settings-tabs" role="tablist" aria-label="Settings sections">
+ tabs={<div className="settings-tabs" role="tablist" aria-label="Settings sections">
 <button type="button" role="tab" aria-selected={settingsTab === "appearance"} className={settingsTab === "appearance" ? "active" : ""} onClick={() => setSettingsTab("appearance")}>Appearance</button>
 <button type="button" role="tab" aria-selected={settingsTab === "startup"} className={settingsTab === "startup" ? "active" : ""} onClick={() => setSettingsTab("startup")}>Startup &amp; Tray</button>
-</div>
+</div>}
+
 {settingsTab === "appearance" ? (
 <div className="appearance-settings">
 <div className="settings-section-heading">
