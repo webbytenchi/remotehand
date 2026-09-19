@@ -997,10 +997,9 @@ event.api.onDidLayoutChange(() => {
 captureLayout(event.api);
 });
 event.api.onDidRemovePanel((panel) => {
-const wasPopout = panel.api.location.type === "popout";
 const sessionId = panel.id;
 window.setTimeout(() => {
-if (wasPopout && event.api.panels.length === 0 && isTauri()) {
+if (event.api.panels.length === 0 && isTauri()) {
 void invoke("close_current_window").catch((error) => {
 console.error("Failed to close empty popout window", error);
 });
