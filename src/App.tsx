@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import {
 DockviewReact,
 type DockviewApi,
@@ -38,6 +39,10 @@ terminalBackground: string;
 terminalForeground: string;
 terminalFontFamily: string;
 terminalFontSize: number;
+startWithSystem: boolean;
+startMinimized: boolean;
+showInSystemTray: boolean;
+minimizeToTrayOnClose: boolean;
 };
 type WorkspaceLayout = Parameters<DockviewApi["fromJSON"]>[0];
 const WORKSPACE_KEY = "remotehand.workspace";
@@ -54,6 +59,10 @@ terminalBackground: "#11151a",
 terminalForeground: "#d8dde6",
 terminalFontFamily: "JetBrains Mono",
 terminalFontSize: 13,
+startWithSystem: false,
+startMinimized: false,
+showInSystemTray: true,
+minimizeToTrayOnClose: false,
 };
 const UI_FONT_OPTIONS = ["Inter", "IBM Plex Sans", "Segoe UI", "System Default"] as const;
 const TERMINAL_FONT_OPTIONS = ["JetBrains Mono", "IBM Plex Mono", "Cascadia Mono", "Consolas", "System Monospace"] as const;
@@ -430,6 +439,9 @@ const legacyTheme = localStorage.getItem(THEME_KEY);
 return { ...DEFAULT_SETTINGS, theme: legacyTheme === "light" ? "light" : "dark" };
 });
 const [settingsOpen, setSettingsOpen] = useState(false);
+const [settingsTab, setSettingsTab] = useState<"appearance" | "startup" | "papa">("appearance");
+const [papaTabUnlocked, setPapaTabUnlocked] = useState(false);
+const papaSequenceRef = useRef<string[]>([]);
 const [pluginsOpen, setPluginsOpen] = useState(false);
 const [plugins, setPlugins] = useState<PluginInfo[]>([]);
 const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("dark");
@@ -634,7 +646,15 @@ detail: "Local shell",
 });
 }, [localOs, recordActivity]);
 const addConnections = useCallback(() => {
-apiRef.current?.addPanel({
+const api = apiRef.current;
+if (!api) return;
+const existing = api.panels.find((panel) => panel.api.component === "connections");
+if (existing) {
+existing.api.updateParameters({ connections });
+existing.api.setActive();
+return;
+}
+api.addPanel({
 id: `connections-${Date.now()}`,
 component: "connections",
 title: "Connections",
@@ -787,8 +807,14 @@ setSettingsLoaded(true);
 return;
 }
 void invoke<Settings>("load_settings")
-.then((saved) => {
-setSettings({ ...DEFAULT_SETTINGS, ...saved });
+.then(async (saved) => {
+let startWithSystem = false;
+try {
+startWithSystem = await invoke<boolean>("startup_enabled");
+} catch (error) {
+console.error("Failed to load startup preference", error);
+}
+setSettings({ ...DEFAULT_SETTINGS, ...saved, startWithSystem });
 setSettingsLoaded(true);
 })
 .catch((error) => {
@@ -857,6 +883,46 @@ panel.api.setTitle("Home");
 panel.api.updateParameters({ activities: recentActivities });
 }
 }, [recentActivities]);
+useEffect(() => {
+if (!settingsOpen || settingsTab !== "startup" || papaTabUnlocked) {
+papaSequenceRef.current = [];
+return;
+}
+const sequence = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "b", "a"];
+const onKeyDown = (event: KeyboardEvent) => {
+if (!settingsOpen || settingsTab !== "startup") return;
+const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+const expected = sequence[papaSequenceRef.current.length];
+if (key === expected) {
+papaSequenceRef.current.push(key);
+if (papaSequenceRef.current.length === sequence.length) {
+setPapaTabUnlocked(true);
+papaSequenceRef.current = [];
+}
+return;
+}
+papaSequenceRef.current = key === sequence[0] ? [key] : [];
+};
+window.addEventListener("keydown", onKeyDown, true);
+return () => window.removeEventListener("keydown", onKeyDown, true);
+}, [settingsOpen, settingsTab, papaTabUnlocked]);
+
+useEffect(() => {
+if (!isTauri()) return;
+let cancelled = false;
+const disposables: Array<() => void> = [];
+const bind = (eventName: string, handler: () => void) => {
+void listen(eventName, handler).then((dispose) => {
+if (cancelled) dispose();
+else disposables.push(dispose);
+});
+};
+bind("remotehand-tray-home", () => openHome());
+bind("remotehand-tray-connections", () => addConnections());
+bind("remotehand-tray-terminal", () => addTerminal());
+bind("remotehand-tray-settings", () => { setSettingsTab("appearance"); setSettingsOpen(true); });
+return () => { cancelled = true; disposables.forEach((dispose) => dispose()); };
+}, [addConnections, addTerminal, openHome]);
 useEffect(() => {
 const onKeyDown = (event: KeyboardEvent) => {
 if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
@@ -979,7 +1045,7 @@ return (
 <button
 className="topbar-button icon-button settings-button"
 type="button"
-onClick={() => setSettingsOpen(true)}
+onClick={() => { setSettingsTab("appearance"); setSettingsOpen(true); }}
 title="Settings"
 aria-label="Settings"
 >
@@ -1107,10 +1173,15 @@ title="Settings"
 confirmLabel="Done"
 onConfirm={() => setSettingsOpen(false)}
 onCancel={() => setSettingsOpen(false)}
-focusActions={false}>
-<div className="appearance-settings">
+focusActions={false}
+tabs={<div className="settings-tabs" role="tablist" aria-label="Settings sections">
+<button type="button" role="tab" aria-selected={settingsTab === "appearance"} className={settingsTab === "appearance" ? "active" : ""} onClick={() => setSettingsTab("appearance")}>Appearance</button>
+<button type="button" role="tab" aria-selected={settingsTab === "startup"} className={settingsTab === "startup" ? "active" : ""} onClick={() => setSettingsTab("startup")}>Startup &amp; Tray</button>
+{papaTabUnlocked ? <button type="button" role="tab" aria-selected={settingsTab === "papa"} className={settingsTab === "papa" ? "active" : ""} onClick={() => setSettingsTab("papa")}>Papa</button> : null}
+</div>}>
+{settingsTab === "appearance" ? (
+<div className="appearance-settings settings-tab-content">
 <div className="settings-section-heading">
-<strong>Appearance</strong>
 <span>Customize RemoteHand and terminal typography.</span>
 </div>
 <div className="settings-field">
@@ -1176,6 +1247,48 @@ return { ...current, terminalTheme };
 </div>
 <button type="button" className="settings-reset" onClick={() => setSettings(DEFAULT_SETTINGS)}>Reset appearance</button>
 </div>
+) : settingsTab === "startup" ? (
+<div className="appearance-settings startup-settings settings-tab-content">
+<div className="settings-section-heading">
+<span>Control how RemoteHand behaves when Windows or Linux starts it.</span>
+</div>
+<label className="settings-toggle">
+<input type="checkbox" checked={settings.startWithSystem} onChange={(event) => {
+const enabled = event.target.checked;
+setSettings((current) => ({ ...current, startWithSystem: enabled }));
+if (isTauri()) void invoke("set_startup_enabled", { enabled }).catch((error) => console.error("Failed to update startup preference", error));
+}} />
+<span><strong>Start RemoteHand with system</strong><small>Launch RemoteHand automatically at user login.</small></span>
+</label>
+<label className="settings-toggle">
+<input type="checkbox" checked={settings.startMinimized} onChange={(event) => setSettings((current) => ({ ...current, startMinimized: event.target.checked }))} />
+<span><strong>Start minimized</strong><small>Applies when RemoteHand is launched automatically.</small></span>
+</label>
+<label className="settings-toggle">
+<input type="checkbox" checked={settings.showInSystemTray} onChange={(event) => {
+const visible = event.target.checked;
+setSettings((current) => ({ ...current, showInSystemTray: visible }));
+if (isTauri()) void invoke("set_tray_visible", { visible }).catch((error) => console.error("Failed to update tray visibility", error));
+}} />
+<span><strong>Show RemoteHand in system tray</strong><small>Keep a tray icon available while RemoteHand is running.</small></span>
+</label>
+<label className={"settings-toggle" + (!settings.showInSystemTray ? " disabled" : "")}>
+<input type="checkbox" checked={settings.minimizeToTrayOnClose} disabled={!settings.showInSystemTray} onChange={(event) => {
+const value = event.target.checked;
+setSettings((current) => ({ ...current, minimizeToTrayOnClose: value }));
+if (isTauri()) void invoke("set_close_to_tray", { value }).catch((error) => console.error("Failed to update close-to-tray preference", error));
+}} />
+<span><strong>Minimize to tray when closing</strong><small>Keep RemoteHand running when the main window is closed.</small></span>
+</label>
+</div>
+) : (
+<div className="settings-tab-content papa-settings">
+<div className="papa-message">
+<strong>I Love You Andami!</strong>
+<span>- Papa</span>
+</div>
+</div>
+)}
 </AppModal>
 {paletteOpen && (
 <div className="palette-backdrop" role="presentation" onMouseDown={() => setPaletteOpen(false)}>

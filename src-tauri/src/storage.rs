@@ -12,6 +12,10 @@ pub struct Settings {
     pub terminal_foreground: String,
     pub terminal_font_family: String,
     pub terminal_font_size: u8,
+    pub start_with_system: bool,
+    pub start_minimized: bool,
+    pub show_in_system_tray: bool,
+    pub minimize_to_tray_on_close: bool,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -25,6 +29,10 @@ impl Default for Settings {
             terminal_foreground: "#d8dde6".to_string(),
             terminal_font_family: "JetBrains Mono".to_string(),
             terminal_font_size: 13,
+            start_with_system: false,
+            start_minimized: false,
+            show_in_system_tray: true,
+            minimize_to_tray_on_close: false,
         }
     }
 }

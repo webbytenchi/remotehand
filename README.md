@@ -19,6 +19,7 @@ RemoteHand V1 is intentionally focused on the workflows needed for day-to-day te
 - Home dashboard with persistent Recent Activity
 - Dark, light, and system themes
 - Configurable color scheme, UI font, and terminal appearance
+- Optional startup at user login and system-tray integration
 - Terminal selection auto-copy, right-click paste, and multi-line paste confirmation
 - Responsive Connections and Recent Activity cards
 
@@ -191,7 +192,7 @@ Build the frontend:
 npm run build
 ```
 
-RemoteHand is configured as portable-only. Tauri bundling/installers are disabled in `src-tauri/tauri.conf.json`.
+RemoteHand is configured as portable-only. Tauri bundling/installers are disabled in `src-tauri/tauri.conf.json`. Startup registration is an OS-level user preference; application data remains beside the executable.
 
 ## V1 Status
 
