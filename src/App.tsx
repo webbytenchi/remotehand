@@ -439,7 +439,9 @@ const legacyTheme = localStorage.getItem(THEME_KEY);
 return { ...DEFAULT_SETTINGS, theme: legacyTheme === "light" ? "light" : "dark" };
 });
 const [settingsOpen, setSettingsOpen] = useState(false);
-const [settingsTab, setSettingsTab] = useState<"appearance" | "startup">("appearance");
+const [settingsTab, setSettingsTab] = useState<"appearance" | "startup" | "papa">("appearance");
+const [papaTabUnlocked, setPapaTabUnlocked] = useState(false);
+const papaSequenceRef = useRef<string[]>([]);
 const [pluginsOpen, setPluginsOpen] = useState(false);
 const [plugins, setPlugins] = useState<PluginInfo[]>([]);
 const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("dark");
@@ -882,6 +884,30 @@ panel.api.updateParameters({ activities: recentActivities });
 }
 }, [recentActivities]);
 useEffect(() => {
+if (!settingsOpen || settingsTab !== "startup" || papaTabUnlocked) {
+papaSequenceRef.current = [];
+return;
+}
+const sequence = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "b", "a"];
+const onKeyDown = (event: KeyboardEvent) => {
+if (!settingsOpen || settingsTab !== "startup") return;
+const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+const expected = sequence[papaSequenceRef.current.length];
+if (key === expected) {
+papaSequenceRef.current.push(key);
+if (papaSequenceRef.current.length === sequence.length) {
+setPapaTabUnlocked(true);
+papaSequenceRef.current = [];
+}
+return;
+}
+papaSequenceRef.current = key === sequence[0] ? [key] : [];
+};
+window.addEventListener("keydown", onKeyDown);
+return () => window.removeEventListener("keydown", onKeyDown);
+}, [settingsOpen, settingsTab, papaTabUnlocked]);
+
+useEffect(() => {
 if (!isTauri()) return;
 let cancelled = false;
 const disposables: Array<() => void> = [];
@@ -1151,6 +1177,7 @@ focusActions={false}
 tabs={<div className="settings-tabs" role="tablist" aria-label="Settings sections">
 <button type="button" role="tab" aria-selected={settingsTab === "appearance"} className={settingsTab === "appearance" ? "active" : ""} onClick={() => setSettingsTab("appearance")}>Appearance</button>
 <button type="button" role="tab" aria-selected={settingsTab === "startup"} className={settingsTab === "startup" ? "active" : ""} onClick={() => setSettingsTab("startup")}>Startup &amp; Tray</button>
+{papaTabUnlocked ? <button type="button" role="tab" aria-selected={settingsTab === "papa"} className={settingsTab === "papa" ? "active" : ""} onClick={() => setSettingsTab("papa")}>Papa</button> : null}
 </div>}>
 {settingsTab === "appearance" ? (
 <div className="appearance-settings settings-tab-content">
@@ -1253,6 +1280,13 @@ if (isTauri()) void invoke("set_close_to_tray", { value }).catch((error) => cons
 }} />
 <span><strong>Minimize to tray when closing</strong><small>Keep RemoteHand running when the main window is closed.</small></span>
 </label>
+</div>
+) : (
+<div className="settings-tab-content papa-settings">
+<div className="papa-message">
+<strong>I Love You Andami!</strong>
+<span>- Papa</span>
+</div>
 </div>
 )}
 </AppModal>
