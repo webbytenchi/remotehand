@@ -460,6 +460,7 @@ open={pendingPaste !== null}
 title="Paste multiple lines?"
 confirmLabel="Paste"
 cancelLabel="Cancel"
+confirmOnEnter
 onConfirm={() => {
 const text = pendingPaste;
 setPendingPaste(null);
