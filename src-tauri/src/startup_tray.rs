@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use tauri::{
-    menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem},
+    menu::{MenuBuilder, MenuItem, MenuItemBuilder, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, Runtime, State, Wry, Window,
 };
@@ -10,6 +10,7 @@ use tauri_plugin_autostart::ManagerExt;
 #[derive(Clone)]
 pub struct StartupTrayState {
     tray: Arc<Mutex<Option<TrayIcon>>>,
+    window_item: Arc<Mutex<Option<MenuItem>>>,
     minimize_to_tray_on_close: Arc<Mutex<bool>>,
     show_in_system_tray: Arc<Mutex<bool>>,
 }
@@ -18,6 +19,7 @@ impl Default for StartupTrayState {
     fn default() -> Self {
         Self {
             tray: Arc::new(Mutex::new(None)),
+            window_item: Arc::new(Mutex::new(None)),
             minimize_to_tray_on_close: Arc::new(Mutex::new(false)),
             show_in_system_tray: Arc::new(Mutex::new(true)),
         }
@@ -48,7 +50,38 @@ impl StartupTrayState {
     }
 }
 
-fn build_menu(app: &AppHandle<Wry>, visible: bool) -> Result<tauri::menu::Menu<Wry>, Box<dyn std::error::Error + Send + Sync>> {
+fn build_menu(app: &AppHandle, window_item: &MenuItem, home_item: &MenuItem, connections_item: &MenuItem, terminal_item: &MenuItem, settings_item: &MenuItem, separator: &PredefinedMenuItem, quit_item: &MenuItem) -> Result<tauri::menu::Menu, Box<dyn std::error::Error + Send + Sync>> {
+    Ok(MenuBuilder::new(app)
+        .items(&[
+            window_item,
+            home_item,
+            connections_item,
+            terminal_item,
+            settings_item,
+            separator,
+            quit_item,
+        ])
+        .build()?)
+}
+
+fn update_window_item(app: &AppHandle, state: &StartupTrayState) {
+    let visible = app
+        .get_webview_window("main")
+        .and_then(|window| window.is_visible().ok())
+        .unwrap_or(true);
+    if let Ok(guard) = state.window_item.lock() {
+        if let Some(item) = guard.as_ref() {
+            let _ = item.set_text(if visible { "Hide RemoteHand" } else { "Show RemoteHand" });
+        }
+    }
+}
+
+pub fn install(app: &tauri::AppHandle, state: &StartupTrayState) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let visible = app
+        .get_webview_window("main")
+        .and_then(|window| window.is_visible().ok())
+        .unwrap_or(true);
+
     let window_item = MenuItemBuilder::with_id(
         if visible { "hide" } else { "show" },
         if visible { "Hide RemoteHand" } else { "Show RemoteHand" },
@@ -59,42 +92,11 @@ fn build_menu(app: &AppHandle<Wry>, visible: bool) -> Result<tauri::menu::Menu<W
     let settings_item = MenuItemBuilder::with_id("settings", "Settings").build(app)?;
     let quit_item = MenuItemBuilder::with_id("quit", "Exit").build(app)?;
     let separator = PredefinedMenuItem::separator(app)?;
-    Ok(MenuBuilder::new(app)
-        .items(&[
-            &window_item,
-            &home_item,
-            &connections_item,
-            &terminal_item,
-            &settings_item,
-            &separator,
-            &quit_item,
-        ])
-        .build()?)
-}
+    let menu = build_menu(app, &window_item, &home_item, &connections_item, &terminal_item, &settings_item, &separator, &quit_item)?;
 
-fn refresh_menu(app: &AppHandle<Wry>) {
-    let visible = app
-        .get_webview_window("main")
-        .and_then(|window| window.is_visible().ok())
-        .unwrap_or(true);
-    if let Some(tray) = app.tray_by_id("main-tray") {
-        match build_menu(app, visible) {
-            Ok(menu) => {
-                if let Err(error) = tray.set_menu(Some(menu)) {
-                    log::error!("Failed to refresh tray menu: {error}");
-                }
-            }
-            Err(error) => log::error!("Failed to build tray menu: {error}"),
-        }
+    if let Ok(mut guard) = state.window_item.lock() {
+        *guard = Some(window_item.clone());
     }
-}
-
-pub fn install(app: &AppHandle<Wry>, state: &StartupTrayState) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let visible = app
-        .get_webview_window("main")
-        .and_then(|window| window.is_visible().ok())
-        .unwrap_or(true);
-    let menu = build_menu(app, visible)?;
 
     let icon = app
         .default_window_icon()
@@ -106,60 +108,47 @@ pub fn install(app: &AppHandle<Wry>, state: &StartupTrayState) -> Result<(), Box
         .tooltip("RemoteHand")
         .menu(&menu)
         .show_menu_on_left_click(false)
-        .on_menu_event(|app, event| match event.id().as_ref() {
-            "show" => {
-                show_main(app);
-                refresh_menu(app);
-            }
-            "hide" => {
-                hide_main(app);
-                refresh_menu(app);
-            }
-            "home" => {
-                show_main(app);
-                refresh_menu(app);
-                let _ = app.emit("remotehand-tray-home", ());
-            }
-            "connections" => {
-                show_main(app);
-                refresh_menu(app);
-                let _ = app.emit("remotehand-tray-connections", ());
-            }
-            "terminal" => {
-                show_main(app);
-                refresh_menu(app);
-                let _ = app.emit("remotehand-tray-terminal", ());
-            }
-            "settings" => {
-                show_main(app);
-                refresh_menu(app);
-                let _ = app.emit("remotehand-tray-settings", ());
-            }
-            "quit" => {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.destroy();
+        .on_menu_event(|app, event| {
+            match event.id().as_ref() {
+                "show" => {
+                    show_main(app);
                 }
-                app.exit(0);
-            }
-            _ => {}
-        })
-        .on_tray_icon_event(|tray, event| {
-            match event {
-                TrayIconEvent::Click {
-                    button: MouseButton::Left,
-                    button_state: MouseButtonState::Up,
-                    ..
-                } => {
-                    show_main(&tray.app_handle());
-                    refresh_menu(&tray.app_handle());
+                "hide" => {
+                    hide_main(app);
                 }
-                TrayIconEvent::Click {
-                    button: MouseButton::Right,
-                    ..
-                } => {
-                    refresh_menu(&tray.app_handle());
+                "home" => {
+                    show_main(app);
+                    let _ = app.emit("remotehand-tray-home", ());
+                }
+                "connections" => {
+                    show_main(app);
+                    let _ = app.emit("remotehand-tray-connections", ());
+                }
+                "terminal" => {
+                    show_main(app);
+                    let _ = app.emit("remotehand-tray-terminal", ());
+                }
+                "settings" => {
+                    show_main(app);
+                    let _ = app.emit("remotehand-tray-settings", ());
+                }
+                "quit" => {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.destroy();
+                    }
+                    app.exit(0);
                 }
                 _ => {}
+            }
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                show_main(&tray.app_handle());
             }
         })
         .build(app)?;
@@ -189,6 +178,9 @@ fn show_main(app: &AppHandle) {
 fn hide_main(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.hide();
+    }
+    if let Some(state) = app.try_state::<StartupTrayState>() {
+        update_window_item(app, &state);
     }
 }
 
