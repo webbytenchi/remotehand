@@ -437,12 +437,12 @@ export function PluginManager({
       return <span key={key} aria-hidden="true" style={{ position: "relative", zIndex: 1, flex: 1, minHeight: 12, display: "flex", alignItems: "flex-end", gap: 1, opacity: 0.78 }}>
         {series.map((entry, index) => {
           const pointTone = toneVars(entry.tone || content.tone);
-          const height = entry.value == null ? 4 : Math.max(3, Math.round(((Number(entry.value) || 0) / max) * Math.max(8, size.height - 24)));
+          const height = entry.value == null ? 4 : Math.max(3, Math.round(((Number(entry.value) || 0) / max) * Math.max(8, size.height - 24) * 0.88));
           return <span key={`${key}:${index}`} style={{ flex: 1, minWidth: 1, height, borderRadius: 1, background: pointTone.text }} />;
         })}
       </span>;
     }
-    return <span key={key} style={{ display: "contents" }}><span style={{ position: "relative", zIndex: 2, fontSize: fontSize ?? 14, fontWeight: 700, lineHeight: 1.05 }}>{content.value == null ? "—" : String(content.value)}</span>{series.length ? <span aria-hidden="true" style={{ position: "absolute", left: 4, right: 4, bottom: 4, height: Math.max(16, Math.min(30, size.height - 22)), display: "flex", alignItems: "flex-end", gap: 1, opacity: 0.78 }}>{series.map((entry, index) => { const pointTone = toneVars(entry.tone || content.tone); const height = entry.value == null ? 5 : Math.max(3, Math.round(((Number(entry.value) || 0) / max) * Math.max(10, size.height - 18))); return <span key={`${key}:${index}`} style={{ flex: 1, minWidth: 1, height, borderRadius: 1, background: pointTone.text }} />; })}</span> : null}</span>;
+    return <span key={key} style={{ display: "contents" }}><span style={{ position: "relative", zIndex: 2, fontSize: fontSize ?? 14, fontWeight: 700, lineHeight: 1.05 }}>{content.value == null ? "—" : String(content.value)}</span>{series.length ? <span aria-hidden="true" style={{ position: "absolute", left: 4, right: 4, bottom: 4, height: Math.max(16, Math.min(30, size.height - 22)), display: "flex", alignItems: "flex-end", gap: 1, opacity: 0.78 }}>{series.map((entry, index) => { const pointTone = toneVars(entry.tone || content.tone); const height = entry.value == null ? 5 : Math.max(3, Math.round(((Number(entry.value) || 0) / max) * Math.max(10, size.height - 18) * 0.88)); return <span key={`${key}:${index}`} style={{ flex: 1, minWidth: 1, height, borderRadius: 1, background: pointTone.text }} />; })}</span> : null}</span>;
   };
 
   const renderedTopbar = Object.entries(topbarItems).flatMap(([pluginId, items]) =>
@@ -494,7 +494,7 @@ export function PluginManager({
               </span>
               <span aria-hidden="true" style={{ position: "absolute", left: 4, right: 4, bottom: 4, height: 22, display: "flex", alignItems: "flex-end", gap: 1, opacity: 0.72 }}>
                 {legacyVisible.map((entry, index) => {
-                  const height = entry.latencyMs == null ? 8 : Math.max(4, Math.round(((Number(entry.latencyMs) || 0) / legacyMax) * 20));
+                  const height = entry.latencyMs == null ? 8 : Math.max(4, Math.round(((Number(entry.latencyMs) || 0) / legacyMax) * 20 * 0.88));
                   return <span key={`${item.id}:${index}`} style={{ flex: 1, minWidth: 1, height, borderRadius: 1, background: entry.state === "OFFLINE" ? "var(--danger-text, #efaaaa)" : entry.state === "HIGH LATENCY" ? "var(--warning-text, #f1cf87)" : "var(--accent, #70a7e8)" }} />;
                 })}
               </span>
