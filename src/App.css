@@ -759,7 +759,7 @@ background: var(--terminal-background, #11151a) !important;
 .terminal-host .xterm-viewport {
 background: var(--terminal-background, #11151a) !important;
 overflow-x: hidden !important;
-overflow-y: scroll !important;
+overflow-y: auto !important;
 scrollbar-width: thin;
 }
 .terminal-host .xterm-rows {
