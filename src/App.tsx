@@ -1001,7 +1001,7 @@ popout.group.activePanel?.api.setActive();
 popout.window.focus();
 poppedOutPanelRef.current = { panelId: popout.group.activePanel?.id ?? poppedOutPanelRef.current?.panelId ?? "", count: event.api.getPopouts().length };
 });
-event.api.onDidRemovePopoutGroup((popout) => {
+event.api.onDidRemovePopoutGroup(() => {
 const panelId = poppedOutPanelRef.current?.panelId;
 if (panelId) {
 window.setTimeout(() => {
