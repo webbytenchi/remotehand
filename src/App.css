@@ -2318,3 +2318,36 @@ background: transparent;
   color: #75859a;
   font-weight: 600;
 }
+
+
+.papa-debug-panel {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 0 4px;
+  padding: 8px 10px;
+  border: 1px solid #38495f;
+  border-radius: 7px;
+  background: #111923;
+  color: #8ea0b7;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+.papa-debug-panel > div {
+  color: #6f82a0;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+.papa-debug-panel > strong {
+  min-width: 78px;
+  color: #e2e8f0;
+  font-size: 12px;
+}
+.papa-debug-panel > span {
+  color: #aeb8c6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
