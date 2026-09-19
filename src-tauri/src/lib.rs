@@ -99,7 +99,7 @@ pub fn run() {
         .on_page_load(move |webview, payload| {
             if webview.label() == "main" && payload.event() == PageLoadEvent::Finished {
                 load_page_loaded.store(true, Ordering::Release);
-                if load_window_restored.load(Ordering::Acquire) {
+                if load_window_restored.load(Ordering::Acquire) && !start_hidden {
                     if let Err(error) = webview.window().show() {
                         log::error!("Failed to show main window: {error}");
                     }
