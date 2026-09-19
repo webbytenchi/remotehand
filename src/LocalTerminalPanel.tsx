@@ -145,7 +145,7 @@ const updateDiagnostic = () => {
 const element = host.querySelector(".xterm-rows");
 const computed = element ? getComputedStyle(element) : null;
 setDiagnostic(
-`doc=${host.ownerDocument.URL} | location=${String(api.location.type)} | font=${terminal.options.fontFamily} | size=${terminal.options.fontSize}px | rows=${terminal.rows} cols=${terminal.cols} | cssFont=${computed?.fontFamily ?? "n/a"} | cssSize=${computed?.fontSize ?? "n/a"}`,
+`doc=${host.ownerDocument.URL} | location=${String(api.location.type)} | font=${terminal.options.fontFamily} | size=${terminal.options.fontSize}px | rows=${terminal.rows} cols=${terminal.cols} | cssFont=${computed?.fontFamily ?? "n/a"} | cssSize=${computed?.fontSize ?? "n/a"} | terminalTheme=${host.ownerDocument.documentElement.dataset.terminalTheme ?? "n/a"} | cssBg=${getComputedStyle(host.ownerDocument.documentElement).getPropertyValue("--terminal-background").trim() || "n/a"} | cssFg=${getComputedStyle(host.ownerDocument.documentElement).getPropertyValue("--terminal-foreground").trim() || "n/a"} | xtermBg=${terminal.options.theme?.background ?? "n/a"} | xtermFg=${terminal.options.theme?.foreground ?? "n/a"}`,
 );
 };
 
@@ -314,7 +314,7 @@ fitAddonRef.current?.fit();
 if (api.location.type === "popout") {
 const computed = rows ? ownerWindow?.getComputedStyle(rows) : null;
 setDiagnostic(
-`doc=${ownerDocument.URL} | location=${String(api.location.type)} | font=${terminal.options.fontFamily} | size=${terminal.options.fontSize}px | rows=${terminal.rows} cols=${terminal.cols} | cssFont=${computed?.fontFamily ?? "n/a"} | cssSize=${computed?.fontSize ?? "n/a"}`,
+`doc=${ownerDocument.URL} | location=${String(api.location.type)} | font=${terminal.options.fontFamily} | size=${terminal.options.fontSize}px | rows=${terminal.rows} cols=${terminal.cols} | cssFont=${computed?.fontFamily ?? "n/a"} | cssSize=${computed?.fontSize ?? "n/a"} | terminalTheme=${ownerDocument.documentElement.dataset.terminalTheme ?? "n/a"} | cssBg=${styles.getPropertyValue("--terminal-background").trim() || "n/a"} | cssFg=${styles.getPropertyValue("--terminal-foreground").trim() || "n/a"} | xtermBg=${terminal.options.theme?.background ?? "n/a"} | xtermFg=${terminal.options.theme?.foreground ?? "n/a"}`,
 );
 }
 if (isTauri()) {
