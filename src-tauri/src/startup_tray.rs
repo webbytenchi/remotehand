@@ -1,7 +1,6 @@
 use std::sync::{Arc, Mutex};
 
 use tauri::{
-    image::Image,
     menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
     AppHandle, Manager, Runtime, State, WebviewWindow,
@@ -59,7 +58,7 @@ pub fn install<R: Runtime>(app: &tauri::App<R>, state: &StartupTrayState) -> Res
         .items(&[&show_item, &home_item, &hide_item, &separator, &quit_item])
         .build()?;
 
-    let icon: Image<'static> = app
+    let icon = app
         .default_window_icon()
         .cloned()
         .ok_or_else(|| "default application icon is unavailable")?;
