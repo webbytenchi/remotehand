@@ -1170,6 +1170,7 @@ if (plugin) openPluginPanel(plugin, panelId, context);
 <AppModal
 open={settingsOpen}
 title="Settings"
+className="settings-modal"
 confirmLabel="Done"
 onConfirm={() => setSettingsOpen(false)}
 onCancel={() => setSettingsOpen(false)}
