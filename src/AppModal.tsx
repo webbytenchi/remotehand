@@ -37,7 +37,7 @@ if (!open) return null;
 return (
 <div className="app-modal-backdrop" onMouseDown={onCancel}>
 <div
-className={`app-modal${className ? ` ${className}` : ""}`
+className={`app-modal${className ? ` ${className}` : ""}`}
 role="dialog"
 aria-modal="true"
 aria-labelledby="app-modal-title"
