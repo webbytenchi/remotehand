@@ -1026,15 +1026,18 @@ panel.api.updateParameters({ activities: recentActivities });
 }
 captureLayout(event.api);
 event.api.onDidAddPopoutGroup((popout) => {
+const apply = () => {
 syncPopoutAppearance(popout.window);
 popout.group.activePanel?.api.setActive();
 popout.window.focus();
-window.setTimeout(() => {
-syncPopoutAppearance(popout.window);
-popout.group.activePanel?.api.setActive();
-popout.window.focus();
-}, 0);
-poppedOutPanelRef.current = { panelId: popout.group.activePanel?.id ?? poppedOutPanelRef.current?.panelId ?? "", count: event.api.getPopouts().length };
+};
+apply();
+const timers = [0, 50, 200, 500].map((delay) => window.setTimeout(apply, delay));
+poppedOutPanelRef.current = {
+panelId: popout.group.activePanel?.id ?? poppedOutPanelRef.current?.panelId ?? "",
+count: event.api.getPopouts().length,
+};
+window.setTimeout(() => timers.forEach((timer) => window.clearTimeout(timer)), 1000);
 });
 event.api.onDidRemovePopoutGroup(() => {
 const panelId = poppedOutPanelRef.current?.panelId;
