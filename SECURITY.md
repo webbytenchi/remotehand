@@ -105,7 +105,7 @@ Runtime isolation:
 UI isolation:
 
 - Plugin panels render in a sandboxed iframe with sandbox=allow-scripts - no same-origin access, no forms, no popups, no top-level navigation.
-- A strict Content-Security-Policy is injected into each panel, including connect-src none. Plugin UI cannot make direct network requests.
+- A plugin-specific Content-Security-Policy is injected into each panel, including connect-src none. Plugin UI cannot make direct network requests. The production desktop host preserves the inline-script policy needed by the current srcdoc panel-hosting implementation.
 - All panel to host communication flows through an injected bridge that the host validates.
 
 Credential handling:
