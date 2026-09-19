@@ -94,6 +94,14 @@ Still desirable post-V1:
 
 Further transfer queue polish and richer progress/ETA UX can continue later.
 
+### Plugin Architecture - Shipping Baseline
+
+- Plugin API v1 - shipping in RemoteHand v1.1.0
+- Out-of-process executable runtime - shipping
+- Generic panels, sidebar, command, and top-bar contributions - shipping
+- Plugin-scoped storage and host-mediated permissions - shipping
+- Host Monitor reference plugin - released separately as v0.5.0
+
 ## Post-V1 Roadmap
 
 ### Phase 6 - SSH and Productivity Expansion
