@@ -22,8 +22,9 @@ Contributions should preserve these goals:
 3. Add or update tests when behavior changes.
 4. Run the relevant formatting, linting, tests, and build checks.
 5. Test native/Tauri behavior on the affected platform when the change touches PTYs, SSH, SFTP, windows, paths, or portable storage.
-6. Update documentation when architecture or user-visible behavior changes.
+6. Update documentation when architecture or user-visible behavior changes, including plugin API and panel-hosting behavior.
 7. Open a pull request describing intent, implementation, and verification.
+8. For plugin changes, test both development and release builds when the change affects sandboxing, CSP, IPC, or plugin loading.
 
 Useful frontend commands:
 
