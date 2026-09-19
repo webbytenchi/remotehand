@@ -1247,7 +1247,6 @@ return { ...current, terminalTheme };
 </div>
 <button type="button" className="settings-reset" onClick={() => setSettings(DEFAULT_SETTINGS)}>Reset appearance</button>
 </div>
-) : (
 ) : settingsTab === "startup" ? (
 <div className="appearance-settings startup-settings settings-tab-content">
 <div className="settings-section-heading">
