@@ -117,7 +117,14 @@ const sessionId = api.id;
 const shell = params?.shell ?? "default";
 const ssh = params?.ssh;
 const initialCommand = params?.initialCommand;
-const appearance = params?.appearance;
+const appearance = params?.appearance ?? (() => {
+try {
+const raw = localStorage.getItem("remotehand.terminalAppearance");
+return raw ? JSON.parse(raw) as TerminalAppearance : undefined;
+} catch {
+return undefined;
+}
+})();
 useEffect(() => {
 const host = hostRef.current;
 if (!host) return;
