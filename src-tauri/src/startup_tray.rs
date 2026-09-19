@@ -178,6 +178,9 @@ fn show_main(app: &AppHandle) {
         let _ = window.show();
         let _ = window.set_focus();
     }
+    if let Some(state) = app.try_state::<StartupTrayState>() {
+        update_window_item(app, &state);
+    }
 }
 
 fn hide_main(app: &AppHandle) {
