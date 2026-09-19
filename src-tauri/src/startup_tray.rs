@@ -51,11 +51,14 @@ impl StartupTrayState {
 pub fn install(app: &tauri::AppHandle, state: &StartupTrayState) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let show_item = MenuItemBuilder::with_id("show", "Show RemoteHand").build(app)?;
     let home_item = MenuItemBuilder::with_id("home", "Home").build(app)?;
+    let connections_item = MenuItemBuilder::with_id("connections", "Connections").build(app)?;
+    let terminal_item = MenuItemBuilder::with_id("terminal", "New Terminal").build(app)?;
+    let settings_item = MenuItemBuilder::with_id("settings", "Settings").build(app)?;
     let hide_item = MenuItemBuilder::with_id("hide", "Hide RemoteHand").build(app)?;
     let quit_item = MenuItemBuilder::with_id("quit", "Exit").build(app)?;
     let separator = PredefinedMenuItem::separator(app)?;
     let menu = MenuBuilder::new(app)
-        .items(&[&show_item, &home_item, &hide_item, &separator, &quit_item])
+        .items(&[&show_item, &home_item, &connections_item, &terminal_item, &settings_item, &hide_item, &separator, &quit_item])
         .build()?;
 
     let icon = app
@@ -74,6 +77,18 @@ pub fn install(app: &tauri::AppHandle, state: &StartupTrayState) -> Result<(), B
             "home" => {
                 show_main(app);
                 let _ = app.emit("remotehand-tray-home", ());
+            }
+            "connections" => {
+                show_main(app);
+                let _ = app.emit("remotehand-tray-connections", ());
+            }
+            "terminal" => {
+                show_main(app);
+                let _ = app.emit("remotehand-tray-terminal", ());
+            }
+            "settings" => {
+                show_main(app);
+                let _ = app.emit("remotehand-tray-settings", ());
             }
             "quit" => {
                 if let Some(window) = app.get_webview_window("main") {
