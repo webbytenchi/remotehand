@@ -37,6 +37,10 @@ impl StartupTrayState {
         self.minimize_to_tray_on_close.lock().map(|guard| *guard).unwrap_or(false)
     }
 
+    pub fn sync_window_menu(&self, app: &AppHandle) {
+        update_window_item(app, self);
+    }
+
     pub fn set_show_in_tray(&self, app: &AppHandle, value: bool) -> Result<(), String> {
         if let Ok(mut guard) = self.show_in_system_tray.lock() {
             *guard = value;
