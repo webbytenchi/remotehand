@@ -916,6 +916,15 @@ panel.api.updateParameters({ activities: recentActivities });
 }
 }, [recentActivities]);
 useEffect(() => {
+const api = apiRef.current;
+if (!api) return;
+const appearance = terminalAppearanceFromSettings(settings);
+for (const panel of api.panels) {
+if (panel.api.component !== "terminal") continue;
+panel.api.updateParameters({ appearance });
+}
+}, [settings]);
+useEffect(() => {
 if (!settingsOpen || settingsTab !== "startup" || papaTabUnlocked) {
 papaSequenceRef.current = [];
 return;
