@@ -758,10 +758,9 @@ background: var(--terminal-background, #11151a) !important;
 }
 .terminal-host .xterm-viewport {
 background: var(--terminal-background, #11151a) !important;
+overflow-x: hidden !important;
+overflow-y: auto !important;
 scrollbar-width: thin;
-}
-.terminal-host .xterm-viewport::-webkit-scrollbar-corner {
-background: var(--terminal-background, #11151a);
 }
 .terminal-host .xterm-rows {
 margin: 0;
