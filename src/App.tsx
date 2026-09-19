@@ -751,27 +751,6 @@ onSftp={openSftp}
 }),
 [recentActivities, homeMessageIndex, openRecentActivity, addConnection, updateConnection, removeConnection, connectSsh, openSftp],
 );
-const syncPopoutAppearance = useCallback((popoutWindow: Window) => {
-const source = document.documentElement;
-const target = popoutWindow.document.documentElement;
-for (const name of [
-"--terminal-background",
-"--terminal-foreground",
-"--terminal-font-family",
-"--terminal-font-size",
-"--ui-font-family",
-"--ui-font-size",
-]) {
-const value = getComputedStyle(source).getPropertyValue(name);
-if (value) target.style.setProperty(name, value);
-}
-for (const attribute of ["data-theme", "data-scheme", "data-terminal-theme"]) {
-const value = source.getAttribute(attribute);
-if (value === null) target.removeAttribute(attribute);
-else target.setAttribute(attribute, value);
-}
-popoutWindow.requestAnimationFrame(() => popoutWindow.dispatchEvent(new CustomEvent("remotehand-appearance-change")));
-}, []);
 const popoutActive = useCallback(async () => {
 const api = apiRef.current;
 const panel = api?.activePanel;
@@ -784,7 +763,7 @@ if (opened) poppedOutPanelRef.current = { panelId: panel.id, count: api.getPopou
 } catch (error) {
 console.error("Failed to pop out active panel", error);
 }
-}, [syncPopoutAppearance]);
+}, [settings]);
 const resetLayout = useCallback(async () => {
 const api = apiRef.current;
 if (!api) return;
@@ -926,14 +905,6 @@ panel.api.updateParameters({ activities: recentActivities });
 }
 }, [recentActivities]);
 useEffect(() => {
-const api = apiRef.current;
-if (!api) return;
-for (const popout of api.getPopouts()) {
-syncPopoutAppearance(popout.window);
-}
-}, [settings, syncPopoutAppearance]);
-
-useEffect(() => {
 if (!settingsOpen || settingsTab !== "startup" || papaTabUnlocked) {
 papaSequenceRef.current = [];
 return;
@@ -1024,6 +995,7 @@ id: "terminal",
 component: "terminal",
 title: "Terminal",
 position: { referencePanel: "welcome", direction: "below" },
+params: { appearance: terminalAppearanceFromSettings(settings) },
 });
 event.api.addPanel({
 id: "connections",
@@ -1041,18 +1013,15 @@ panel.api.updateParameters({ activities: recentActivities });
 }
 captureLayout(event.api);
 event.api.onDidAddPopoutGroup((popout) => {
-const apply = () => {
-syncPopoutAppearance(popout.window);
+popout.group.activePanel?.api.updateParameters({
+appearance: terminalAppearanceFromSettings(settings),
+});
 popout.group.activePanel?.api.setActive();
 popout.window.focus();
-};
-apply();
-const timers = [0, 50, 200, 500].map((delay) => window.setTimeout(apply, delay));
 poppedOutPanelRef.current = {
 panelId: popout.group.activePanel?.id ?? poppedOutPanelRef.current?.panelId ?? "",
 count: event.api.getPopouts().length,
 };
-window.setTimeout(() => timers.forEach((timer) => window.clearTimeout(timer)), 1000);
 });
 event.api.onDidRemovePopoutGroup(() => {
 const panelId = poppedOutPanelRef.current?.panelId;
