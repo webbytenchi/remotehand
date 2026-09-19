@@ -21,6 +21,8 @@ RemoteHand
 │       ├── SSH PTY sessions
 │       ├── Native SFTP
 │       ├── Portable credential vault
+│       ├── Startup registration
+│       ├── System tray integration
 │       └── Logging
 └── data/ beside executable
 ```
@@ -178,6 +180,14 @@ The executable directory is the root of the portable data model:
 ```
 
 This is intentional: portable operation should not depend on installer-created registry keys or system-wide directories.
+
+## Startup and System Tray
+
+RemoteHand v1.2 adds optional OS-level user-login startup and a native system-tray integration. The Rust backend owns tray creation, tray-menu actions, startup registration through the Tauri autostart plugin, and minimize-to-tray close handling. The frontend owns the corresponding Settings UI.
+
+The tray menu keeps one window action (`Show RemoteHand` or `Hide RemoteHand`) and updates its label in place as visibility changes. Quick actions for Home, Connections, New Terminal, and Settings are emitted as frontend events so the tray layer remains generic and does not own Dockview panel implementations.
+
+Startup/minimized behavior is intentionally separate from portable application data. The normal `data/` tree remains beside the executable; the OS stores only its own startup registration.
 
 ## Window State
 
