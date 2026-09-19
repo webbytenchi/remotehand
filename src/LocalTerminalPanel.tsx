@@ -299,6 +299,20 @@ window.removeEventListener("remotehand-appearance-change", applyAppearance);
 };
 }, [sessionId]);
 useEffect(() => {
+const focusTerminal = () => {
+terminalRef.current?.focus();
+};
+window.addEventListener("focus", focusTerminal);
+document.addEventListener("visibilitychange", focusTerminal);
+const frame = window.requestAnimationFrame(focusTerminal);
+return () => {
+window.removeEventListener("focus", focusTerminal);
+document.removeEventListener("visibilitychange", focusTerminal);
+window.cancelAnimationFrame(frame);
+};
+}, []);
+
+useEffect(() => {
 const host = hostRef.current;
 if (!host) return;
 const onContextMenu = (event: MouseEvent) => {
