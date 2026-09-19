@@ -23,6 +23,9 @@ fn local_os() -> &'static str {
 
 #[tauri::command]
 fn close_current_window(window: tauri::WebviewWindow) -> Result<(), String> {
+    if window.label() == "main" {
+        return Err("refusing to close main window".to_string());
+    }
     window.close().map_err(|error| error.to_string())
 }
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
