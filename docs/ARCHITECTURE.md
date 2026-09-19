@@ -151,9 +151,9 @@ Plugins contribute to core through two paths.
 - Dock panels - plugin-provided HTML hosted in a sandboxed iframe.
 - Commands - named actions invokable from RemoteHand UI.
 
-**Dynamic** contributions are published at runtime over events. A running plugin emits topbar.update events carrying an items array, one entry per top-bar widget. Each widget is a 112x44 button by default (clamped to 72-180 wide and 36-64 tall) rendered from generic content primitives: stack, text, metric, sparkline, status, and progress.
+**Dynamic** contributions are published at runtime over events. A running plugin emits plugin.event messages that core forwards to the frontend. The shipped Host Monitor plugin uses topbar.update for live top-bar widgets and monitor.sampled for full panel history updates. Each top-bar widget is a 112x44 button by default (clamped to 72-180 wide and 36-64 tall) rendered from generic content primitives: stack, text, metric, sparkline, status, and progress. Core keeps the top-bar history window separate from plugin-specific panel history; Host Monitor's top bar uses 30 samples (one minute at the 2-second sampling interval).
 
-Panel HTML is hosted in a sandboxed iframe with no same-origin access and no direct network. All panel-to-host communication is mediated by an injected bridge script.
+Panel HTML is hosted in a sandboxed iframe with no same-origin access and no direct network. The panel receives an injected bridge for host requests and runtime events. Release builds preserve the panel's inline-script policy required by the current srcdoc hosting model, while the panel itself remains sandboxed and its injected plugin-panel CSP blocks direct network connections.
 
 ### Permissions
 
