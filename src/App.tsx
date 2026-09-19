@@ -846,7 +846,28 @@ document.documentElement.style.setProperty("--ui-font-family", uiFamily);
 document.documentElement.style.setProperty("--ui-font-size", String(settings.uiFontSize) + "px");
 document.documentElement.style.setProperty("--terminal-font-family", terminalFamily);
 document.documentElement.style.setProperty("--terminal-font-size", String(settings.terminalFontSize) + "px");
-window.dispatchEvent(new CustomEvent("remotehand-appearance-change"));
+
+const applyAppearanceToDocument = (targetDocument: Document) => {
+const root = targetDocument.documentElement;
+root.dataset.theme = resolvedTheme;
+root.dataset.scheme = settings.colorScheme;
+root.dataset.terminalTheme = settings.terminalTheme;
+root.style.setProperty("--terminal-background", settings.terminalBackground);
+root.style.setProperty("--terminal-foreground", settings.terminalForeground);
+root.style.setProperty("--ui-font-family", uiFamily);
+root.style.setProperty("--ui-font-size", String(settings.uiFontSize) + "px");
+root.style.setProperty("--terminal-font-family", terminalFamily);
+root.style.setProperty("--terminal-font-size", String(settings.terminalFontSize) + "px");
+targetDocument.defaultView?.dispatchEvent(new CustomEvent("remotehand-appearance-change"));
+};
+
+applyAppearanceToDocument(document);
+for (const panel of apiRef.current?.panels ?? []) {
+const panelDocument = panel.api.element?.ownerDocument;
+if (panelDocument && panelDocument !== document) {
+applyAppearanceToDocument(panelDocument);
+}
+}
 };
 applyAppearance();
 media.addEventListener("change", applyAppearance);
