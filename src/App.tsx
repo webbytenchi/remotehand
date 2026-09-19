@@ -997,8 +997,15 @@ event.api.onDidLayoutChange(() => {
 captureLayout(event.api);
 });
 event.api.onDidRemovePanel((panel) => {
-if (panel.api.component !== "terminal") return;
 const sessionId = panel.id;
+window.setTimeout(() => {
+for (const popout of event.api.getPopouts()) {
+if (popout.group.panels.length === 0) {
+popout.window.close();
+}
+}
+}, 0);
+if (panel.api.component !== "terminal") return;
 window.setTimeout(() => {
 if (event.api.panels.some((current) => current.id === sessionId)) return;
 if (!isTauri()) return;
