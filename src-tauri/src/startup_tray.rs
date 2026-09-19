@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager, State, Window,
+    AppHandle, Emitter, Manager, Runtime, State, Window,
 };
 use tauri_plugin_autostart::ManagerExt;
 
