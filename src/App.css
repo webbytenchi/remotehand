@@ -2283,3 +2283,26 @@ background: transparent;
   color: var(--accent);
   border-bottom-color: var(--accent);
 }
+
+
+.papa-settings {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 24px 8px;
+}
+.papa-message {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+}
+.papa-message strong {
+  color: #e2e8f0;
+  font-size: 20px;
+  font-weight: 600;
+}
+.papa-message span {
+  color: #718094;
+  font-size: 12px;
+}
