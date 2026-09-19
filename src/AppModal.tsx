@@ -9,6 +9,7 @@ confirmLabel?: string;
 cancelLabel?: string;
 danger?: boolean;
 focusActions?: boolean;
+confirmOnEnter?: boolean;
 onConfirm: () => void;
 onCancel: () => void;
 };
@@ -22,17 +23,26 @@ confirmLabel = "OK",
 cancelLabel,
 danger = false,
 focusActions = true,
+confirmOnEnter = false,
 onConfirm,
 onCancel,
 }: AppModalProps) {
 useEffect(() => {
 if (!open) return;
 const handleKeyDown = (event: KeyboardEvent) => {
-if (event.key === "Escape") onCancel();
+if (event.key === "Escape") {
+event.preventDefault();
+onCancel();
+return;
+}
+if (confirmOnEnter && event.key === "Enter" && !event.isComposing) {
+event.preventDefault();
+onConfirm();
+}
 };
 window.addEventListener("keydown", handleKeyDown);
 return () => window.removeEventListener("keydown", handleKeyDown);
-}, [open, onCancel]);
+}, [open, onCancel, onConfirm, confirmOnEnter]);
 if (!open) return null;
 return (
 <div className="app-modal-backdrop" onMouseDown={onCancel}>
