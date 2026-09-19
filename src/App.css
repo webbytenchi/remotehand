@@ -2308,18 +2308,6 @@ background: transparent;
 }
 
 
-.papa-debug {
-  margin-top: 6px;
-  color: #566477 !important;
-  font-size: 10px !important;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-.papa-debug strong {
-  color: #75859a;
-  font-weight: 600;
-}
-
-
 .papa-debug-panel {
   display: grid;
   grid-template-columns: auto auto 1fr;
