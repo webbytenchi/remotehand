@@ -1800,6 +1800,9 @@ html[data-theme="light"] .terminal-paste-preview {
   display: grid;
   gap: 18px;
 }
+.settings-tab-content {
+  padding-top: 14px;
+}
 .app-modal:has(.appearance-settings) {
   width: min(560px, 100%);
 }
