@@ -44,24 +44,11 @@ startMinimized: boolean;
 showInSystemTray: boolean;
 minimizeToTrayOnClose: boolean;
 };
-type TerminalAppearance = Pick<
-Settings,
-"terminalTheme" | "terminalBackground" | "terminalForeground" | "terminalFontFamily" | "terminalFontSize"
->;
 type WorkspaceLayout = Parameters<DockviewApi["fromJSON"]>[0];
 const WORKSPACE_KEY = "remotehand.workspace";
 const THEME_KEY = "remotehand.theme";
 const SETTINGS_KEY = "remotehand.settings";
-const TERMINAL_APPEARANCE_KEY = "remotehand.terminalAppearance";
 const SIDEBAR_COLLAPSED_KEY = "remotehand.sidebarCollapsed";
-const terminalAppearanceFromSettings = (settings: Settings): TerminalAppearance => ({
-terminalTheme: settings.terminalTheme,
-terminalBackground: settings.terminalBackground,
-terminalForeground: settings.terminalForeground,
-terminalFontFamily: settings.terminalFontFamily,
-terminalFontSize: settings.terminalFontSize,
-});
-
 const DEFAULT_SETTINGS: Settings = {
 theme: "dark",
 colorScheme: "blue",
@@ -472,7 +459,6 @@ const layoutHistoryIndexRef = useRef(-1);
 const applyingHistoryRef = useRef(false);
 const workspaceSaveTimerRef = useRef<number | null>(null);
 const workspacePersistenceEnabledRef = useRef(true);
-const poppedOutPanelRef = useRef<{ panelId: string; count: number } | null>(null);
 useEffect(() => {
 if (!isTauri()) return;
 void invoke<string>("local_os")
@@ -604,7 +590,6 @@ port: connection.port,
 user: connection.user,
 name: connection.name,
 },
-appearance: terminalAppearanceFromSettings(settings),
 },
 });
 recordActivity({
@@ -613,7 +598,7 @@ title: connection.name,
 detail: connection.user + "@" + connection.host + ":" + connection.port,
 connection,
 });
-}, [recordActivity, settings]);
+}, [recordActivity]);
 const openSftp = useCallback((connection: Connection) => {
 const api = apiRef.current;
 if (!api) return;
@@ -649,7 +634,7 @@ api.addPanel({
 id,
 component: "terminal",
 title,
-params: { shell: resolvedShell, appearance: terminalAppearanceFromSettings(settings) },
+params: { shell: resolvedShell },
 ...(position && activePanel
 ? { position: { referencePanel: activePanel.id, direction: position } }
 : {}),
@@ -659,7 +644,7 @@ kind: resolvedShell === "default" ? "terminal" : resolvedShell,
 title,
 detail: "Local shell",
 });
-}, [localOs, recordActivity, settings]);
+}, [localOs, recordActivity]);
 const addConnections = useCallback(() => {
 const api = apiRef.current;
 if (!api) return;
@@ -757,25 +742,8 @@ const api = apiRef.current;
 const panel = api?.activePanel;
 if (!api || !panel) return;
 if (panel.api.location.type === "popout") return;
-try {
-const appearance = panel.api.component === "terminal" ? terminalAppearanceFromSettings(settings) : undefined;
-if (appearance) panel.api.updateParameters({ appearance });
-const opened = await api.addPopoutGroup(panel);
-if (!opened) return;
-const popout = api.getPopouts().find((item) =>
-item.group.activePanel?.id === panel.id
-);
-const popoutPanel = popout?.group.activePanel;
-if (popoutPanel && appearance) {
-popoutPanel.api.updateParameters({ appearance });
-}
-popoutPanel?.api.setActive();
-popout?.window.focus();
-poppedOutPanelRef.current = { panelId: panel.id, count: api.getPopouts().length };
-} catch (error) {
-console.error("Failed to pop out active panel", error);
-}
-}, [settings]);
+try { await api.addPopoutGroup(panel); } catch (error) { console.error("Failed to pop out active panel", error); }
+}, []);
 const resetLayout = useCallback(async () => {
 const api = apiRef.current;
 if (!api) return;
@@ -797,7 +765,6 @@ id: "terminal",
 component: "terminal",
 title: "Terminal",
 position: { referencePanel: "welcome", direction: "below" },
-params: { appearance: terminalAppearanceFromSettings(settings) },
 });
 api.addPanel({
 id: "connections",
@@ -805,7 +772,7 @@ component: "connections",
 title: "Connections",
 position: { referencePanel: "welcome", direction: "right" },
 });
-}, [connections, recentActivities, settings]);
+}, [connections, recentActivities]);
 useEffect(() => {
 if (!isTauri()) return;
 void invoke<Connection[]>("load_connections")
@@ -878,11 +845,6 @@ document.documentElement.style.setProperty("--ui-font-family", uiFamily);
 document.documentElement.style.setProperty("--ui-font-size", String(settings.uiFontSize) + "px");
 document.documentElement.style.setProperty("--terminal-font-family", terminalFamily);
 document.documentElement.style.setProperty("--terminal-font-size", String(settings.terminalFontSize) + "px");
-try {
-localStorage.setItem(TERMINAL_APPEARANCE_KEY, JSON.stringify(terminalAppearanceFromSettings(settings)));
-} catch {
-}
-
 window.dispatchEvent(new CustomEvent("remotehand-appearance-change"));
 };
 applyAppearance();
@@ -921,15 +883,6 @@ panel.api.setTitle("Home");
 panel.api.updateParameters({ activities: recentActivities });
 }
 }, [recentActivities]);
-useEffect(() => {
-const api = apiRef.current;
-if (!api) return;
-const appearance = terminalAppearanceFromSettings(settings);
-for (const panel of api.panels) {
-if (panel.api.component !== "terminal") continue;
-panel.api.updateParameters({ appearance });
-}
-}, [settings]);
 useEffect(() => {
 if (!settingsOpen || settingsTab !== "startup" || papaTabUnlocked) {
 papaSequenceRef.current = [];
@@ -1021,7 +974,6 @@ id: "terminal",
 component: "terminal",
 title: "Terminal",
 position: { referencePanel: "welcome", direction: "below" },
-params: { appearance: terminalAppearanceFromSettings(settings) },
 });
 event.api.addPanel({
 id: "connections",
@@ -1038,26 +990,6 @@ panel.api.updateParameters({ activities: recentActivities });
 }
 }
 captureLayout(event.api);
-event.api.onDidAddPopoutGroup((popout) => {
-popout.group.activePanel?.api.updateParameters({
-appearance: terminalAppearanceFromSettings(settings),
-});
-popout.group.activePanel?.api.setActive();
-popout.window.focus();
-poppedOutPanelRef.current = {
-panelId: popout.group.activePanel?.id ?? poppedOutPanelRef.current?.panelId ?? "",
-count: event.api.getPopouts().length,
-};
-});
-event.api.onDidRemovePopoutGroup(() => {
-const panelId = poppedOutPanelRef.current?.panelId;
-if (panelId) {
-window.setTimeout(() => {
-event.api.getPanel(panelId)?.api.setActive();
-}, 0);
-}
-poppedOutPanelRef.current = null;
-});
 event.api.onDidMutateLayout(() => {
 captureLayout(event.api);
 });
