@@ -903,8 +903,8 @@ return;
 }
 papaSequenceRef.current = key === sequence[0] ? [key] : [];
 };
-window.addEventListener("keydown", onKeyDown);
-return () => window.removeEventListener("keydown", onKeyDown);
+window.addEventListener("keydown", onKeyDown, true);
+return () => window.removeEventListener("keydown", onKeyDown, true);
 }, [settingsOpen, settingsTab, papaTabUnlocked]);
 
 useEffect(() => {
