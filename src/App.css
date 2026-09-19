@@ -745,12 +745,14 @@ padding: 0;
 }
 .terminal-host .xterm {
 height: 100%;
-padding: 6px;
-box-sizing: border-box;
+padding: 0;
 background: var(--terminal-background, #11151a);
 }
 .terminal-host .xterm-screen {
-padding: 0;
+width: calc(100% - 6px);
+height: calc(100% - 6px);
+margin-left: 6px;
+margin-top: 6px;
 }
 .terminal-host .xterm-rows {
 margin: 0;
