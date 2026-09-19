@@ -10,7 +10,7 @@ use tauri_plugin_autostart::ManagerExt;
 #[derive(Clone)]
 pub struct StartupTrayState {
     tray: Arc<Mutex<Option<TrayIcon>>>,
-    window_item: Arc<Mutex<Option<MenuItem>>>,
+    window_item: Arc<Mutex<Option<MenuItem<Wry>>>>,
     minimize_to_tray_on_close: Arc<Mutex<bool>>,
     show_in_system_tray: Arc<Mutex<bool>>,
 }
@@ -50,7 +50,7 @@ impl StartupTrayState {
     }
 }
 
-fn build_menu(app: &AppHandle, window_item: &MenuItem, home_item: &MenuItem, connections_item: &MenuItem, terminal_item: &MenuItem, settings_item: &MenuItem, separator: &PredefinedMenuItem, quit_item: &MenuItem) -> Result<tauri::menu::Menu, Box<dyn std::error::Error + Send + Sync>> {
+fn build_menu(app: &AppHandle<Wry>, window_item: &MenuItem<Wry>, home_item: &MenuItem<Wry>, connections_item: &MenuItem<Wry>, terminal_item: &MenuItem<Wry>, settings_item: &MenuItem<Wry>, separator: &PredefinedMenuItem<Wry>, quit_item: &MenuItem<Wry>) -> Result<tauri::menu::Menu<Wry>, Box<dyn std::error::Error + Send + Sync>> {
     Ok(MenuBuilder::new(app)
         .items(&[
             window_item,
@@ -76,7 +76,7 @@ fn update_window_item(app: &AppHandle, state: &StartupTrayState) {
     }
 }
 
-pub fn install(app: &tauri::AppHandle, state: &StartupTrayState) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub fn install(app: &tauri::AppHandle<Wry>, state: &StartupTrayState) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let visible = app
         .get_webview_window("main")
         .and_then(|window| window.is_visible().ok())
