@@ -2208,3 +2208,41 @@ min-height: 0;
 border: 0;
 background: transparent;
 }
+
+
+.settings-section-divider {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid #1d2632;
+}
+.settings-toggle {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding: 10px 0;
+  cursor: pointer;
+}
+.settings-toggle input {
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+.settings-toggle > span {
+  display: grid;
+  gap: 3px;
+}
+.settings-toggle strong {
+  color: #dce4ee;
+  font-size: 13px;
+}
+.settings-toggle small {
+  color: #6f7b8c;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.settings-toggle.disabled {
+  opacity: .55;
+  cursor: default;
+}
