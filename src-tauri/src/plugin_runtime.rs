@@ -648,6 +648,7 @@ impl PluginRuntimeState {
         log::info!("Plugin runtime {id} stopped");
         Ok(())
     }
+}
 
 #[tauri::command]
 pub async fn plugin_runtime_call(
