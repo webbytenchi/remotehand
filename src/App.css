@@ -742,17 +742,18 @@ min-width: 0;
 min-height: 0;
 overflow: hidden;
 padding: 0;
+background: var(--terminal-background, #11151a);
 }
 .terminal-host .xterm {
 height: 100%;
-padding: 0;
+padding: 6px;
+box-sizing: border-box;
 background: var(--terminal-background, #11151a);
 }
 .terminal-host .xterm-screen {
-width: calc(100% - 6px);
+width: 100%;
 height: 100%;
-margin-left: 6px;
-margin-top: 6px;
+margin: 0;
 }
 .terminal-host .xterm-rows {
 margin: 0;
