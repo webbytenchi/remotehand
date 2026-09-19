@@ -10,7 +10,7 @@ The format is based on `Keep a Changelog` (https://keepachangelog.com/), and thi
 
 - **Plugin Runtime v1** - out-of-process executable plugins, communicating over a versioned stdio IPC protocol. Core owns infrastructure; plugins own functionality.
 - **Generic top-bar contribution API.** Plugins can publish live per-target widgets into the RemoteHand app bar, composed from generic content primitives (`stack`, `text`, `metric`, `sparkline`, `status`, `progress`).
-- **Plugin panel hosting.** Plugins contribute dockable panels, hosted in a sandboxed iframe with a strict Content-Security-Policy and an injected bridge.
+- **Plugin panel hosting.** Plugins contribute dockable panels, hosted in a sandboxed iframe with a plugin-specific Content-Security-Policy and an injected bridge.
 - **Sidebar and command contributions** from plugins.
 - **Manifest-declared permissions** - network, clipboard, credentials, vault unlock, plugin storage - gated by the host and reported back at handshake.
 - **Plugin-scoped storage** under `data/plugins/plugin-id/`.
@@ -20,6 +20,11 @@ The format is based on `Keep a Changelog` (https://keepachangelog.com/), and thi
 ### Fixed
 
 - **Multi-line paste normalization.** Pasted text now normalizes line endings to CR before reaching the shell, so multi-line pastes execute cleanly in PowerShell, Command Prompt, and SSH sessions.
+
+### Fixed
+
+- **Release-build plugin panels.** Production plugin panels now execute correctly with the sandboxed srcdoc hosting path.
+- **Top-bar sparkline headroom.** Generic top-bar sparkline rendering now leaves consistent vertical headroom while preserving per-widget scaling.
 
 ### Notes
 
