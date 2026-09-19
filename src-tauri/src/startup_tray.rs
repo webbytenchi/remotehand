@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager, Runtime, State, Window,
+    AppHandle, Emitter, Manager, Runtime, State, Wry, Window,
 };
 use tauri_plugin_autostart::ManagerExt;
 
@@ -48,7 +48,7 @@ impl StartupTrayState {
     }
 }
 
-fn build_menu<R: Runtime>(app: &AppHandle<R>, visible: bool) -> Result<tauri::menu::Menu<R>, Box<dyn std::error::Error + Send + Sync>> {
+fn build_menu(app: &AppHandle<Wry>, visible: bool) -> Result<tauri::menu::Menu<Wry>, Box<dyn std::error::Error + Send + Sync>> {
     let window_item = MenuItemBuilder::with_id(
         if visible { "hide" } else { "show" },
         if visible { "Hide RemoteHand" } else { "Show RemoteHand" },
@@ -72,7 +72,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>, visible: bool) -> Result<tauri::me
         .build()?)
 }
 
-fn refresh_menu<R: Runtime>(app: &AppHandle<R>) {
+fn refresh_menu(app: &AppHandle<Wry>) {
     let visible = app
         .get_webview_window("main")
         .and_then(|window| window.is_visible().ok())
@@ -89,7 +89,7 @@ fn refresh_menu<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
-pub fn install<R: Runtime>(app: &AppHandle<R>, state: &StartupTrayState) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub fn install(app: &AppHandle<Wry>, state: &StartupTrayState) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let visible = app
         .get_webview_window("main")
         .and_then(|window| window.is_visible().ok())
