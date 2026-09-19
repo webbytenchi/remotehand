@@ -151,7 +151,8 @@ pub fn set_close_to_tray(value: bool, state: State<'_, StartupTrayState>) -> Res
 }
 
 pub fn should_minimize_at_startup() -> bool {
-    std::env::args().any(|arg| arg == "--startup-minimized")
+    std::env::args().any(|arg| arg == "--autostart")
+        && crate::storage::load_settings().map(|settings| settings.start_minimized).unwrap_or(false)
 }
 
 pub fn handle_close<R: Runtime>(_window: &WebviewWindow<R>, state: &StartupTrayState) -> bool {
