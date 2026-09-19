@@ -897,6 +897,8 @@ backdrop-filter: blur(3px);
 }
 .app-modal {
 width: min(560px, calc(100vw - 32px));
+height: min(90vh, calc(100vh - 48px));
+min-height: 0;
 max-height: 90vh;
 display: grid;
 grid-template-rows: auto auto minmax(0, 1fr) auto;
@@ -2254,6 +2256,8 @@ background: transparent;
 
 
 .settings-tabs {
+  min-height: 0;
+  flex: 0 0 auto;
   display: flex;
   gap: 4px;
   padding: 0 22px;
