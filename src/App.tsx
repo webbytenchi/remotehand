@@ -87,18 +87,6 @@ detail: string;
 timestamp: number;
 connection?: Connection;
 };
-type TerminalPanelParams = {
-shell?: "default" | "powershell" | "cmd" | "wsl";
-initialCommand?: string;
-ssh?: {
-host: string;
-port: number;
-user: string;
-name: string;
-};
-appearance?: TerminalAppearance;
-};
-
 type HomePanelParams = {
 activities?: RecentActivity[];
 onOpen?: (activity: RecentActivity) => void;
