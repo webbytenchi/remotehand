@@ -1067,9 +1067,21 @@ poppedOutPanelRef.current?.panelId === sessionId
 : undefined;
 window.setTimeout(() => {
 if (event.api.getPanel(sessionId)) return;
-if (popoutWindow && !popoutWindow.closed) {
+if (!popoutWindow) return;
+if (!popoutWindow.closed) {
 popoutWindow.close();
 }
+if (!isTauri()) return;
+void getAllWindows().then(async (windows) => {
+const nativePopouts = windows.filter((candidate) =>
+candidate.label.startsWith("panel-popout-")
+);
+if (nativePopouts.length === 1) {
+await nativePopouts[0].close();
+}
+}).catch((error) => {
+console.error("Failed to close native popout after its last tab closed", error);
+});
 }, 0);
 if (panel.api.component !== "terminal") return;
 window.setTimeout(() => {
