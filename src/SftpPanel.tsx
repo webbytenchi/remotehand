@@ -112,6 +112,7 @@ const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
 const [lastSelectedPath, setLastSelectedPath] = useState<string | null>(null);
 const [transferState, setTransferState] = useState<TransferState>("idle");
 const [transferStatus, setTransferStatus] = useState("");
+const [downloadDestination, setDownloadDestination] = useState<string | null>(null);
 const [liveTransfer, setLiveTransfer] = useState<LiveTransfer | null>(null);
 const [cancelRequested, setCancelRequested] = useState(false);
 const [moreOpen, setMoreOpen] = useState(false);
@@ -360,6 +361,7 @@ size: entry.size,
 const transferId = crypto.randomUUID();
 setTransferState("downloading");
 setTransferStatus("");
+setDownloadDestination(null);
 setCancelRequested(false);
 setLiveTransfer({
 transferId,
@@ -396,15 +398,17 @@ String(result.folders) +
 (result.folders === 1 ? " folder" : " folders") +
 " · " +
 formatSize(result.bytes) +
-" · Saved to " +
-folder,
+" · Saved to",
 );
+setDownloadDestination(folder);
 } catch (reason) {
 const message = String(reason);
 if (message.includes("SFTP transfer cancelled")) {
 setTransferStatus("Download cancelled");
+setDownloadDestination(null);
 } else {
 setError(message);
+setDownloadDestination(null);
 }
 } finally {
 setTransferState("idle");
@@ -845,10 +849,30 @@ disabled={!vaultPassphrase || unlocking}
 
 {transferStatus ? (
 <div className="sftp-transfer-status sftp-message">
-<span>{transferStatus}</span>
+<span>
+{transferStatus}
+{downloadDestination ? (
+<>
+{" · "}
 <button
 type="button"
-onClick={() => setTransferStatus("")}
+className="sftp-download-destination"
+title={"Open " + downloadDestination}
+onClick={() => {
+void invoke("reveal_path", { path: downloadDestination }).catch((reason) => setError(String(reason)));
+}}
+>
+{downloadDestination}
+</button>
+</>
+) : null}
+</span>
+<button
+type="button"
+onClick={() => {
+setTransferStatus("");
+setDownloadDestination(null);
+}}
 aria-label="Dismiss transfer status"
 >
 ×
