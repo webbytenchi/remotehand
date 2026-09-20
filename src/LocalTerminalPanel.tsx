@@ -338,6 +338,12 @@ if (Number.isFinite(fontSize)) rows.style.setProperty("font-size", String(fontSi
 const foreground = styles.getPropertyValue("--terminal-foreground").trim();
 if (foreground) rows.style.setProperty("color", foreground);
 }
+const cursor = terminal.element?.querySelector<HTMLElement>(".xterm-cursor");
+if (cursor) {
+const theme = terminal.options.theme;
+cursor.style.setProperty("background-color", theme?.cursor ?? theme?.foreground ?? foreground);
+cursor.style.setProperty("color", theme?.cursorAccent ?? theme?.background ?? styles.getPropertyValue("--terminal-background").trim());
+}
 fitAddonRef.current?.fit();
 if (api.location.type === "popout") {
 const computed = rows ? ownerWindow?.getComputedStyle(rows) : null;
@@ -379,6 +385,12 @@ if (fontSize) rows.style.setProperty("font-size", fontSize);
 if (foreground) rows.style.setProperty("color", foreground);
 }
 applyAppearance();
+const cursor = terminal.element?.querySelector<HTMLElement>(".xterm-cursor");
+if (cursor) {
+const theme = terminal.options.theme;
+cursor.style.setProperty("background-color", theme?.cursor ?? theme?.foreground ?? foreground ?? "");
+cursor.style.setProperty("color", theme?.cursorAccent ?? theme?.background ?? styles?.getPropertyValue("--terminal-background").trim() ?? "");
+}
 terminal.refresh(0, terminal.rows - 1);
 terminal.focus();
 };
