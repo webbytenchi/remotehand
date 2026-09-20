@@ -454,7 +454,15 @@ if (cursorElement) {
 adoptedCursorMatch = Array.from(sheet.cssRules).some((rule) => rule instanceof CSSStyleRule && cursorElement.matches(rule.selectorText)) ? "yes" : "no";
 }
 } catch (error) {
-adoptedSheet = error instanceof Error ? error.name + ":" + error.message : "error";
+if (error instanceof Error) {
+adoptedSheet = error.name + ":" + error.message;
+} else {
+try {
+adoptedSheet = "error:" + JSON.stringify(error);
+} catch {
+adoptedSheet = "error:" + String(error);
+}
+}
 }
 setDiagnostic((current) =>
 `${current} | POSTMOVE adoptedSheet=${adoptedSheet} | adoptedRules=${adoptedRules} | adoptedCursorMatch=${adoptedCursorMatch} | cursor=${cursorElement ? "yes" : "no"} | cursorDisplay=${cursorComputed?.display ?? "n/a"} | cursorVisibility=${cursorComputed?.visibility ?? "n/a"} | cursorOpacity=${cursorComputed?.opacity ?? "n/a"} | cursorBg=${cursorComputed?.backgroundColor ?? "n/a"} | cursorSize=${cursorRect ? cursorRect.width.toFixed(1) + "x" + cursorRect.height.toFixed(1) : "n/a"} | cursorInline=${cursorElement?.getAttribute("style") ?? "n/a"} | textareaFocused=${textarea ? String(activeElement === textarea) : "n/a"} | active=${activeElement instanceof HTMLElement ? activeElement.className || activeElement.tagName : "n/a"}`,
