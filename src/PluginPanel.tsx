@@ -191,50 +191,54 @@ iframeRef.current?.contentWindow?.postMessage({ type: "remotehand.plugin.event",
 }).then((dispose) => { if (cancelled) dispose(); else unlisten = dispose; });
 return () => { cancelled = true; unlisten?.(); };
 }, [pluginId]);
-const [popoutDiagnostic, setPopoutDiagnostic] = useState<string | null>(null);
+const [popoutDiagnostic, setPopoutDiagnostic] = useState("");
 useEffect(() => {
 const inspect = () => {
 const frame = iframeRef.current;
 const doc = frame?.contentDocument;
-if (!frame || !doc || api.location.type !== "popout") {
-setPopoutDiagnostic(null);
+if (!frame || !doc) {
+setPopoutDiagnostic("iframe document unavailable");
 return;
 }
 const styles = Array.from(doc.querySelectorAll<HTMLStyleElement>("style"));
 const details = styles.map((style, index) => {
 let sheetState = "sheet=null";
 try {
-sheetState = style.sheet ? "sheet=active rules=" + style.sheet.cssRules.length : "sheet=null";
+sheetState = style.sheet
+? "sheet=active rules=" + style.sheet.cssRules.length
+: "sheet=null";
 } catch (error) {
 sheetState = "sheet=error " + String(error);
 }
 return index + ":" + (style.textContent?.length ?? 0) + " chars " + sheetState;
 }).join(" | ");
-const bodyStyle = doc.defaultView?.getComputedStyle(doc.body);
+const view = doc.defaultView;
+const bodyStyle = view?.getComputedStyle(doc.body);
+const rootStyle = view?.getComputedStyle(doc.documentElement);
 setPopoutDiagnostic(
-"PLUGIN POPOUT DEBUG\n" +
-"readyState=" + doc.readyState +
-" styles=" + styles.length +
-" adopted=" + doc.adoptedStyleSheets.length +
-" body.bg=" + (bodyStyle?.backgroundColor ?? "?") +
-" body.font=" + (bodyStyle?.fontFamily ?? "?") +
-"\n" + details
+"location=" + String(api.location.type) +
+" | readyState=" + doc.readyState +
+" | styles=" + styles.length +
+" | adopted=" + doc.adoptedStyleSheets.length +
+"\nbody.bg=" + (bodyStyle?.backgroundColor ?? "?") +
+" | body.color=" + (bodyStyle?.color ?? "?") +
+" | body.font=" + (bodyStyle?.fontFamily ?? "?") +
+" | root.font=" + (rootStyle?.fontFamily ?? "?") +
+"\n" + (details || "no style elements")
 );
 };
-const locationDisposable = api.onDidLocationChange(() => {
-window.setTimeout(inspect, 500);
-});
-const timer = window.setTimeout(inspect, 750);
-return () => {
-window.clearTimeout(timer);
-locationDisposable.dispose();
-};
+inspect();
+const timer = window.setInterval(inspect, 500);
+return () => window.clearInterval(timer);
 }, [api, html]);
 const content = useMemo(() => html ?? "", [html]);
 if (error) return <section className="plugin-panel-host plugin-panel-error"><strong>Plugin panel unavailable</strong><span>{error}</span></section>;
 if (!html) return <div className="plugin-panel-host plugin-panel-loading">Loading plugin panel…</div>;
-return <div style={{ position: "relative", width: "100%", height: "100%" }}>
-<iframe ref={iframeRef} className="plugin-panel-frame" title={params?.title || pluginId} sandbox="allow-scripts" allow="autoplay" srcDoc={content} />
-{popoutDiagnostic ? <pre style={{ position: "absolute", left: 8, right: 8, bottom: 8, zIndex: 2147483647, maxHeight: "45%", overflow: "auto", margin: 0, padding: 8, whiteSpace: "pre-wrap", background: "#111", color: "#7cff7c", border: "1px solid #7cff7c", fontSize: 11 }}>{popoutDiagnostic}</pre> : null}
+return <div style={{ display: "flex", flexDirection: "column", width: "100%", height: "100%", minHeight: 0 }}>
+<pre style={{ flex: "0 0 auto", margin: 0, padding: "8px 10px", whiteSpace: "pre-wrap", overflowWrap: "anywhere", background: "#111", color: "#7cff7c", borderBottom: "1px solid #7cff7c", fontSize: 11, lineHeight: 1.35 }}>
+PLUGIN POPOUT DEBUG
+{popoutDiagnostic || "Collecting plugin diagnostics…"}
+</pre>
+<iframe ref={iframeRef} className="plugin-panel-frame" style={{ flex: "1 1 auto", minHeight: 0 }} title={params?.title || pluginId} sandbox="allow-scripts" allow="autoplay" srcDoc={content} />
 </div>;
 }
