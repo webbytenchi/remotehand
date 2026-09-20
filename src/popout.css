@@ -1,3 +1,11 @@
 @import "./index.css";
 @import "dockview-react/dist/styles/dockview.css";
 @import "./App.css";
+
+/*
+ * Dockview copies the opener's linked stylesheets into a popout after its
+ * document has loaded. Those duplicate <link> elements load asynchronously
+ * and can briefly replace the already-loaded popout styling with an
+ * unstyled frame. Keep the popout's own bundled stylesheet as the source of
+ * truth; App.tsx removes Dockview's late duplicate links before reveal.
+ */
