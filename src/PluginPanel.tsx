@@ -193,17 +193,27 @@ return () => { cancelled = true; unlisten?.(); };
 }, [pluginId]);
 const repairedDocumentRef = useRef<Document | null>(null);
 const repairSheetRef = useRef<CSSStyleSheet | null>(null);
+const [popoutStylesReady, setPopoutStylesReady] = useState(api.location.type !== "popout");
 useEffect(() => {
 const repairPopoutStyles = () => {
-if (api.location.type !== "popout") return;
+if (api.location.type !== "popout") {
+setPopoutStylesReady(true);
+return;
+}
 const doc = iframeRef.current?.contentDocument;
 if (!doc) return;
 const styles = Array.from(doc.querySelectorAll<HTMLStyleElement>("style"));
-if (!styles.some((style) => style.sheet === null)) return;
+if (!styles.some((style) => style.sheet === null)) {
+setPopoutStylesReady(true);
+return;
+}
 try {
 if (repairedDocumentRef.current === doc) {
 const sheet = repairSheetRef.current;
-if (sheet && doc.adoptedStyleSheets.includes(sheet)) return;
+if (sheet && doc.adoptedStyleSheets.includes(sheet)) {
+setPopoutStylesReady(true);
+return;
+}
 }
 const css = styles.map((style) => style.textContent ?? "").join("\n");
 if (!css) return;
@@ -223,10 +233,13 @@ sheet.replaceSync(css);
 doc.adoptedStyleSheets = [...doc.adoptedStyleSheets, sheet];
 repairedDocumentRef.current = doc;
 repairSheetRef.current = sheet;
+setPopoutStylesReady(true);
 } catch (error) {
 console.error("RemoteHand plugin popout style repair failed", error);
 }
 };
+if (api.location.type === "popout") setPopoutStylesReady(false);
+else setPopoutStylesReady(true);
 repairPopoutStyles();
 const timer = window.setInterval(repairPopoutStyles, 500);
 return () => window.clearInterval(timer);
@@ -234,5 +247,5 @@ return () => window.clearInterval(timer);
 const content = useMemo(() => html ?? "", [html]);
 if (error) return <section className="plugin-panel-host plugin-panel-error"><strong>Plugin panel unavailable</strong><span>{error}</span></section>;
 if (!html) return <div className="plugin-panel-host plugin-panel-loading">Loading plugin panel…</div>;
-return <iframe ref={iframeRef} className="plugin-panel-frame" title={params?.title || pluginId} sandbox="allow-scripts allow-same-origin" allow="autoplay" srcDoc={content} />;
+return <iframe ref={iframeRef} className="plugin-panel-frame" style={{ visibility: popoutStylesReady ? "visible" : "hidden" }} title={params?.title || pluginId} sandbox="allow-scripts allow-same-origin" allow="autoplay" srcDoc={content} />;
 }
