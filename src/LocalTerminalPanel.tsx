@@ -388,10 +388,19 @@ const host = hostRef.current;
 if (!terminal || !host) return;
 const nextWindow = host.ownerDocument.defaultView;
 const refreshAppearance = () => {
-// Dockview adopts the existing xterm DOM into another Document. Reparse xterm's
-// generated renderer styles in their new owner document without reopening the
-// terminal, which would break the input lifecycle on the return trip.
 applyAppearance();
+// Dockview's popout stylesheet can outrank xterm's generated renderer rules.
+// Keep xterm's owner scoping, but lower only that scoping selector's specificity
+// so the renderer's span, ANSI color and cursor rules can apply after the move.
+if (api.location.type === "popout") {
+const ownerClass = terminal.element ? Array.from(terminal.element.classList).find((name) => name.startsWith("xterm-dom-renderer-owner-")) : undefined;
+if (ownerClass) {
+for (const style of terminal.element?.querySelectorAll<HTMLStyleElement>("style") ?? []) {
+if (!style.textContent?.includes("." + ownerClass)) continue;
+style.textContent = style.textContent.replaceAll("." + ownerClass, ":where(." + ownerClass + ")");
+}
+}
+}
 terminal.refresh(0, terminal.rows - 1);
 terminal.focus();
 window.setTimeout(() => {
