@@ -212,6 +212,18 @@ sheetState = "sheet=error " + String(error);
 }
 return index + ":" + (style.textContent?.length ?? 0) + " chars " + sheetState;
 }).join(" | ");
+let probe = "probe=not-run";
+try {
+const probeStyle = doc.createElement("style");
+probeStyle.textContent = "body { outline: 0 solid transparent; }";
+doc.head.appendChild(probeStyle);
+probe = probeStyle.sheet
+? "probe=active rules=" + probeStyle.sheet.cssRules.length
+: "probe=sheet-null";
+probeStyle.remove();
+} catch (error) {
+probe = "probe=error " + String(error);
+}
 const view = doc.defaultView;
 const bodyStyle = view?.getComputedStyle(doc.body);
 const rootStyle = view?.getComputedStyle(doc.documentElement);
@@ -224,7 +236,8 @@ setPopoutDiagnostic(
 " | body.color=" + (bodyStyle?.color ?? "?") +
 " | body.font=" + (bodyStyle?.fontFamily ?? "?") +
 " | root.font=" + (rootStyle?.fontFamily ?? "?") +
-"\n" + (details || "no style elements")
+"\n" + (details || "no style elements") +
+" | " + probe
 );
 };
 inspect();
