@@ -315,6 +315,26 @@ cols: terminal.cols,
 }
 };
 
+const applyPopoutRendererStyles = () => {
+const terminal = terminalRef.current;
+const host = hostRef.current;
+if (!terminal || !host || api.location.type !== "popout") return;
+const ownerDocument = host.ownerDocument;
+const ownerWindow = ownerDocument.defaultView;
+try {
+const rendererCss = Array.from(terminal.element?.querySelectorAll<HTMLStyleElement>("style") ?? [])
+.map((style) => style.textContent ?? "")
+.join("\n");
+const PopoutCSSStyleSheet = ownerWindow?.CSSStyleSheet;
+if (!PopoutCSSStyleSheet) return;
+const sheet = new PopoutCSSStyleSheet();
+sheet.replaceSync(rendererCss);
+ownerDocument.adoptedStyleSheets = [...ownerDocument.adoptedStyleSheets, sheet];
+} catch {
+return;
+}
+};
+
 const ownerDocument = hostRef.current?.ownerDocument ?? document;
 const ownerWindow = ownerDocument.defaultView ?? window;
 const observer = new MutationObserver(applyAppearance);
@@ -327,7 +347,13 @@ const locationDisposable = api.onDidLocationChange(() => {
 const terminal = terminalRef.current;
 const host = hostRef.current;
 if (!terminal || !host) return;
+/*
+ * Dockview has already moved the existing terminal DOM when this event fires.
+ * Repair xterm's document-bound renderer stylesheet synchronously so the
+ * popout cannot paint the moved terminal with xterm's generated CSS missing.
+ */
 applyAppearance();
+applyPopoutRendererStyles();
 terminal.refresh(0, terminal.rows - 1);
 terminal.focus();
 });
