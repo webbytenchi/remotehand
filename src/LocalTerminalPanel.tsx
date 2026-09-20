@@ -375,7 +375,7 @@ matches.push(rule.cssText.replace(/\\s+/g, " ").slice(0, 220));
 }
 return matches.slice(-8).join(" || ") || "none";
 };
-const cursorMatchedRules = matchedRulesFor(cursorElement);
+const cursorMatchedRules = matchedRulesFor(cursorElement ?? undefined);
 const glyphMatchedRules = matchedRulesFor(glyphElement);
 const cursorInline = cursorElement?.getAttribute("style") ?? "n/a";
 const cursorParentInline = cursorParent?.getAttribute("style") ?? "n/a";
