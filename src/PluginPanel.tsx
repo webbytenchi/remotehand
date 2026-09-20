@@ -174,19 +174,10 @@ let ownerWindow = api.getWindow();
 const bind = (nextWindow: Window) => { ownerWindow.removeEventListener("message", onMessage); ownerWindow = nextWindow; ownerWindow.addEventListener("message", onMessage); };
 ownerWindow.addEventListener("message", onMessage);
 window.addEventListener("remotehand-appearance-change", postAppearance);
-const reloadPluginFrame = () => {
-const frame = iframeRef.current;
-if (!frame || !html) return;
-frame.srcdoc = "";
-window.setTimeout(() => {
-if (iframeRef.current === frame) {
-frame.srcdoc = html;
-}
-}, 0);
-};
 const locationDisposable = api.onDidLocationChange(() => {
 bind(api.getWindow());
-window.setTimeout(reloadPluginFrame, 0);
+postAppearance();
+postContext();
 });
 return () => { locationDisposable.dispose(); ownerWindow.removeEventListener("message", onMessage); window.removeEventListener("remotehand-appearance-change", postAppearance); };
 }, [api, pluginId, html, context?.targetId, context?.target]);
@@ -202,8 +193,7 @@ return () => { cancelled = true; unlisten?.(); };
 }, [pluginId]);
 const [popoutDiagnostic, setPopoutDiagnostic] = useState<string | null>(null);
 useEffect(() => {
-const locationDisposable = api.onDidLocationChange(() => {
-window.setTimeout(() => {
+const inspect = () => {
 const frame = iframeRef.current;
 const doc = frame?.contentDocument;
 if (!frame || !doc || api.location.type !== "popout") {
@@ -218,7 +208,7 @@ sheetState = style.sheet ? "sheet=active rules=" + style.sheet.cssRules.length :
 } catch (error) {
 sheetState = "sheet=error " + String(error);
 }
-return index + ":" + style.textContent?.length + " chars " + sheetState;
+return index + ":" + (style.textContent?.length ?? 0) + " chars " + sheetState;
 }).join(" | ");
 const bodyStyle = doc.defaultView?.getComputedStyle(doc.body);
 setPopoutDiagnostic(
@@ -230,15 +220,21 @@ setPopoutDiagnostic(
 " body.font=" + (bodyStyle?.fontFamily ?? "?") +
 "\n" + details
 );
-}, 500);
+};
+const locationDisposable = api.onDidLocationChange(() => {
+window.setTimeout(inspect, 500);
 });
-return () => locationDisposable.dispose();
+const timer = window.setTimeout(inspect, 750);
+return () => {
+window.clearTimeout(timer);
+locationDisposable.dispose();
+};
 }, [api, html]);
 const content = useMemo(() => html ?? "", [html]);
 if (error) return <section className="plugin-panel-host plugin-panel-error"><strong>Plugin panel unavailable</strong><span>{error}</span></section>;
 if (!html) return <div className="plugin-panel-host plugin-panel-loading">Loading plugin panel…</div>;
-return <>
+return <div style={{ position: "relative", width: "100%", height: "100%" }}>
 <iframe ref={iframeRef} className="plugin-panel-frame" title={params?.title || pluginId} sandbox="allow-scripts" allow="autoplay" srcDoc={content} />
-{popoutDiagnostic ? <pre style={{ position: "absolute", right: 8, bottom: 8, zIndex: 9999, maxWidth: "calc(100% - 16px)", margin: 0, padding: 8, whiteSpace: "pre-wrap", background: "#111", color: "#7cff7c", border: "1px solid #7cff7c", fontSize: 11 }}>{popoutDiagnostic}</pre> : null}
-</>;
+{popoutDiagnostic ? <pre style={{ position: "absolute", left: 8, right: 8, bottom: 8, zIndex: 2147483647, maxHeight: "45%", overflow: "auto", margin: 0, padding: 8, whiteSpace: "pre-wrap", background: "#111", color: "#7cff7c", border: "1px solid #7cff7c", fontSize: 11 }}>{popoutDiagnostic}</pre> : null}
+</div>;
 }
