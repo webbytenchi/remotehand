@@ -1084,6 +1084,20 @@ if (link !== popoutStylesheet) link.remove();
 
 root.style.visibility = "visible";
 popout.window.dispatchEvent(new CustomEvent("remotehand-appearance-change"));
+if (isTauri()) {
+void getAllWindows().then(async (windows) => {
+const nativePopouts = windows.filter((candidate) =>
+candidate.label.startsWith("panel-popout-")
+);
+const nativePopout = nativePopouts.find((candidate) => !candidate.isVisible());
+if (nativePopout) {
+await nativePopout.show();
+await nativePopout.setFocus();
+}
+}).catch((error) => {
+console.error("Failed to reveal native popout after Dockview setup", error);
+});
+}
 });
 event.api.onDidRemovePopoutGroup(() => {
 const panelId = poppedOutPanelRef.current?.panelId;
