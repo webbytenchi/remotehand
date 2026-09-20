@@ -461,7 +461,7 @@ const applyingHistoryRef = useRef(false);
 const workspaceSaveTimerRef = useRef<number | null>(null);
 const workspacePersistenceEnabledRef = useRef(true);
 const poppedOutPanelRef = useRef<{ panelId: string; count: number; window?: Window } | null>(null);
-const closingPopoutPanelRef = useRef<string | null>(null);
+const closingPopoutPanelRef = useRef<{ panelId: string; groupId: string } | null>(null);
 useEffect(() => {
 if (!isTauri()) return;
 void invoke<string>("local_os")
@@ -1009,15 +1009,22 @@ event.api.onWillMutateLayout((mutation) => {
 if (mutation.kind !== "remove" || mutation.origin !== "user") return;
 const activePanel = event.api.activePanel;
 if (activePanel?.api.location.type !== "popout") return;
-closingPopoutPanelRef.current = activePanel.id;
+closingPopoutPanelRef.current = {
+panelId: activePanel.id,
+groupId: activePanel.api.group.id,
+};
 });
 event.api.onDidMutateLayout((mutation) => {
 captureLayout(event.api);
-const panelId = closingPopoutPanelRef.current;
-if (mutation.kind !== "remove" || !panelId) return;
+const closing = closingPopoutPanelRef.current;
+if (mutation.kind !== "remove" || !closing) return;
 closingPopoutPanelRef.current = null;
 window.setTimeout(() => {
-if (event.api.getPanel(panelId) || !isTauri()) return;
+if (event.api.getPanel(closing.panelId) || !isTauri()) return;
+const groupStillHasPanels = event.api.panels.some(
+(panel) => panel.api.group.id === closing.groupId
+);
+if (groupStillHasPanels) return;
 void getAllWindows().then(async (windows) => {
 const nativePopouts = windows.filter((candidate) =>
 candidate.label.startsWith("panel-popout-")
