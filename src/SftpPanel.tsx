@@ -389,13 +389,13 @@ transferId,
 ...(useNativeSftp ? { sessionId: nativeSessionId } : {}),
 },
 );
+const completedItems = [
+result.files > 0 ? String(result.files) + (result.files === 1 ? " file" : " files") : null,
+result.folders > 0 ? String(result.folders) + (result.folders === 1 ? " folder" : " folders") : null,
+].filter((item): item is string => item !== null);
 setTransferStatus(
-"Download complete · " +
-String(result.files) +
-(result.files === 1 ? " file" : " files") +
-" · " +
-String(result.folders) +
-(result.folders === 1 ? " folder" : " folders") +
+"Download complete" +
+(completedItems.length > 0 ? " · " + completedItems.join(" · ") : "") +
 " · " +
 formatSize(result.bytes) +
 " · Saved to",
