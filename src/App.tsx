@@ -1065,8 +1065,12 @@ for (const property of [
 const value = source.style.getPropertyValue(property);
 if (value) root.style.setProperty(property, value);
 }
-root.style.visibility = "visible";
 popout.window.dispatchEvent(new CustomEvent("remotehand-appearance-change"));
+popout.window.requestAnimationFrame(() => {
+popout.window.requestAnimationFrame(() => {
+root.classList.add("remotehand-popout-ready");
+});
+});
 });
 event.api.onDidRemovePopoutGroup(() => {
 const panelId = poppedOutPanelRef.current?.panelId;
