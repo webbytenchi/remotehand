@@ -22,6 +22,41 @@ fn local_os() -> &'static str {
 }
 
 #[tauri::command]
+fn reveal_path(path: String) -> Result<(), String> {
+    let path = std::path::PathBuf::from(path);
+    if !path.exists() {
+        return Err("path does not exist".to_string());
+    }
+
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        let mut command = std::process::Command::new("explorer.exe");
+        command.arg(&path);
+        command
+    };
+
+    #[cfg(target_os = "linux")]
+    let mut command = {
+        let mut command = std::process::Command::new("xdg-open");
+        command.arg(&path);
+        command
+    };
+
+    #[cfg(target_os = "macos")]
+    let mut command = {
+        let mut command = std::process::Command::new("open");
+        command.arg(&path);
+        command
+    };
+
+    #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+    return Err("revealing paths is not supported on this platform".to_string());
+
+    command.spawn().map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 fn close_current_window(window: tauri::WebviewWindow) -> Result<(), String> {
     if window.label() == "main" {
         return Err("refusing to close main window".to_string());
@@ -122,6 +157,7 @@ pub fn run() {
             terminal::terminal_resize,
             terminal::terminal_close,
             local_os,
+            reveal_path,
             close_current_window,
             show_pending_popout,
             startup_tray::set_startup_enabled,
