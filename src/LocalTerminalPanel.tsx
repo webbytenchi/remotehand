@@ -347,18 +347,15 @@ const locationDisposable = api.onDidLocationChange(() => {
 const terminal = terminalRef.current;
 const host = hostRef.current;
 if (!terminal || !host) return;
-const nextWindow = host.ownerDocument.defaultView;
-const refreshAppearance = () => {
+/*
+ * Dockview has already moved the existing terminal DOM when this event fires.
+ * Repair xterm's document-bound renderer stylesheet synchronously so the
+ * popout cannot paint the moved terminal with xterm's generated CSS missing.
+ */
 applyAppearance();
 applyPopoutRendererStyles();
 terminal.refresh(0, terminal.rows - 1);
 terminal.focus();
-};
-if (nextWindow) {
-nextWindow.requestAnimationFrame(refreshAppearance);
-} else {
-refreshAppearance();
-}
 });
 return () => {
 observer.disconnect();
