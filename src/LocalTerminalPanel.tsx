@@ -104,7 +104,6 @@ const [status, setStatus] = useState(params?.ssh ? "Connecting SSH..." : "Starti
 const [rightClickPaste, setRightClickPaste] = useState(true);
 const [confirmMultiline, setConfirmMultiline] = useState(true);
 const [pendingPaste, setPendingPaste] = useState<string | null>(null);
-const [diagnostic, setDiagnostic] = useState("");
 const sessionId = api.id;
 const shell = params?.shell ?? "default";
 const ssh = params?.ssh;
@@ -143,37 +142,6 @@ terminal.open(host);
 applyTerminalDomTypography();
 fitAddon.fit();
 terminal.focus();
-
-const updateDiagnostic = () => {
-const element = host.querySelector(".xterm-rows");
-const computed = element ? host.ownerDocument.defaultView?.getComputedStyle(element) : null;
-const firstCell = element?.querySelector<HTMLElement>("span");
-const cellComputed = firstCell ? host.ownerDocument.defaultView?.getComputedStyle(firstCell) : null;
-const xtermElement = terminal.element;
-const ownerClass = xtermElement ? Array.from(xtermElement.classList).find((name) => name.startsWith("xterm-dom-renderer-owner-")) ?? "n/a" : "n/a";
-const matchingStyles = ownerClass === "n/a" ? [] : Array.from(host.ownerDocument.querySelectorAll("style")).filter((style) => style.textContent?.includes(ownerClass));
-const mainMatchingStyles = ownerClass === "n/a" ? [] : Array.from(document.querySelectorAll("style")).filter((style) => style.textContent?.includes(ownerClass));
-const cellClass = firstCell?.className || "n/a";
-const cellStyle = firstCell?.getAttribute("style") || "n/a";
-const glyphSpans = element ? Array.from(element.querySelectorAll<HTMLElement>("span")).filter((span) => (span.textContent ?? "").trim().length > 0) : [];
-const glyphSample = glyphSpans.slice(0, 4).map((span) => {
-const color = host.ownerDocument.defaultView?.getComputedStyle(span).color ?? "n/a";
-const text = (span.textContent ?? "").trim().replace(/\\s+/g, " ").slice(0, 18);
-return `${JSON.stringify(text)}:${span.className || "-"}:${color}`;
-}).join(";") || "n/a";
-const ownerRules = ownerClass === "n/a" ? [] : Array.from(host.ownerDocument.styleSheets).flatMap((sheet) => {
-try {
-return Array.from(sheet.cssRules).map((rule) => rule.cssText).filter((rule) => rule.includes(ownerClass) && (rule.includes("xterm-rows") || rule.includes("color:")));
-} catch {
-return [];
-}
-});
-const defaultRule = ownerRules.find((rule) => /xterm-rows[^,{]*\\{[^}]*color:/i.test(rule)) ?? ownerRules.find((rule) => rule.includes("color:")) ?? "n/a";
-const ownerRuleSample = ownerRules.slice(0, 6).map((rule) => rule.replace(/\\s+/g, " ").slice(0, 180)).join(" || ") || "n/a";
-setDiagnostic(
-`doc=${host.ownerDocument.URL} | location=${String(api.location.type)} | font=${terminal.options.fontFamily} | size=${terminal.options.fontSize}px | rows=${terminal.rows} cols=${terminal.cols} | cssFont=${computed?.fontFamily ?? "n/a"} | cssSize=${computed?.fontSize ?? "n/a"} | terminalTheme=${host.ownerDocument.documentElement.dataset.terminalTheme ?? "n/a"} | cssBg=${host.ownerDocument.defaultView?.getComputedStyle(host.ownerDocument.documentElement).getPropertyValue("--terminal-background").trim() || "n/a"} | cssFg=${host.ownerDocument.defaultView?.getComputedStyle(host.ownerDocument.documentElement).getPropertyValue("--terminal-foreground").trim() || "n/a"} | xtermBg=${terminal.options.theme?.background ?? "n/a"} | xtermFg=${terminal.options.theme?.foreground ?? "n/a"} | blue=${terminal.options.theme?.blue ?? "n/a"} | brightBlue=${terminal.options.theme?.brightBlue ?? "n/a"} | white=${terminal.options.theme?.white ?? "n/a"} | brightWhite=${terminal.options.theme?.brightWhite ?? "n/a"} | owner=${ownerClass} | ownerStyles=${matchingStyles.length} | mainOwnerStyles=${mainMatchingStyles.length} | cellClass=${cellClass} | cellStyle=${cellStyle} | cellColor=${cellComputed?.color ?? "n/a"} | glyphs=${glyphSample} | defaultRule=${defaultRule.replace(/\\s+/g, " ").slice(0, 240)} | ownerRules=${ownerRuleSample}`,
-);
-};
 
 if (!isTauri()) {
 terminal.writeln("RemoteHand Terminal");
@@ -294,7 +262,6 @@ cols: terminal.cols,
 });
 
 resizeObserver.observe(host);
-updateDiagnostic();
 };
 
 
@@ -341,133 +308,21 @@ if (foreground) rows.style.setProperty("color", foreground);
 fitAddonRef.current?.fit();
 if (api.location.type === "popout") {
 const computed = rows ? ownerWindow?.getComputedStyle(rows) : null;
-const cursorElement = terminal.element?.querySelector<HTMLElement>(".xterm-cursor");
-const cursorComputed = cursorElement ? ownerWindow?.getComputedStyle(cursorElement) : null;
-const cursorParent = cursorElement?.parentElement;
-const cursorParentComputed = cursorParent ? ownerWindow?.getComputedStyle(cursorParent) : null;
-const ownerClass = terminal.element ? Array.from(terminal.element.classList).find((name) => name.startsWith("xterm-dom-renderer-owner-")) : undefined;
-const rendererStyles = Array.from(terminal.element?.querySelectorAll<HTMLStyleElement>("style") ?? []);
-const dimensionStyle = rendererStyles.find((style) => style.textContent?.includes(".xterm-rows span"));
-const themeStyle = rendererStyles.find((style) => style.textContent?.includes(".xterm-fg-") || style.textContent?.includes("xterm-cursor"));
-const dimensionOwner = dimensionStyle?.ownerDocument.URL ?? "n/a";
-const dimensionConnected = dimensionStyle ? String(dimensionStyle.isConnected) : "n/a";
-const dimensionText = dimensionStyle?.textContent?.replace(/\\s+/g, " ").slice(0, 220) ?? "n/a";
-const themeOwner = themeStyle?.ownerDocument.URL ?? "n/a";
-const themeConnected = themeStyle ? String(themeStyle.isConnected) : "n/a";
-const ownerSelectorMatches = ownerClass ? ownerDocument.querySelectorAll("." + ownerClass).length : 0;
-const cursorClass = cursorElement?.className || "n/a";
-const glyphElement = rows ? Array.from(rows.querySelectorAll<HTMLElement>("span")).find((span) => (span.textContent ?? "").trim().length > 0) : undefined;
-const glyphClass = glyphElement?.className || "n/a";
-const matchedRulesFor = (element: Element | undefined) => {
-if (!element) return "n/a";
-const matches: string[] = [];
-for (const sheet of Array.from(ownerDocument.styleSheets)) {
-try {
-for (const rule of Array.from(sheet.cssRules)) {
-if (!(rule instanceof CSSStyleRule)) continue;
-try {
-if (element.matches(rule.selectorText)) {
-matches.push(rule.cssText.replace(/\\s+/g, " ").slice(0, 220));
-}
-} catch {}
-}
-} catch {}
-}
-return matches.slice(-8).join(" || ") || "none";
-};
-const cursorMatchedRules = matchedRulesFor(cursorElement ?? undefined);
-const glyphMatchedRules = matchedRulesFor(glyphElement);
-const sheetSummary = Array.from(ownerDocument.styleSheets).map((sheet, index) => {
-let count = "blocked";
-try { count = String(sheet.cssRules.length); } catch {}
-const owner = sheet.ownerNode instanceof HTMLElement ? sheet.ownerNode.tagName + (sheet.ownerNode.id ? "#" + sheet.ownerNode.id : "") : "n/a";
-return index + ":" + owner + ":" + count;
-}).join(",");
-const rendererSheetVisible = rendererStyles.map((style) => {
-const sheet = style.sheet;
-let count = "null";
-try { count = sheet ? String(sheet.cssRules.length) : "null"; } catch { count = "blocked"; }
-return count;
-}).join(",");
-const cursorInline = cursorElement?.getAttribute("style") ?? "n/a";
-const cursorParentInline = cursorParent?.getAttribute("style") ?? "n/a";
-const cursorParentRect = cursorParent?.getBoundingClientRect();
-const screen = terminal.element?.querySelector<HTMLElement>(".xterm-screen");
-const screenRect = screen?.getBoundingClientRect();
-const textarea = terminal.textarea;
-const activeElement = ownerDocument.activeElement;
-setDiagnostic(
-`doc=${ownerDocument.URL} | location=${String(api.location.type)} | font=${terminal.options.fontFamily} | size=${terminal.options.fontSize}px | rows=${terminal.rows} cols=${terminal.cols} | cssFont=${computed?.fontFamily ?? "n/a"} | cssSize=${computed?.fontSize ?? "n/a"} | terminalTheme=${ownerDocument.documentElement.dataset.terminalTheme ?? "n/a"} | cssBg=${styles.getPropertyValue("--terminal-background").trim() || "n/a"} | cssFg=${styles.getPropertyValue("--terminal-foreground").trim() || "n/a"} | xtermBg=${terminal.options.theme?.background ?? "n/a"} | xtermFg=${terminal.options.theme?.foreground ?? "n/a"} | blue=${terminal.options.theme?.blue ?? "n/a"} | brightBlue=${terminal.options.theme?.brightBlue ?? "n/a"} | white=${terminal.options.theme?.white ?? "n/a"} | brightWhite=${terminal.options.theme?.brightWhite ?? "n/a"} | owner=${terminal.element ? Array.from(terminal.element.classList).find((name) => name.startsWith("xterm-dom-renderer-owner-")) ?? "n/a" : "n/a"} | ownerStyles=${terminal.element ? Array.from(ownerDocument.querySelectorAll("style")).filter((style) => style.textContent?.includes(Array.from(terminal.element!.classList).find((name) => name.startsWith("xterm-dom-renderer-owner-")) ?? "__missing__")).length : 0} | mainOwnerStyles=${terminal.element ? Array.from(document.querySelectorAll("style")).filter((style) => style.textContent?.includes(Array.from(terminal.element!.classList).find((name) => name.startsWith("xterm-dom-renderer-owner-")) ?? "__missing__")).length : 0} | cellClass=${rows?.querySelector<HTMLElement>("span")?.className || "n/a"} | cellStyle=${rows?.querySelector<HTMLElement>("span")?.getAttribute("style") || "n/a"} | cellColor=${rows?.querySelector<HTMLElement>("span") ? ownerWindow?.getComputedStyle(rows.querySelector<HTMLElement>("span")!).color ?? "n/a" : "n/a"} | glyphs=${rows ? Array.from(rows.querySelectorAll<HTMLElement>("span")).filter((span) => (span.textContent ?? "").trim().length > 0).slice(0, 4).map((span) => `${JSON.stringify((span.textContent ?? "").trim().replace(/\\s+/g, " ").slice(0, 18))}:${span.className || "-"}:${ownerWindow?.getComputedStyle(span).color ?? "n/a"}`).join(";") || "n/a" : "n/a"} | defaultRule=${terminal.element ? Array.from(ownerDocument.styleSheets).flatMap((sheet) => { try { return Array.from(sheet.cssRules).map((rule) => rule.cssText).filter((rule) => rule.includes(Array.from(terminal.element!.classList).find((name) => name.startsWith("xterm-dom-renderer-owner-")) ?? "__missing__") && (rule.includes("xterm-rows") || rule.includes("color:"))); } catch { return []; } }).find((rule) => /xterm-rows[^,{]*\\{[^}]*color:/i.test(rule))?.replace(/\\s+/g, " ").slice(0, 240) ?? "n/a" : "n/a"} | ownerRules=${terminal.element ? Array.from(ownerDocument.styleSheets).flatMap((sheet) => { try { return Array.from(sheet.cssRules).map((rule) => rule.cssText).filter((rule) => rule.includes(Array.from(terminal.element!.classList).find((name) => name.startsWith("xterm-dom-renderer-owner-")) ?? "__missing__") && (rule.includes("xterm-rows") || rule.includes("color:"))); } catch { return []; } }).slice(0, 6).map((rule) => rule.replace(/\\s+/g, " ").slice(0, 180)).join(" || ") || "n/a" : "n/a"} | cursor=${cursorElement ? "yes" : "no"} | cursorDisplay=${cursorComputed?.display ?? "n/a"} | cursorVisibility=${cursorComputed?.visibility ?? "n/a"} | cursorOpacity=${cursorComputed?.opacity ?? "n/a"} | cursorBg=${cursorComputed?.backgroundColor ?? "n/a"} | cursorSize=${cursorElement ? cursorElement.getBoundingClientRect().width.toFixed(1) + "x" + cursorElement.getBoundingClientRect().height.toFixed(1) : "n/a"} | cursorInline=${cursorInline} | cursorParent=${cursorParent?.className || "n/a"} | cursorParentSize=${cursorParentRect ? cursorParentRect.width.toFixed(1) + "x" + cursorParentRect.height.toFixed(1) : "n/a"} | cursorParentInline=${cursorParentInline} | cursorParentPos=${cursorParentComputed?.position ?? "n/a"} | rendererStyles=${rendererStyles.length} | dimensionOwner=${dimensionOwner} | dimensionConnected=${dimensionConnected} | dimensionText=${dimensionText} | themeOwner=${themeOwner} | themeConnected=${themeConnected} | ownerSelectorMatches=${ownerSelectorMatches} | cursorClass=${cursorClass} | cursorMatchedRules=${cursorMatchedRules} | glyphClass=${glyphClass} | glyphMatchedRules=${glyphMatchedRules} | documentSheets=${ownerDocument.styleSheets.length} | sheetSummary=${sheetSummary} | rendererSheetVisible=${rendererSheetVisible} | screenSize=${screenRect ? screenRect.width.toFixed(1) + "x" + screenRect.height.toFixed(1) : "n/a"} | textareaDoc=${textarea?.ownerDocument.URL ?? "n/a"} | textareaFocused=${textarea ? String(activeElement === textarea) : "n/a"} | active=${activeElement instanceof HTMLElement ? activeElement.className || activeElement.tagName : "n/a"}`,
-);
-}
-if (isTauri()) {
-void invoke("terminal_resize", {
-sessionId,
-rows: terminal.rows,
-cols: terminal.cols,
-}).catch(() => undefined);
-}
-};
-const ownerDocument = hostRef.current?.ownerDocument ?? document;
-const ownerWindow = ownerDocument.defaultView ?? window;
-const observer = new MutationObserver(applyAppearance);
-observer.observe(ownerDocument.documentElement, {
-attributes: true,
-attributeFilter: ["data-theme", "data-terminal-theme"],
-});
-ownerWindow.addEventListener("remotehand-appearance-change", applyAppearance);
-const locationDisposable = api.onDidLocationChange(() => {
-const terminal = terminalRef.current;
-const host = hostRef.current;
-if (!terminal || !host) return;
-const nextWindow = host.ownerDocument.defaultView;
-const refreshAppearance = () => {
-applyAppearance();
-terminal.refresh(0, terminal.rows - 1);
-terminal.focus();
-window.setTimeout(() => {
-if (api.location.type !== "popout") return;
-const ownerDocument = host.ownerDocument;
-const ownerWindow = ownerDocument.defaultView;
-const cursorElement = terminal.element?.querySelector<HTMLElement>(".xterm-cursor");
-const cursorComputed = cursorElement ? ownerWindow?.getComputedStyle(cursorElement) : null;
-const cursorRect = cursorElement?.getBoundingClientRect();
-const textarea = terminal.textarea;
-const activeElement = ownerDocument.activeElement;
-let adoptedSheet = "unsupported";
-let adoptedRules = "n/a";
-let adoptedCursorMatch = "n/a";
 try {
 const rendererCss = Array.from(terminal.element?.querySelectorAll<HTMLStyleElement>("style") ?? [])
 .map((style) => style.textContent ?? "")
 .join("\n");
 const PopoutCSSStyleSheet = ownerWindow?.CSSStyleSheet;
-if (!PopoutCSSStyleSheet) throw new Error("popout CSSStyleSheet constructor unavailable");
+if (!PopoutCSSStyleSheet) return;
 const sheet = new PopoutCSSStyleSheet();
 sheet.replaceSync(rendererCss);
 ownerDocument.adoptedStyleSheets = [
 ...ownerDocument.adoptedStyleSheets,
 sheet,
 ];
-adoptedSheet = "yes";
-adoptedRules = String(sheet.cssRules.length);
-if (cursorElement) {
-adoptedCursorMatch = Array.from(sheet.cssRules).some((rule) => rule instanceof ownerWindow.CSSStyleRule && cursorElement.matches(rule.selectorText)) ? "yes" : "no";
+} catch {
+return;
 }
-} catch (error) {
-const details: string[] = [];
-try { details.push("type=" + typeof error); } catch {}
-try { details.push("tag=" + Object.prototype.toString.call(error)); } catch {}
-try { details.push("name=" + String((error as { name?: unknown })?.name)); } catch {}
-try { details.push("message=" + String((error as { message?: unknown })?.message)); } catch {}
-try { details.push("code=" + String((error as { code?: unknown })?.code)); } catch {}
-try { details.push("ctor=" + String((error as { constructor?: { name?: unknown } })?.constructor?.name)); } catch {}
-try { details.push("text=" + String(error)); } catch {}
-adoptedSheet = "error:" + details.join(",");
-}
-setDiagnostic((current) =>
-`${current} | POSTMOVE adoptedSheet=${adoptedSheet} | adoptedRules=${adoptedRules} | adoptedCursorMatch=${adoptedCursorMatch} | cursor=${cursorElement ? "yes" : "no"} | cursorDisplay=${cursorComputed?.display ?? "n/a"} | cursorVisibility=${cursorComputed?.visibility ?? "n/a"} | cursorOpacity=${cursorComputed?.opacity ?? "n/a"} | cursorBg=${cursorComputed?.backgroundColor ?? "n/a"} | cursorSize=${cursorRect ? cursorRect.width.toFixed(1) + "x" + cursorRect.height.toFixed(1) : "n/a"} | cursorInline=${cursorElement?.getAttribute("style") ?? "n/a"} | textareaFocused=${textarea ? String(activeElement === textarea) : "n/a"} | active=${activeElement instanceof HTMLElement ? activeElement.className || activeElement.tagName : "n/a"}`,
-);
 }, 250);
 };
 if (nextWindow) {
@@ -604,13 +459,6 @@ title="Paste clipboard"
 Paste
 </button>
 </div>
-
-{api.location.type === "popout" ? (
-<pre className="terminal-debug-panel">
-POPUP DEBUG
-{diagnostic || "Collecting popout diagnostics…"}
-</pre>
-) : null}
 
 {searchOpen ? (
 <form
