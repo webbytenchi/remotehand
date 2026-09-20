@@ -751,7 +751,7 @@ background: var(--terminal-background, #11151a) !important;
 }
 .terminal-host .xterm-screen {
 width: calc(100% - 6px);
-height: 100%;
+height: calc(100% - 12px);
 margin-left: 6px;
 margin-top: 6px;
 background: var(--terminal-background, #11151a) !important;
