@@ -343,6 +343,11 @@ if (cursor) {
 const theme = terminal.options.theme;
 cursor.style.setProperty("background-color", theme?.cursor ?? theme?.foreground ?? foreground);
 cursor.style.setProperty("color", theme?.cursorAccent ?? theme?.background ?? styles.getPropertyValue("--terminal-background").trim());
+if (cursor.getBoundingClientRect().width === 0) {
+cursor.style.setProperty("display", "inline-block");
+cursor.style.setProperty("width", "1ch");
+cursor.style.setProperty("margin-right", "-1ch");
+}
 }
 fitAddonRef.current?.fit();
 if (api.location.type === "popout") {
