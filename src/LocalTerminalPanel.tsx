@@ -381,8 +381,14 @@ const refreshAppearance = () => {
 // Dockview adopts the existing xterm DOM into another Document. Reparse xterm's
 // generated renderer styles in their new owner document without reopening the
 // terminal, which would break the input lifecycle on the return trip.
+const targetDocument = host.ownerDocument;
 for (const style of terminal.element?.querySelectorAll<HTMLStyleElement>("style") ?? []) {
-style.textContent = style.textContent;
+const replacement = targetDocument.createElement("style");
+replacement.textContent = style.textContent;
+for (const attribute of Array.from(style.attributes)) {
+replacement.setAttribute(attribute.name, attribute.value);
+}
+style.replaceWith(replacement);
 }
 applyAppearance();
 terminal.refresh(0, terminal.rows - 1);
