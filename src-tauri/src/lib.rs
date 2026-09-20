@@ -141,6 +141,11 @@ pub fn run() {
                         ),
                     )
                     .window_features(features)
+                    // Dockview first receives an about:blank native WebView, then
+                    // navigates it to popout.html and moves the panel DOM into it.
+                    // Keep that native window hidden so neither the blank WebView
+                    // nor the intermediate unstyled panel can reach the screen.
+                    .visible(false)
                     .title("RemoteHand Panel")
                     .on_document_title_changed(|window, title| {
                         let _ = window.set_title(&title);
