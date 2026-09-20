@@ -184,6 +184,7 @@ const css = Array.from(frameDocument.querySelectorAll<HTMLStyleElement>("style")
 if (!css) return;
 try {
 const FrameCSSStyleSheet = frameWindow.constructor.prototype.CSSStyleSheet as typeof CSSStyleSheet | undefined;
+if (!FrameCSSStyleSheet) return;
 const sheet = new FrameCSSStyleSheet();
 sheet.replaceSync(css);
 frameDocument.adoptedStyleSheets = [
