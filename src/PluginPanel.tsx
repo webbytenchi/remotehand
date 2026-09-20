@@ -191,125 +191,48 @@ iframeRef.current?.contentWindow?.postMessage({ type: "remotehand.plugin.event",
 }).then((dispose) => { if (cancelled) dispose(); else unlisten = dispose; });
 return () => { cancelled = true; unlisten?.(); };
 }, [pluginId]);
-const [popoutDiagnostic, setPopoutDiagnostic] = useState("");
 const repairedDocumentRef = useRef<Document | null>(null);
 const repairSheetRef = useRef<CSSStyleSheet | null>(null);
 useEffect(() => {
-const inspect = () => {
-const frame = iframeRef.current;
-const doc = frame?.contentDocument;
-if (!frame || !doc) {
-setPopoutDiagnostic("iframe document unavailable");
-return;
-}
+const repairPopoutStyles = () => {
+if (api.location.type !== "popout") return;
+const doc = iframeRef.current?.contentDocument;
+if (!doc) return;
 const styles = Array.from(doc.querySelectorAll<HTMLStyleElement>("style"));
-let repair = "repair=not-needed";
-const deadStyles = styles.filter((style) => style.sheet === null);
-if (api.location.type === "popout" && deadStyles.length > 0) {
+if (!styles.some((style) => style.sheet === null)) return;
 try {
-if (repairedDocumentRef.current !== doc) {
+if (repairedDocumentRef.current === doc) {
+const sheet = repairSheetRef.current;
+if (sheet && doc.adoptedStyleSheets.includes(sheet)) return;
+}
 const css = styles.map((style) => style.textContent ?? "").join("\n");
+if (!css) return;
 const view = doc.defaultView;
 const FrameCSSStyleSheet = view
 ? Reflect.get(view, "CSSStyleSheet") as typeof CSSStyleSheet | undefined
 : undefined;
-if (!FrameCSSStyleSheet) {
-repair = "repair=constructor-unavailable";
-} else if (!css) {
-repair = "repair=no-css";
-} else {
+if (!FrameCSSStyleSheet) return;
+const previousSheet = repairSheetRef.current;
+if (previousSheet && repairedDocumentRef.current === doc) {
+doc.adoptedStyleSheets = doc.adoptedStyleSheets.filter(
+(candidate) => candidate !== previousSheet
+);
+}
 const sheet = new FrameCSSStyleSheet();
 sheet.replaceSync(css);
 doc.adoptedStyleSheets = [...doc.adoptedStyleSheets, sheet];
 repairedDocumentRef.current = doc;
 repairSheetRef.current = sheet;
-repair = "repair=active rules=" + sheet.cssRules.length;
-}
-} else {
-const sheet = repairSheetRef.current;
-repair = sheet && doc.adoptedStyleSheets.includes(sheet)
-? "repair=active rules=" + sheet.cssRules.length
-: "repair=missing";
-}
 } catch (error) {
-repair = "repair=error " + String(error);
+console.error("RemoteHand plugin popout style repair failed", error);
 }
-}
-const details = styles.map((style, index) => {
-let sheetState = "sheet=null";
-try {
-sheetState = style.sheet
-? "sheet=active rules=" + style.sheet.cssRules.length
-: "sheet=null";
-} catch (error) {
-sheetState = "sheet=error " + String(error);
-}
-return index + ":" + (style.textContent?.length ?? 0) + " chars " + sheetState;
-}).join(" | ");
-let probe = "probe=not-run";
-try {
-const probeStyle = doc.createElement("style");
-probeStyle.textContent = "body { outline: 0 solid transparent; }";
-doc.head.appendChild(probeStyle);
-probe = probeStyle.sheet
-? "probe=active rules=" + probeStyle.sheet.cssRules.length
-: "probe=sheet-null";
-probeStyle.remove();
-} catch (error) {
-probe = "probe=error " + String(error);
-}
-let constructable = "constructable=not-run";
-try {
-const view = doc.defaultView;
-const FrameCSSStyleSheet = view
-? Reflect.get(view, "CSSStyleSheet") as typeof CSSStyleSheet | undefined
-: undefined;
-if (!FrameCSSStyleSheet) {
-constructable = "constructable=unavailable";
-} else {
-const sheet = new FrameCSSStyleSheet();
-sheet.replaceSync("body { outline: 0 solid transparent; }");
-doc.adoptedStyleSheets = [...doc.adoptedStyleSheets, sheet];
-constructable =
-"constructable=active rules=" + sheet.cssRules.length +
-" adopted=" + doc.adoptedStyleSheets.length;
-doc.adoptedStyleSheets = doc.adoptedStyleSheets.filter(
-(candidate) => candidate !== sheet
-);
-}
-} catch (error) {
-constructable = "constructable=error " + String(error);
-}
-const view = doc.defaultView;
-const bodyStyle = view?.getComputedStyle(doc.body);
-const rootStyle = view?.getComputedStyle(doc.documentElement);
-setPopoutDiagnostic(
-"location=" + String(api.location.type) +
-" | readyState=" + doc.readyState +
-" | styles=" + styles.length +
-" | adopted=" + doc.adoptedStyleSheets.length +
-"\nbody.bg=" + (bodyStyle?.backgroundColor ?? "?") +
-" | body.color=" + (bodyStyle?.color ?? "?") +
-" | body.font=" + (bodyStyle?.fontFamily ?? "?") +
-" | root.font=" + (rootStyle?.fontFamily ?? "?") +
-"\n" + (details || "no style elements") +
-" | " + repair +
-" | " + probe +
-" | " + constructable
-);
 };
-inspect();
-const timer = window.setInterval(inspect, 500);
+repairPopoutStyles();
+const timer = window.setInterval(repairPopoutStyles, 500);
 return () => window.clearInterval(timer);
 }, [api, html]);
 const content = useMemo(() => html ?? "", [html]);
 if (error) return <section className="plugin-panel-host plugin-panel-error"><strong>Plugin panel unavailable</strong><span>{error}</span></section>;
 if (!html) return <div className="plugin-panel-host plugin-panel-loading">Loading plugin panel…</div>;
-return <div style={{ display: "flex", flexDirection: "column", width: "100%", height: "100%", minHeight: 0 }}>
-<pre style={{ flex: "0 0 auto", margin: 0, padding: "8px 10px", whiteSpace: "pre-wrap", overflowWrap: "anywhere", background: "#111", color: "#7cff7c", borderBottom: "1px solid #7cff7c", fontSize: 11, lineHeight: 1.35 }}>
-PLUGIN POPOUT DEBUG
-{popoutDiagnostic || "Collecting plugin diagnostics…"}
-</pre>
-<iframe ref={iframeRef} className="plugin-panel-frame" style={{ flex: "1 1 auto", minHeight: 0 }} title={params?.title || pluginId} sandbox="allow-scripts allow-same-origin" allow="autoplay" srcDoc={content} />
-</div>;
+return <iframe ref={iframeRef} className="plugin-panel-frame" title={params?.title || pluginId} sandbox="allow-scripts allow-same-origin" allow="autoplay" srcDoc={content} />;
 }
