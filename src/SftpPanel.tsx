@@ -119,14 +119,11 @@ const [actionModal, setActionModal] = useState<SftpActionModal>(null);
 const [modalValue, setModalValue] = useState("");
 const [modalError, setModalError] = useState("");
 const transferStartedAtRef = useRef<{ transferId: string; time: number } | null>(null);
-const navigationHistoryRef = useRef<string[]>([]);
-const currentPathRef = useRef<string | null>(null);
-const [canGoBack, setCanGoBack] = useState(false);
 const nativeSessionId = useRef(crypto.randomUUID()).current;
 const useNativeSftp = Boolean(connection.credentialRef);
 const transferring = transferState !== "idle";
 const loadPath = useCallback(
-async (path: string, recordHistory = true) => {
+async (path: string) => {
 if (!isTauri()) {
 setError("SFTP browsing is available in the RemoteHand desktop app.");
 return;
@@ -145,12 +142,6 @@ credentialRef: connection.credentialRef,
 ...(useNativeSftp ? { sessionId: nativeSessionId } : {}),
 },
 );
-const previousPath = currentPathRef.current;
-if (recordHistory && previousPath && previousPath !== next.path) {
-navigationHistoryRef.current.push(previousPath);
-setCanGoBack(true);
-}
-currentPathRef.current = next.path;
 setListing(next);
 setRequestedPath(next.path);
 setPathInput(next.path);
@@ -228,17 +219,6 @@ const selectedFileCount = selectedEntries.filter((entry) => !entry.isDir).length
 const selectedFolderCount = selectedEntries.filter((entry) => entry.isDir).length;
 const currentPath = listing?.path ?? requestedPath;
 const canGoUp = Boolean(currentPath && currentPath !== "/" && currentPath !== ".");
-async function goBack() {
-if (loading || transferring) return;
-const history = navigationHistoryRef.current;
-const target = history[history.length - 1];
-if (!target) return;
-await loadPath(target, false);
-if (currentPathRef.current === target) {
-history.pop();
-setCanGoBack(history.length > 0);
-}
-}
 function toggleEntry(entry: SftpEntry) {
 if (transferring) return;
 setTransferStatus("");
@@ -700,8 +680,7 @@ return (
 </div>
 {listing && !needsVaultUnlock ? (
 <div className="sftp-action-toolbar" role="toolbar" aria-label="SFTP file actions">
-<button className="sftp-icon-action" type="button" title="Back" aria-label="Back" onClick={() => void goBack()} disabled={!canGoBack || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m0 0 6-6m-6 6 6 6"/></svg></button>
-<button className="sftp-icon-action" type="button" title="Up" aria-label="Up" onClick={() => void loadPath(parentPath(currentPath))} disabled={!canGoUp || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m0 0-5 5m5-5 5 5"/></svg></button>
+<button className="sftp-icon-action" type="button" title="Up" aria-label="Up" onClick={() => void loadPath(parentPath(currentPath))} disabled={!canGoUp || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m0 0 6-6m-6 6 6 6"/></svg></button>
 <button className="sftp-icon-action" type="button" title="Refresh" aria-label="Refresh" onClick={() => void loadPath(currentPath)} disabled={loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5M4 18v-5h5M6.2 9a7 7 0 0 1 11.5-2.3L20 11M4 13l2.3 4.3A7 7 0 0 0 17.8 15"/></svg></button>
 <span className="sftp-toolbar-separator" aria-hidden="true" />
 <button className="sftp-icon-action" type="button" title="Upload" aria-label="Upload" onClick={() => void chooseUploadFiles()} disabled={!listing || needsVaultUnlock || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0-5 5m5-5 5 5M5 20h14"/></svg></button>
