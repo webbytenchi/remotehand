@@ -174,31 +174,22 @@ let ownerWindow = api.getWindow();
 const bind = (nextWindow: Window) => { ownerWindow.removeEventListener("message", onMessage); ownerWindow = nextWindow; ownerWindow.addEventListener("message", onMessage); };
 ownerWindow.addEventListener("message", onMessage);
 window.addEventListener("remotehand-appearance-change", postAppearance);
-const restorePluginStyles = () => {
+const reloadPluginFrame = () => {
 const frame = iframeRef.current;
-const frameDocument = frame?.contentDocument;
-if (!frame || !frameDocument) return;
-const css = Array.from(frameDocument.querySelectorAll<HTMLStyleElement>("style"))
-.map((style) => style.textContent ?? "")
-.join("\n");
-if (!css) return;
-try {
-const repairedStyle = frameDocument.createElement("style");
-repairedStyle.dataset.remotehandPopoutRepair = "true";
-repairedStyle.textContent = css;
-frameDocument.head.appendChild(repairedStyle);
-} catch (cause) {
-console.error("Failed to restore plugin stylesheet after popout move", cause);
+if (!frame || !html) return;
+frame.srcdoc = "";
+window.setTimeout(() => {
+if (iframeRef.current === frame) {
+frame.srcdoc = html;
 }
+}, 0);
 };
 const locationDisposable = api.onDidLocationChange(() => {
 bind(api.getWindow());
-postAppearance();
-postContext();
-window.setTimeout(restorePluginStyles, 250);
+window.setTimeout(reloadPluginFrame, 0);
 });
 return () => { locationDisposable.dispose(); ownerWindow.removeEventListener("message", onMessage); window.removeEventListener("remotehand-appearance-change", postAppearance); };
-}, [api, pluginId, context?.targetId, context?.target]);
+}, [api, pluginId, html, context?.targetId, context?.target]);
 useEffect(() => {
 if (!isTauri() || !pluginId) return;
 let cancelled = false;
