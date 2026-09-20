@@ -246,6 +246,9 @@ return;
 }
 
 fitAddon.fit();
+if (terminal.rows > 1) {
+terminal.resize(terminal.cols, terminal.rows - 1);
+}
 
 if (ssh) {
 await invoke("ssh_start", {
@@ -284,6 +287,9 @@ resizeObserver = new ResizeObserver(() => {
 const previousCols = terminal.cols;
 const previousRows = terminal.rows;
 fitAddon.fit();
+if (terminal.rows > 1) {
+terminal.resize(terminal.cols, terminal.rows - 1);
+}
 if (terminal.cols === previousCols && terminal.rows === previousRows) return;
 
 void invoke("terminal_resize", {
