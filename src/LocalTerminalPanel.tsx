@@ -454,15 +454,15 @@ if (cursorElement) {
 adoptedCursorMatch = Array.from(sheet.cssRules).some((rule) => rule instanceof CSSStyleRule && cursorElement.matches(rule.selectorText)) ? "yes" : "no";
 }
 } catch (error) {
-if (error instanceof Error) {
-adoptedSheet = error.name + ":" + error.message;
-} else {
-try {
-adoptedSheet = "error:" + JSON.stringify(error);
-} catch {
-adoptedSheet = "error:" + String(error);
-}
-}
+const details: string[] = [];
+try { details.push("type=" + typeof error); } catch {}
+try { details.push("tag=" + Object.prototype.toString.call(error)); } catch {}
+try { details.push("name=" + String((error as { name?: unknown })?.name)); } catch {}
+try { details.push("message=" + String((error as { message?: unknown })?.message)); } catch {}
+try { details.push("code=" + String((error as { code?: unknown })?.code)); } catch {}
+try { details.push("ctor=" + String((error as { constructor?: { name?: unknown } })?.constructor?.name)); } catch {}
+try { details.push("text=" + String(error)); } catch {}
+adoptedSheet = "error:" + details.join(",");
 }
 setDiagnostic((current) =>
 `${current} | POSTMOVE adoptedSheet=${adoptedSheet} | adoptedRules=${adoptedRules} | adoptedCursorMatch=${adoptedCursorMatch} | cursor=${cursorElement ? "yes" : "no"} | cursorDisplay=${cursorComputed?.display ?? "n/a"} | cursorVisibility=${cursorComputed?.visibility ?? "n/a"} | cursorOpacity=${cursorComputed?.opacity ?? "n/a"} | cursorBg=${cursorComputed?.backgroundColor ?? "n/a"} | cursorSize=${cursorRect ? cursorRect.width.toFixed(1) + "x" + cursorRect.height.toFixed(1) : "n/a"} | cursorInline=${cursorElement?.getAttribute("style") ?? "n/a"} | textareaFocused=${textarea ? String(activeElement === textarea) : "n/a"} | active=${activeElement instanceof HTMLElement ? activeElement.className || activeElement.tagName : "n/a"}`,
