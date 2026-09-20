@@ -239,6 +239,6 @@ return <div style={{ display: "flex", flexDirection: "column", width: "100%", he
 PLUGIN POPOUT DEBUG
 {popoutDiagnostic || "Collecting plugin diagnostics…"}
 </pre>
-<iframe ref={iframeRef} className="plugin-panel-frame" style={{ flex: "1 1 auto", minHeight: 0 }} title={params?.title || pluginId} sandbox="allow-scripts" allow="autoplay" srcDoc={content} />
+<iframe ref={iframeRef} className="plugin-panel-frame" style={{ flex: "1 1 auto", minHeight: 0 }} title={params?.title || pluginId} sandbox="allow-scripts allow-same-origin" allow="autoplay" srcDoc={content} />
 </div>;
 }
