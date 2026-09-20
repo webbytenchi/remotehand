@@ -1089,10 +1089,11 @@ void getAllWindows().then(async (windows) => {
 const nativePopouts = windows.filter((candidate) =>
 candidate.label.startsWith("panel-popout-")
 );
-const nativePopout = nativePopouts.find((candidate) => !candidate.isVisible());
-if (nativePopout) {
+for (const nativePopout of nativePopouts) {
+if (await nativePopout.isVisible()) continue;
 await nativePopout.show();
 await nativePopout.setFocus();
+break;
 }
 }).catch((error) => {
 console.error("Failed to reveal native popout after Dockview setup", error);
