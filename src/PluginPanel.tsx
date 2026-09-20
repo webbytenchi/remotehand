@@ -183,7 +183,7 @@ const css = Array.from(frameDocument.querySelectorAll<HTMLStyleElement>("style")
 .join("\n");
 if (!css) return;
 try {
-const FrameCSSStyleSheet = frameWindow.CSSStyleSheet;
+const FrameCSSStyleSheet = frameWindow.constructor.prototype.CSSStyleSheet as typeof CSSStyleSheet | undefined;
 const sheet = new FrameCSSStyleSheet();
 sheet.replaceSync(css);
 frameDocument.adoptedStyleSheets = [
