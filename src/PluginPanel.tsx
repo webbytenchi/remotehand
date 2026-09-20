@@ -207,7 +207,7 @@ return;
 const doc = iframeRef.current?.contentDocument;
 if (!doc) return;
 const styles = Array.from(doc.querySelectorAll<HTMLStyleElement>("style"));
-if (!styles.some((style) => style.sheet === null)) {
+if (styles.length === 0) {
 markPopoutStylesReady(doc);
 return;
 }
@@ -220,7 +220,10 @@ return;
 }
 }
 const css = styles.map((style) => style.textContent ?? "").join("\n");
-if (!css) return;
+if (!css) {
+markPopoutStylesReady(doc);
+return;
+}
 const view = doc.defaultView;
 const FrameCSSStyleSheet = view
 ? Reflect.get(view, "CSSStyleSheet") as typeof CSSStyleSheet | undefined
@@ -237,7 +240,7 @@ sheet.replaceSync(css);
 doc.adoptedStyleSheets = [...doc.adoptedStyleSheets, sheet];
 repairedDocumentRef.current = doc;
 repairSheetRef.current = sheet;
-setPopoutStylesReady(true);
+markPopoutStylesReady(doc);
 } catch (error) {
 console.error("RemoteHand plugin popout style repair failed", error);
 }
