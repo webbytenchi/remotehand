@@ -378,6 +378,12 @@ const host = hostRef.current;
 if (!terminal || !host) return;
 const nextWindow = host.ownerDocument.defaultView;
 const refreshAppearance = () => {
+// Dockview adopts the existing xterm DOM into another Document. Reparse xterm's
+// generated renderer styles in their new owner document without reopening the
+// terminal, which would break the input lifecycle on the return trip.
+for (const style of terminal.element?.querySelectorAll<HTMLStyleElement>("style") ?? []) {
+style.textContent = style.textContent;
+}
 applyAppearance();
 terminal.refresh(0, terminal.rows - 1);
 terminal.focus();
