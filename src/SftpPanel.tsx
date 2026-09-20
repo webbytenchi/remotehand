@@ -395,7 +395,9 @@ String(result.files) +
 String(result.folders) +
 (result.folders === 1 ? " folder" : " folders") +
 " · " +
-formatSize(result.bytes),
+formatSize(result.bytes) +
+" · Saved to " +
+folder,
 );
 } catch (reason) {
 const message = String(reason);
