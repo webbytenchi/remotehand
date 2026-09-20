@@ -192,6 +192,8 @@ iframeRef.current?.contentWindow?.postMessage({ type: "remotehand.plugin.event",
 return () => { cancelled = true; unlisten?.(); };
 }, [pluginId]);
 const [popoutDiagnostic, setPopoutDiagnostic] = useState("");
+const repairedDocumentRef = useRef<Document | null>(null);
+const repairSheetRef = useRef<CSSStyleSheet | null>(null);
 useEffect(() => {
 const inspect = () => {
 const frame = iframeRef.current;
@@ -201,6 +203,38 @@ setPopoutDiagnostic("iframe document unavailable");
 return;
 }
 const styles = Array.from(doc.querySelectorAll<HTMLStyleElement>("style"));
+let repair = "repair=not-needed";
+const deadStyles = styles.filter((style) => style.sheet === null);
+if (api.location.type === "popout" && deadStyles.length > 0) {
+try {
+if (repairedDocumentRef.current !== doc) {
+const css = styles.map((style) => style.textContent ?? "").join("\n");
+const view = doc.defaultView;
+const FrameCSSStyleSheet = view
+? Reflect.get(view, "CSSStyleSheet") as typeof CSSStyleSheet | undefined
+: undefined;
+if (!FrameCSSStyleSheet) {
+repair = "repair=constructor-unavailable";
+} else if (!css) {
+repair = "repair=no-css";
+} else {
+const sheet = new FrameCSSStyleSheet();
+sheet.replaceSync(css);
+doc.adoptedStyleSheets = [...doc.adoptedStyleSheets, sheet];
+repairedDocumentRef.current = doc;
+repairSheetRef.current = sheet;
+repair = "repair=active rules=" + sheet.cssRules.length;
+}
+} else {
+const sheet = repairSheetRef.current;
+repair = sheet && doc.adoptedStyleSheets.includes(sheet)
+? "repair=active rules=" + sheet.cssRules.length
+: "repair=missing";
+}
+} catch (error) {
+repair = "repair=error " + String(error);
+}
+}
 const details = styles.map((style, index) => {
 let sheetState = "sheet=null";
 try {
@@ -259,6 +293,7 @@ setPopoutDiagnostic(
 " | body.font=" + (bodyStyle?.fontFamily ?? "?") +
 " | root.font=" + (rootStyle?.fontFamily ?? "?") +
 "\n" + (details || "no style elements") +
+" | " + repair +
 " | " + probe +
 " | " + constructable
 );
