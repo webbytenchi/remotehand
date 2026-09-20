@@ -442,6 +442,7 @@ return { ...DEFAULT_SETTINGS, theme: legacyTheme === "light" ? "light" : "dark" 
 const [settingsOpen, setSettingsOpen] = useState(false);
 const [settingsTab, setSettingsTab] = useState<"appearance" | "startup" | "papa">("appearance");
 const [papaTabUnlocked, setPapaTabUnlocked] = useState(false);
+const [papaConfettiActive, setPapaConfettiActive] = useState(false);
 const papaSequenceRef = useRef<string[]>([]);
 const papaAudioRef = useRef<HTMLAudioElement | null>(null);
 const [pluginsOpen, setPluginsOpen] = useState(false);
@@ -940,6 +941,7 @@ if (key === expected) {
 papaSequenceRef.current.push(key);
 if (papaSequenceRef.current.length === sequence.length) {
 setPapaTabUnlocked(true);
+setPapaConfettiActive(true);
 papaSequenceRef.current = [];
 }
 return;
@@ -949,6 +951,11 @@ papaSequenceRef.current = key === sequence[0] ? [key] : [];
 window.addEventListener("keydown", onKeyDown, true);
 return () => window.removeEventListener("keydown", onKeyDown, true);
 }, [settingsOpen, settingsTab, papaTabUnlocked]);
+useEffect(() => {
+if (!papaConfettiActive) return;
+const timer = window.setTimeout(() => setPapaConfettiActive(false), 1400);
+return () => window.clearTimeout(timer);
+}, [papaConfettiActive]);
 
 useEffect(() => {
 if (!isTauri()) return;
@@ -1343,7 +1350,7 @@ focusActions={false}
 tabs={<div className="settings-tabs" role="tablist" aria-label="Settings sections">
 <button type="button" role="tab" aria-selected={settingsTab === "appearance"} className={settingsTab === "appearance" ? "active" : ""} onClick={() => setSettingsTab("appearance")}>Appearance</button>
 <button type="button" role="tab" aria-selected={settingsTab === "startup"} className={settingsTab === "startup" ? "active" : ""} onClick={() => setSettingsTab("startup")}>Startup &amp; Tray</button>
-{papaTabUnlocked ? <button type="button" role="tab" aria-selected={settingsTab === "papa"} className={settingsTab === "papa" ? "active" : ""} onClick={() => { setSettingsTab("papa"); startPapaAudio(); }}>Papa</button> : null}
+{papaTabUnlocked ? <span className="papa-tab-reveal"><button type="button" role="tab" aria-selected={settingsTab === "papa"} className={settingsTab === "papa" ? "active" : ""} onClick={() => { setSettingsTab("papa"); startPapaAudio(); }}>Papa</button>{papaConfettiActive ? <span className="papa-heart-confetti" aria-hidden="true">{Array.from({ length: 10 }, (_, index) => <span key={index}>♥</span>)}</span> : null}</span> : null}
 </div>}>
 {settingsTab === "appearance" ? (
 <div className="appearance-settings settings-tab-content">
