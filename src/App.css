@@ -741,7 +741,8 @@ flex: 1 1 auto;
 min-width: 0;
 min-height: 0;
 overflow: hidden;
-padding: 0;
+padding: 0 0 6px;
+box-sizing: border-box;
 background: var(--terminal-background, #11151a) !important;
 }
 .terminal-host .xterm {
@@ -751,7 +752,7 @@ background: var(--terminal-background, #11151a) !important;
 }
 .terminal-host .xterm-screen {
 width: calc(100% - 6px);
-height: calc(100% - 16px);
+height: calc(100% - 12px);
 margin-left: 6px;
 margin-top: 6px;
 background: var(--terminal-background, #11151a) !important;
