@@ -736,8 +736,11 @@ font: inherit;
 .terminal-search input:focus {
 border-color: #53657d;
 }
+/* Temporary popout flash diagnostic: terminal host is magenta. */
 .terminal-host {
 flex: 1 1 auto;
+outline: 6px solid #ff00ff !important;
+outline-offset: -6px;
 min-width: 0;
 min-height: 0;
 overflow: hidden;
