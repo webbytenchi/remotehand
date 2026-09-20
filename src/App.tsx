@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow, getAllWindows } from "@tauri-apps/api/window";
 import {
 DockviewReact,
 type DockviewApi,
@@ -1028,8 +1028,13 @@ event.api.onDidRemoveGroup(() => {
 if (!isTauri()) return;
 const currentWindow = getCurrentWindow();
 if (!currentWindow.label.startsWith("panel-popout-")) return;
-void currentWindow.close().catch((error) => {
-console.error("Failed to close empty popout window", error);
+void currentWindow.close().then(async () => {
+const mainWindow = (await getAllWindows()).find((candidate) => candidate.label === "main");
+if (mainWindow) {
+await mainWindow.setFocus();
+}
+}).catch((error) => {
+console.error("Failed to close empty popout window or restore main-window focus", error);
 });
 });
 event.api.onDidRemovePanel((panel) => {
