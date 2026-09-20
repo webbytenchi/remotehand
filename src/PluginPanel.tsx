@@ -200,8 +200,45 @@ iframeRef.current?.contentWindow?.postMessage({ type: "remotehand.plugin.event",
 }).then((dispose) => { if (cancelled) dispose(); else unlisten = dispose; });
 return () => { cancelled = true; unlisten?.(); };
 }, [pluginId]);
+const [popoutDiagnostic, setPopoutDiagnostic] = useState<string | null>(null);
+useEffect(() => {
+const locationDisposable = api.onDidLocationChange(() => {
+window.setTimeout(() => {
+const frame = iframeRef.current;
+const doc = frame?.contentDocument;
+if (!frame || !doc || api.location.type !== "popout") {
+setPopoutDiagnostic(null);
+return;
+}
+const styles = Array.from(doc.querySelectorAll<HTMLStyleElement>("style"));
+const details = styles.map((style, index) => {
+let sheetState = "sheet=null";
+try {
+sheetState = style.sheet ? "sheet=active rules=" + style.sheet.cssRules.length : "sheet=null";
+} catch (error) {
+sheetState = "sheet=error " + String(error);
+}
+return index + ":" + style.textContent?.length + " chars " + sheetState;
+}).join(" | ");
+const bodyStyle = doc.defaultView?.getComputedStyle(doc.body);
+setPopoutDiagnostic(
+"PLUGIN POPOUT DEBUG\n" +
+"readyState=" + doc.readyState +
+" styles=" + styles.length +
+" adopted=" + doc.adoptedStyleSheets.length +
+" body.bg=" + (bodyStyle?.backgroundColor ?? "?") +
+" body.font=" + (bodyStyle?.fontFamily ?? "?") +
+"\n" + details
+);
+}, 500);
+});
+return () => locationDisposable.dispose();
+}, [api, html]);
 const content = useMemo(() => html ?? "", [html]);
 if (error) return <section className="plugin-panel-host plugin-panel-error"><strong>Plugin panel unavailable</strong><span>{error}</span></section>;
 if (!html) return <div className="plugin-panel-host plugin-panel-loading">Loading plugin panel…</div>;
-return <iframe ref={iframeRef} className="plugin-panel-frame" title={params?.title || pluginId} sandbox="allow-scripts" allow="autoplay" srcDoc={content} />;
+return <>
+<iframe ref={iframeRef} className="plugin-panel-frame" title={params?.title || pluginId} sandbox="allow-scripts" allow="autoplay" srcDoc={content} />
+{popoutDiagnostic ? <pre style={{ position: "absolute", right: 8, bottom: 8, zIndex: 9999, maxWidth: "calc(100% - 16px)", margin: 0, padding: 8, whiteSpace: "pre-wrap", background: "#111", color: "#7cff7c", border: "1px solid #7cff7c", fontSize: 11 }}>{popoutDiagnostic}</pre> : null}
+</>;
 }
