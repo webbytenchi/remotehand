@@ -460,7 +460,7 @@ const layoutHistoryIndexRef = useRef(-1);
 const applyingHistoryRef = useRef(false);
 const workspaceSaveTimerRef = useRef<number | null>(null);
 const workspacePersistenceEnabledRef = useRef(true);
-const poppedOutPanelRef = useRef<{ panelId: string; count: number } | null>(null);
+const poppedOutPanelRef = useRef<{ panelId: string; count: number; window?: Window } | null>(null);
 useEffect(() => {
 if (!isTauri()) return;
 void invoke<string>("local_os")
@@ -1016,6 +1016,7 @@ popout.window.focus();
 poppedOutPanelRef.current = {
 panelId: popout.group.activePanel?.id ?? poppedOutPanelRef.current?.panelId ?? "",
 count: event.api.getPopouts().length,
+window: popout.window,
 };
 const targetDocument = popout.window.document;
 const root = targetDocument.documentElement;
@@ -1060,14 +1061,14 @@ console.error("Failed to close empty popout window or restore main-window focus"
 });
 event.api.onDidRemovePanel((panel) => {
 const sessionId = panel.id;
+const popoutWindow =
+poppedOutPanelRef.current?.panelId === sessionId
+? poppedOutPanelRef.current.window
+: undefined;
 window.setTimeout(() => {
-if (event.api.panels.length === 0 && isTauri()) {
-const currentWindow = getCurrentWindow();
-if (currentWindow.label.startsWith("panel-popout-")) {
-void currentWindow.close().catch((error) => {
-console.error("Failed to close empty popout window", error);
-});
-}
+if (event.api.getPanel(sessionId)) return;
+if (popoutWindow && !popoutWindow.closed) {
+popoutWindow.close();
 }
 }, 0);
 if (panel.api.component !== "terminal") return;
