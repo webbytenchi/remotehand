@@ -853,7 +853,7 @@ disabled={!vaultPassphrase || unlocking}
 {transferStatus}
 {downloadDestination ? (
 <>
-{" · "}
+{" "}
 <button
 type="button"
 className="sftp-download-destination"
