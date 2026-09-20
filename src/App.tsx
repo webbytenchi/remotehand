@@ -1065,6 +1065,23 @@ for (const property of [
 const value = source.style.getPropertyValue(property);
 if (value) root.style.setProperty(property, value);
 }
+
+/*
+ * popout.html already loads the complete RemoteHand stylesheet bundle.
+ * Dockview then copies the opener's linked stylesheets after the popout load
+ * event, creating duplicate asynchronous <link> loads. Remove those late
+ * copies before revealing the document so the preloaded popout bundle stays
+ * authoritative and there is no unstyled interval while duplicates load.
+ */
+const popoutStylesheet = Array.from(targetDocument.querySelectorAll<HTMLLinkElement>(
+'link[rel="stylesheet"]',
+)).find((link) => link.href.includes("/assets/popout-") || link.href.endsWith("/src/popout.css"));
+for (const link of Array.from(targetDocument.querySelectorAll<HTMLLinkElement>(
+'link[rel="stylesheet"]',
+))) {
+if (link !== popoutStylesheet) link.remove();
+}
+
 root.style.visibility = "visible";
 popout.window.dispatchEvent(new CustomEvent("remotehand-appearance-change"));
 });
