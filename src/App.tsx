@@ -460,6 +460,7 @@ const layoutHistoryIndexRef = useRef(-1);
 const applyingHistoryRef = useRef(false);
 const workspaceSaveTimerRef = useRef<number | null>(null);
 const workspacePersistenceEnabledRef = useRef(true);
+const poppedOutPanelRef = useRef<{ panelId: string; count: number } | null>(null);
 useEffect(() => {
 if (!isTauri()) return;
 void invoke<string>("local_os")
@@ -743,7 +744,12 @@ const api = apiRef.current;
 const panel = api?.activePanel;
 if (!api || !panel) return;
 if (panel.api.location.type === "popout") return;
-try { await api.addPopoutGroup(panel); } catch (error) { console.error("Failed to pop out active panel", error); }
+try {
+const opened = await api.addPopoutGroup(panel);
+if (opened) poppedOutPanelRef.current = { panelId: panel.id, count: api.getPopouts().length };
+} catch (error) {
+console.error("Failed to pop out active panel", error);
+}
 }, []);
 const resetLayout = useCallback(async () => {
 const api = apiRef.current;
@@ -1005,6 +1011,12 @@ event.api.onDidLayoutChange(() => {
 captureLayout(event.api);
 });
 event.api.onDidAddPopoutGroup((popout) => {
+popout.group.activePanel?.api.setActive();
+popout.window.focus();
+poppedOutPanelRef.current = {
+panelId: popout.group.activePanel?.id ?? poppedOutPanelRef.current?.panelId ?? "",
+count: event.api.getPopouts().length,
+};
 const targetDocument = popout.window.document;
 const root = targetDocument.documentElement;
 const source = document.documentElement;
@@ -1023,6 +1035,15 @@ const value = source.style.getPropertyValue(property);
 if (value) root.style.setProperty(property, value);
 }
 popout.window.dispatchEvent(new CustomEvent("remotehand-appearance-change"));
+});
+event.api.onDidRemovePopoutGroup(() => {
+const panelId = poppedOutPanelRef.current?.panelId;
+if (panelId) {
+window.setTimeout(() => {
+event.api.getPanel(panelId)?.api.setActive();
+}, 0);
+}
+poppedOutPanelRef.current = null;
 });
 event.api.onDidRemoveGroup(() => {
 if (!isTauri()) return;
