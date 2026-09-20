@@ -350,9 +350,9 @@ if (!terminal || !host) return;
 const nextWindow = host.ownerDocument.defaultView;
 const refreshAppearance = () => {
 applyAppearance();
+applyPopoutRendererStyles();
 terminal.refresh(0, terminal.rows - 1);
 terminal.focus();
-window.setTimeout(applyPopoutRendererStyles, 250);
 };
 if (nextWindow) {
 nextWindow.requestAnimationFrame(refreshAppearance);
