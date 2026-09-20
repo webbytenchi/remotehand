@@ -1039,12 +1039,12 @@ popout.window.dispatchEvent(new CustomEvent("remotehand-appearance-change"));
 });
 event.api.onDidRemovePopoutGroup(() => {
 const panelId = poppedOutPanelRef.current?.panelId;
-if (panelId) {
 window.setTimeout(() => {
+if (panelId) {
 event.api.getPanel(panelId)?.api.setActive();
-}, 0);
 }
 poppedOutPanelRef.current = null;
+}, 0);
 });
 event.api.onDidRemoveGroup(() => {
 if (!isTauri()) return;
