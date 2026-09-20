@@ -1066,6 +1066,7 @@ const value = source.style.getPropertyValue(property);
 if (value) root.style.setProperty(property, value);
 }
 popout.window.dispatchEvent(new CustomEvent("remotehand-appearance-change"));
+root.style.visibility = "visible";
 });
 event.api.onDidRemovePopoutGroup(() => {
 const panelId = poppedOutPanelRef.current?.panelId;
