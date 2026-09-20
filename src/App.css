@@ -2412,3 +2412,20 @@ background: transparent;
     display: none;
   }
 }
+
+
+.sftp-download-destination {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.sftp-download-destination:hover {
+  opacity: 0.8;
+}
