@@ -197,7 +197,7 @@ const [popoutStylesReady, setPopoutStylesReady] = useState(api.location.type !==
 useLayoutEffect(() => {
 const markPopoutStylesReady = (doc: Document) => {
 setPopoutStylesReady(true);
-doc.defaultView?.dispatchEvent(new CustomEvent("remotehand-plugin-popout-ready"));
+doc.defaultView?.parent.dispatchEvent(new CustomEvent("remotehand-plugin-popout-ready"));
 };
 const repairPopoutStyles = () => {
 if (api.location.type !== "popout") {
