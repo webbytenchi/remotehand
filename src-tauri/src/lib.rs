@@ -197,6 +197,24 @@ pub fn run() {
                     let _ = window.hide();
                     return;
                 }
+
+                // The main window is actually exiting. Dockview popouts are
+                // independent native windows, so close them explicitly rather
+                // than leaving empty shells behind after the main webview exits.
+                let popout_labels: Vec<String> = window
+                    .app_handle()
+                    .webview_windows()
+                    .keys()
+                    .filter(|label| label.starts_with("panel-popout-"))
+                    .cloned()
+                    .collect();
+                for label in popout_labels {
+                    if let Some(popout) = window.app_handle().get_webview_window(&label) {
+                        if let Err(error) = popout.close() {
+                            log::warn!("Failed to close popout {label} during exit: {error}");
+                        }
+                    }
+                }
             }
             let tracker = window.state::<window_state::WindowStateTracker>();
             window_state::handle_event(&tracker, window, event);
