@@ -1073,9 +1073,8 @@ if (value) root.style.setProperty(property, value);
  * copies before revealing the document so the preloaded popout bundle stays
  * authoritative and there is no unstyled interval while duplicates load.
  */
-const popoutStylesheet = Array.from(targetDocument.querySelectorAll<HTMLLinkElement>(
-'link[rel="stylesheet"]',
-)).find((link) => link.href.includes("/assets/popout-") || link.href.endsWith("/src/popout.css"));
+const popoutStylesheet =
+targetDocument.querySelector<HTMLLinkElement>("#remotehand-popout-styles");
 for (const link of Array.from(targetDocument.querySelectorAll<HTMLLinkElement>(
 'link[rel="stylesheet"]',
 ))) {
