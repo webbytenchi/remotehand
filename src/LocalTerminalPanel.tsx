@@ -441,17 +441,18 @@ try {
 const rendererCss = Array.from(terminal.element?.querySelectorAll<HTMLStyleElement>("style") ?? [])
 .map((style) => style.textContent ?? "")
 .join("\n");
-const sheet = new CSSStyleSheet();
+const PopoutCSSStyleSheet = ownerWindow?.CSSStyleSheet;
+if (!PopoutCSSStyleSheet) throw new Error("popout CSSStyleSheet constructor unavailable");
+const sheet = new PopoutCSSStyleSheet();
 sheet.replaceSync(rendererCss);
 ownerDocument.adoptedStyleSheets = [
-...ownerDocument.adoptedStyleSheets.filter((existing) => !(existing as CSSStyleSheet & { __remotehandXterm?: boolean }).__remotehandXterm),
+...ownerDocument.adoptedStyleSheets,
 sheet,
 ];
-(sheet as CSSStyleSheet & { __remotehandXterm?: boolean }).__remotehandXterm = true;
 adoptedSheet = "yes";
 adoptedRules = String(sheet.cssRules.length);
 if (cursorElement) {
-adoptedCursorMatch = Array.from(sheet.cssRules).some((rule) => rule instanceof CSSStyleRule && cursorElement.matches(rule.selectorText)) ? "yes" : "no";
+adoptedCursorMatch = Array.from(sheet.cssRules).some((rule) => rule instanceof ownerWindow.CSSStyleRule && cursorElement.matches(rule.selectorText)) ? "yes" : "no";
 }
 } catch (error) {
 const details: string[] = [];
