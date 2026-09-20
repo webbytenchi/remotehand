@@ -1146,6 +1146,9 @@ const commands = [
 const filteredCommands = commands.filter((command) =>
 command.label.toLowerCase().includes(paletteQuery.toLowerCase()),
 );
+if (!settingsLoaded) {
+return <main className="app-shell" aria-hidden="true" />;
+}
 return (
 <main className="app-shell">
 <header className="topbar">
