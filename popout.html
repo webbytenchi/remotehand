@@ -11,8 +11,29 @@
         height: 100%;
         margin: 0;
         overflow: hidden;
+        background: var(--remotehand-popout-background, #07090d);
       }
     </style>
+    <script>
+      (() => {
+        try {
+          const saved = JSON.parse(localStorage.getItem("remotehand.settings") || "{}");
+          const theme = saved.theme || localStorage.getItem("remotehand.theme") || "dark";
+          const resolved =
+            theme === "system"
+              ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+              : theme;
+          document.documentElement.style.setProperty(
+            "--remotehand-popout-background",
+            resolved === "light" ? "#eef1f4" : "#07090d",
+          );
+          document.documentElement.style.colorScheme = resolved;
+        } catch {
+          document.documentElement.style.setProperty("--remotehand-popout-background", "#07090d");
+          document.documentElement.style.colorScheme = "dark";
+        }
+      })();
+    </script>
   </head>
   <body></body>
 </html>
