@@ -328,6 +328,7 @@ const ownerWindow = ownerDocument.defaultView;
 const styles = ownerWindow?.getComputedStyle(ownerDocument.documentElement) ?? getComputedStyle(ownerDocument.documentElement);
 const fontFamily = styles.getPropertyValue("--terminal-font-family").trim();
 const fontSize = Number.parseInt(styles.getPropertyValue("--terminal-font-size"), 10);
+const foreground = styles.getPropertyValue("--terminal-foreground").trim();
 terminal.options.theme = getTheme(ownerDocument);
 if (fontFamily) terminal.options.fontFamily = fontFamily;
 if (Number.isFinite(fontSize)) terminal.options.fontSize = fontSize;
@@ -335,7 +336,6 @@ const rows = terminal.element?.querySelector<HTMLElement>(".xterm-rows");
 if (rows) {
 if (fontFamily) rows.style.setProperty("font-family", fontFamily);
 if (Number.isFinite(fontSize)) rows.style.setProperty("font-size", String(fontSize) + "px");
-const foreground = styles.getPropertyValue("--terminal-foreground").trim();
 if (foreground) rows.style.setProperty("color", foreground);
 }
 const cursor = terminal.element?.querySelector<HTMLElement>(".xterm-cursor");
@@ -385,12 +385,6 @@ if (fontSize) rows.style.setProperty("font-size", fontSize);
 if (foreground) rows.style.setProperty("color", foreground);
 }
 applyAppearance();
-const cursor = terminal.element?.querySelector<HTMLElement>(".xterm-cursor");
-if (cursor) {
-const theme = terminal.options.theme;
-cursor.style.setProperty("background-color", theme?.cursor ?? theme?.foreground ?? foreground ?? "");
-cursor.style.setProperty("color", theme?.cursorAccent ?? theme?.background ?? styles?.getPropertyValue("--terminal-background").trim() ?? "");
-}
 terminal.refresh(0, terminal.rows - 1);
 terminal.focus();
 };
