@@ -423,6 +423,20 @@ if (!terminal || !host) return;
 const nextWindow = host.ownerDocument.defaultView;
 const refreshAppearance = () => {
 applyAppearance();
+if (api.location.type === "popout") {
+const targetDocument = host.ownerDocument;
+const mirrorId = "remotehand-xterm-renderer-" + api.id;
+targetDocument.getElementById(mirrorId)?.remove();
+const rendererCss = Array.from(terminal.element?.querySelectorAll<HTMLStyleElement>("style") ?? [])
+.map((style) => style.textContent ?? "")
+.join("\n");
+if (rendererCss) {
+const mirror = targetDocument.createElement("style");
+mirror.id = mirrorId;
+mirror.textContent = rendererCss;
+targetDocument.head.appendChild(mirror);
+}
+}
 terminal.refresh(0, terminal.rows - 1);
 terminal.focus();
 window.setTimeout(() => {
@@ -434,8 +448,17 @@ const cursorComputed = cursorElement ? ownerWindow?.getComputedStyle(cursorEleme
 const cursorRect = cursorElement?.getBoundingClientRect();
 const textarea = terminal.textarea;
 const activeElement = ownerDocument.activeElement;
+const mirror = ownerDocument.getElementById("remotehand-xterm-renderer-" + api.id) as HTMLStyleElement | null;
+let mirrorRules = "n/a";
+try { mirrorRules = mirror?.sheet ? String(mirror.sheet.cssRules.length) : "null"; } catch { mirrorRules = "blocked"; }
+const cursorMirrorMatch = (() => {
+if (!mirror?.sheet || !cursorElement) return "n/a";
+try {
+return Array.from(mirror.sheet.cssRules).some((rule) => rule instanceof CSSStyleRule && cursorElement.matches(rule.selectorText)) ? "yes" : "no";
+} catch { return "error"; }
+})();
 setDiagnostic((current) =>
-`${current} | POSTMOVE cursor=${cursorElement ? "yes" : "no"} | cursorDisplay=${cursorComputed?.display ?? "n/a"} | cursorVisibility=${cursorComputed?.visibility ?? "n/a"} | cursorOpacity=${cursorComputed?.opacity ?? "n/a"} | cursorBg=${cursorComputed?.backgroundColor ?? "n/a"} | cursorSize=${cursorRect ? cursorRect.width.toFixed(1) + "x" + cursorRect.height.toFixed(1) : "n/a"} | cursorInline=${cursorElement?.getAttribute("style") ?? "n/a"} | textareaFocused=${textarea ? String(activeElement === textarea) : "n/a"} | active=${activeElement instanceof HTMLElement ? activeElement.className || activeElement.tagName : "n/a"}`,
+`${current} | POSTMOVE mirrorSheet=${mirrorRules} | cursorMirrorMatch=${cursorMirrorMatch} | cursor=${cursorElement ? "yes" : "no"} | cursorDisplay=${cursorComputed?.display ?? "n/a"} | cursorVisibility=${cursorComputed?.visibility ?? "n/a"} | cursorOpacity=${cursorComputed?.opacity ?? "n/a"} | cursorBg=${cursorComputed?.backgroundColor ?? "n/a"} | cursorSize=${cursorRect ? cursorRect.width.toFixed(1) + "x" + cursorRect.height.toFixed(1) : "n/a"} | cursorInline=${cursorElement?.getAttribute("style") ?? "n/a"} | textareaFocused=${textarea ? String(activeElement === textarea) : "n/a"} | active=${activeElement instanceof HTMLElement ? activeElement.className || activeElement.tagName : "n/a"}`,
 );
 }, 250);
 };
