@@ -1059,8 +1059,18 @@ console.error("Failed to close empty popout window or restore main-window focus"
 });
 });
 event.api.onDidRemovePanel((panel) => {
-if (panel.api.component !== "terminal") return;
 const sessionId = panel.id;
+window.setTimeout(() => {
+if (event.api.panels.length === 0 && isTauri()) {
+const currentWindow = getCurrentWindow();
+if (currentWindow.label.startsWith("panel-popout-")) {
+void currentWindow.close().catch((error) => {
+console.error("Failed to close empty popout window", error);
+});
+}
+}
+}, 0);
+if (panel.api.component !== "terminal") return;
 window.setTimeout(() => {
 if (event.api.panels.some((current) => current.id === sessionId)) return;
 if (!isTauri()) return;
