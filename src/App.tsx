@@ -1343,7 +1343,7 @@ if (plugin) openPluginPanel(plugin, panelId, context);
 open={settingsOpen}
 title="Settings"
 className="settings-modal"
-confirmLabel="Done"
+confirmLabel={settingsTab === "papa" ? "Always" : "Done"}
 onConfirm={() => setSettingsOpen(false)}
 onCancel={() => setSettingsOpen(false)}
 focusActions={false}
