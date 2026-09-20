@@ -195,6 +195,10 @@ const repairedDocumentRef = useRef<Document | null>(null);
 const repairSheetRef = useRef<CSSStyleSheet | null>(null);
 const [popoutStylesReady, setPopoutStylesReady] = useState(api.location.type !== "popout");
 useLayoutEffect(() => {
+const markPopoutStylesReady = (doc: Document) => {
+setPopoutStylesReady(true);
+doc.defaultView?.dispatchEvent(new CustomEvent("remotehand-plugin-popout-ready"));
+};
 const repairPopoutStyles = () => {
 if (api.location.type !== "popout") {
 setPopoutStylesReady(true);
@@ -204,14 +208,14 @@ const doc = iframeRef.current?.contentDocument;
 if (!doc) return;
 const styles = Array.from(doc.querySelectorAll<HTMLStyleElement>("style"));
 if (!styles.some((style) => style.sheet === null)) {
-setPopoutStylesReady(true);
+markPopoutStylesReady(doc);
 return;
 }
 try {
 if (repairedDocumentRef.current === doc) {
 const sheet = repairSheetRef.current;
 if (sheet && doc.adoptedStyleSheets.includes(sheet)) {
-setPopoutStylesReady(true);
+markPopoutStylesReady(doc);
 return;
 }
 }
