@@ -175,22 +175,18 @@ const bind = (nextWindow: Window) => { ownerWindow.removeEventListener("message"
 ownerWindow.addEventListener("message", onMessage);
 window.addEventListener("remotehand-appearance-change", postAppearance);
 const restorePluginStyles = () => {
-const frameDocument = iframeRef.current?.contentDocument;
-const frameWindow = iframeRef.current?.contentWindow;
-if (!frameDocument || !frameWindow) return;
+const frame = iframeRef.current;
+const frameDocument = frame?.contentDocument;
+if (!frame || !frameDocument) return;
 const css = Array.from(frameDocument.querySelectorAll<HTMLStyleElement>("style"))
 .map((style) => style.textContent ?? "")
 .join("\n");
 if (!css) return;
 try {
-const FrameCSSStyleSheet = Reflect.get(frameWindow, "CSSStyleSheet") as typeof CSSStyleSheet | undefined;
-if (!FrameCSSStyleSheet) return;
-const sheet = new FrameCSSStyleSheet();
-sheet.replaceSync(css);
-frameDocument.adoptedStyleSheets = [
-...frameDocument.adoptedStyleSheets,
-sheet,
-];
+const repairedStyle = frameDocument.createElement("style");
+repairedStyle.dataset.remotehandPopoutRepair = "true";
+repairedStyle.textContent = css;
+frameDocument.head.appendChild(repairedStyle);
 } catch (cause) {
 console.error("Failed to restore plugin stylesheet after popout move", cause);
 }
