@@ -1065,15 +1065,7 @@ for (const property of [
 const value = source.style.getPropertyValue(property);
 if (value) root.style.setProperty(property, value);
 }
-const activePanel = popout.group.activePanel;
-if (activePanel?.api.component === "plugin") {
-const revealPluginPopout = () => {
 root.style.visibility = "visible";
-};
-popout.window.addEventListener("remotehand-plugin-popout-ready", revealPluginPopout, { once: true });
-} else {
-root.style.visibility = "visible";
-}
 popout.window.dispatchEvent(new CustomEvent("remotehand-appearance-change"));
 });
 event.api.onDidRemovePopoutGroup(() => {
