@@ -680,7 +680,7 @@ return (
 </div>
 {listing && !needsVaultUnlock ? (
 <div className="sftp-action-toolbar" role="toolbar" aria-label="SFTP file actions">
-<button className="sftp-icon-action" type="button" title="Up" aria-label="Up" onClick={() => void loadPath(parentPath(currentPath))} disabled={!canGoUp || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m0 0 6-6m-6 6 6 6"/></svg></button>
+<button className="sftp-icon-action" type="button" title="Parent" aria-label="Parent" onClick={() => void loadPath(parentPath(currentPath))} disabled={!canGoUp || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m0 0 6-6m-6 6 6 6"/></svg></button>
 <button className="sftp-icon-action" type="button" title="Refresh" aria-label="Refresh" onClick={() => void loadPath(currentPath)} disabled={loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5M4 18v-5h5M6.2 9a7 7 0 0 1 11.5-2.3L20 11M4 13l2.3 4.3A7 7 0 0 0 17.8 15"/></svg></button>
 <span className="sftp-toolbar-separator" aria-hidden="true" />
 <button className="sftp-icon-action" type="button" title="Upload" aria-label="Upload" onClick={() => void chooseUploadFiles()} disabled={!listing || needsVaultUnlock || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0-5 5m5-5 5 5M5 20h14"/></svg></button>
