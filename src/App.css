@@ -741,12 +741,11 @@ flex: 1 1 auto;
 min-width: 0;
 min-height: 0;
 overflow: hidden;
-padding: 0 0 6px;
-box-sizing: border-box;
+padding: 0;
 background: var(--terminal-background, #11151a) !important;
 }
 .terminal-host .xterm {
-height: 100%;
+height: calc(100% - 6px);
 padding: 0;
 background: var(--terminal-background, #11151a) !important;
 }
