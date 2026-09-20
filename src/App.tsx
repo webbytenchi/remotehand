@@ -1067,12 +1067,24 @@ const value = source.style.getPropertyValue(property);
 if (value) root.style.setProperty(property, value);
 }
 
+const revealPopout = () => {
 root.style.visibility = "visible";
 popout.window.dispatchEvent(new CustomEvent("remotehand-appearance-change"));
 if (isTauri()) {
 void invoke("show_pending_popout").catch((error) => {
 console.error("Failed to reveal native popout after Dockview setup", error);
 });
+}
+};
+const activePanel = popout.group.activePanel;
+if (activePanel?.api.component === "plugin") {
+const onPluginReady = () => {
+popout.window.removeEventListener("remotehand-plugin-popout-ready", onPluginReady);
+revealPopout();
+};
+popout.window.addEventListener("remotehand-plugin-popout-ready", onPluginReady, { once: true });
+} else {
+revealPopout();
 }
 });
 event.api.onDidRemovePopoutGroup(() => {
