@@ -224,6 +224,28 @@ probeStyle.remove();
 } catch (error) {
 probe = "probe=error " + String(error);
 }
+let constructable = "constructable=not-run";
+try {
+const view = doc.defaultView;
+const FrameCSSStyleSheet = view
+? Reflect.get(view, "CSSStyleSheet") as typeof CSSStyleSheet | undefined
+: undefined;
+if (!FrameCSSStyleSheet) {
+constructable = "constructable=unavailable";
+} else {
+const sheet = new FrameCSSStyleSheet();
+sheet.replaceSync("body { outline: 0 solid transparent; }");
+doc.adoptedStyleSheets = [...doc.adoptedStyleSheets, sheet];
+constructable =
+"constructable=active rules=" + sheet.cssRules.length +
+" adopted=" + doc.adoptedStyleSheets.length;
+doc.adoptedStyleSheets = doc.adoptedStyleSheets.filter(
+(candidate) => candidate !== sheet
+);
+}
+} catch (error) {
+constructable = "constructable=error " + String(error);
+}
 const view = doc.defaultView;
 const bodyStyle = view?.getComputedStyle(doc.body);
 const rootStyle = view?.getComputedStyle(doc.documentElement);
@@ -237,7 +259,8 @@ setPopoutDiagnostic(
 " | body.font=" + (bodyStyle?.fontFamily ?? "?") +
 " | root.font=" + (rootStyle?.fontFamily ?? "?") +
 "\n" + (details || "no style elements") +
-" | " + probe
+" | " + probe +
+" | " + constructable
 );
 };
 inspect();
