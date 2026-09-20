@@ -338,17 +338,6 @@ if (fontFamily) rows.style.setProperty("font-family", fontFamily);
 if (Number.isFinite(fontSize)) rows.style.setProperty("font-size", String(fontSize) + "px");
 if (foreground) rows.style.setProperty("color", foreground);
 }
-const cursor = terminal.element?.querySelector<HTMLElement>(".xterm-cursor");
-if (cursor) {
-const theme = terminal.options.theme;
-cursor.style.setProperty("background-color", theme?.cursor ?? theme?.foreground ?? foreground);
-cursor.style.setProperty("color", theme?.cursorAccent ?? theme?.background ?? styles.getPropertyValue("--terminal-background").trim());
-if (cursor.getBoundingClientRect().width === 0) {
-cursor.style.setProperty("display", "inline-block");
-cursor.style.setProperty("width", "1ch");
-cursor.style.setProperty("margin-right", "-1ch");
-}
-}
 fitAddonRef.current?.fit();
 if (api.location.type === "popout") {
 const computed = rows ? ownerWindow?.getComputedStyle(rows) : null;
@@ -392,6 +381,19 @@ const refreshAppearance = () => {
 applyAppearance();
 terminal.refresh(0, terminal.rows - 1);
 terminal.focus();
+window.setTimeout(() => {
+if (api.location.type !== "popout") return;
+const ownerDocument = host.ownerDocument;
+const ownerWindow = ownerDocument.defaultView;
+const cursorElement = terminal.element?.querySelector<HTMLElement>(".xterm-cursor");
+const cursorComputed = cursorElement ? ownerWindow?.getComputedStyle(cursorElement) : null;
+const cursorRect = cursorElement?.getBoundingClientRect();
+const textarea = terminal.textarea;
+const activeElement = ownerDocument.activeElement;
+setDiagnostic((current) =>
+`${current} | POSTMOVE cursor=${cursorElement ? "yes" : "no"} | cursorDisplay=${cursorComputed?.display ?? "n/a"} | cursorVisibility=${cursorComputed?.visibility ?? "n/a"} | cursorOpacity=${cursorComputed?.opacity ?? "n/a"} | cursorBg=${cursorComputed?.backgroundColor ?? "n/a"} | cursorSize=${cursorRect ? cursorRect.width.toFixed(1) + "x" + cursorRect.height.toFixed(1) : "n/a"} | cursorInline=${cursorElement?.getAttribute("style") ?? "n/a"} | textareaFocused=${textarea ? String(activeElement === textarea) : "n/a"} | active=${activeElement instanceof HTMLElement ? activeElement.className || activeElement.tagName : "n/a"}`,
+);
+}, 250);
 };
 if (nextWindow) {
 nextWindow.requestAnimationFrame(refreshAppearance);
