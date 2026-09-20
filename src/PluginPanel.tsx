@@ -1,7 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { IDockviewPanelProps } from "dockview-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 export type PluginPanelParams = {
 pluginId: string;
 panelId: string;
@@ -194,7 +194,7 @@ return () => { cancelled = true; unlisten?.(); };
 const repairedDocumentRef = useRef<Document | null>(null);
 const repairSheetRef = useRef<CSSStyleSheet | null>(null);
 const [popoutStylesReady, setPopoutStylesReady] = useState(api.location.type !== "popout");
-useEffect(() => {
+useLayoutEffect(() => {
 const repairPopoutStyles = () => {
 if (api.location.type !== "popout") {
 setPopoutStylesReady(true);
