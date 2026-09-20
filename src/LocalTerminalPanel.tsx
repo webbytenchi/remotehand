@@ -411,6 +411,20 @@ if (!terminal || !host) return;
 const nextWindow = host.ownerDocument.defaultView;
 const refreshAppearance = () => {
 applyAppearance();
+if (api.location.type === "popout") {
+const targetDocument = host.ownerDocument;
+const mirrorId = "remotehand-xterm-renderer-" + api.id;
+targetDocument.getElementById(mirrorId)?.remove();
+const rendererCss = Array.from(terminal.element?.querySelectorAll<HTMLStyleElement>("style") ?? [])
+.map((style) => style.textContent ?? "")
+.join("\n");
+if (rendererCss) {
+const mirror = targetDocument.createElement("style");
+mirror.id = mirrorId;
+mirror.textContent = rendererCss;
+targetDocument.head.appendChild(mirror);
+}
+}
 terminal.refresh(0, terminal.rows - 1);
 terminal.focus();
 window.setTimeout(() => {
