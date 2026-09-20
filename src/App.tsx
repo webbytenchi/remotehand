@@ -461,6 +461,7 @@ const applyingHistoryRef = useRef(false);
 const workspaceSaveTimerRef = useRef<number | null>(null);
 const workspacePersistenceEnabledRef = useRef(true);
 const poppedOutPanelRef = useRef<{ panelId: string; count: number; window?: Window } | null>(null);
+const closingPopoutPanelRef = useRef<string | null>(null);
 useEffect(() => {
 if (!isTauri()) return;
 void invoke<string>("local_os")
@@ -1004,8 +1005,30 @@ panel.api.updateParameters({ activities: recentActivities });
 }
 }
 captureLayout(event.api);
-event.api.onDidMutateLayout(() => {
+event.api.onWillMutateLayout((mutation) => {
+if (mutation.kind !== "remove" || mutation.origin !== "user") return;
+const activePanel = event.api.activePanel;
+if (activePanel?.api.location.type !== "popout") return;
+closingPopoutPanelRef.current = activePanel.id;
+});
+event.api.onDidMutateLayout((mutation) => {
 captureLayout(event.api);
+const panelId = closingPopoutPanelRef.current;
+if (mutation.kind !== "remove" || !panelId) return;
+closingPopoutPanelRef.current = null;
+window.setTimeout(() => {
+if (event.api.getPanel(panelId) || !isTauri()) return;
+void getAllWindows().then(async (windows) => {
+const nativePopouts = windows.filter((candidate) =>
+candidate.label.startsWith("panel-popout-")
+);
+if (nativePopouts.length === 1) {
+await nativePopouts[0].close();
+}
+}).catch((error) => {
+console.error("Failed to close native popout after remove transaction", error);
+});
+}, 0);
 });
 event.api.onDidLayoutChange(() => {
 captureLayout(event.api);
