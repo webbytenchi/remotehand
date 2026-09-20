@@ -28,6 +28,29 @@ fn close_current_window(window: tauri::WebviewWindow) -> Result<(), String> {
     }
     window.close().map_err(|error| error.to_string())
 }
+
+#[tauri::command]
+fn show_pending_popout(app: tauri::AppHandle) -> Result<(), String> {
+    let mut popouts: Vec<_> = app
+        .webview_windows()
+        .into_iter()
+        .filter(|(label, _)| label.starts_with("panel-popout-"))
+        .collect();
+    popouts.sort_by_key(|(label, _)| {
+        label
+            .strip_prefix("panel-popout-")
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(0)
+    });
+    for (_, popout) in popouts.into_iter().rev() {
+        if !popout.is_visible().map_err(|error| error.to_string())? {
+            popout.show().map_err(|error| error.to_string())?;
+            popout.set_focus().map_err(|error| error.to_string())?;
+            return Ok(());
+        }
+    }
+    Err("no hidden panel popout is waiting to be shown".to_string())
+}
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let window_restored = Arc::new(AtomicBool::new(false));
@@ -100,6 +123,7 @@ pub fn run() {
             terminal::terminal_close,
             local_os,
             close_current_window,
+            show_pending_popout,
             startup_tray::set_startup_enabled,
             startup_tray::startup_enabled,
             startup_tray::set_tray_visible,
