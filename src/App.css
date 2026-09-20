@@ -2360,3 +2360,55 @@ background: transparent;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+
+.papa-tab-reveal {
+  position: relative;
+  display: inline-flex;
+}
+.papa-tab-reveal > button {
+  height: 100%;
+}
+.papa-heart-confetti {
+  position: absolute;
+  left: 50%;
+  top: 2px;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+.papa-heart-confetti > span {
+  --papa-heart-x: 0px;
+  --papa-heart-y: -34px;
+  --papa-heart-r: 0deg;
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: #ef6f9a;
+  font-size: 10px;
+  line-height: 1;
+  opacity: 0;
+  transform: translate(-50%, 0) scale(.55);
+  animation: papa-heart-pop 1050ms cubic-bezier(.18,.72,.28,1) forwards;
+}
+.papa-heart-confetti > span:nth-child(1) { --papa-heart-x: -34px; --papa-heart-y: -38px; --papa-heart-r: -18deg; animation-delay: 0ms; }
+.papa-heart-confetti > span:nth-child(2) { --papa-heart-x: -23px; --papa-heart-y: -50px; --papa-heart-r: 12deg; animation-delay: 45ms; }
+.papa-heart-confetti > span:nth-child(3) { --papa-heart-x: -12px; --papa-heart-y: -31px; --papa-heart-r: -10deg; animation-delay: 80ms; }
+.papa-heart-confetti > span:nth-child(4) { --papa-heart-x: 2px; --papa-heart-y: -55px; --papa-heart-r: 15deg; animation-delay: 20ms; }
+.papa-heart-confetti > span:nth-child(5) { --papa-heart-x: 17px; --papa-heart-y: -39px; --papa-heart-r: -8deg; animation-delay: 100ms; }
+.papa-heart-confetti > span:nth-child(6) { --papa-heart-x: 31px; --papa-heart-y: -49px; --papa-heart-r: 20deg; animation-delay: 55ms; }
+.papa-heart-confetti > span:nth-child(7) { --papa-heart-x: -29px; --papa-heart-y: -24px; --papa-heart-r: 8deg; animation-delay: 135ms; }
+.papa-heart-confetti > span:nth-child(8) { --papa-heart-x: 27px; --papa-heart-y: -27px; --papa-heart-r: -14deg; animation-delay: 155ms; }
+.papa-heart-confetti > span:nth-child(9) { --papa-heart-x: -4px; --papa-heart-y: -41px; --papa-heart-r: 6deg; animation-delay: 175ms; }
+.papa-heart-confetti > span:nth-child(10) { --papa-heart-x: 12px; --papa-heart-y: -24px; --papa-heart-r: -5deg; animation-delay: 205ms; }
+@keyframes papa-heart-pop {
+  0% { opacity: 0; transform: translate(-50%, 2px) scale(.45) rotate(0deg); }
+  16% { opacity: .95; }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--papa-heart-x)), var(--papa-heart-y)) scale(1.05) rotate(var(--papa-heart-r)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .papa-heart-confetti {
+    display: none;
+  }
+}
