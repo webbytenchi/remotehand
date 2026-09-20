@@ -306,8 +306,21 @@ if (Number.isFinite(fontSize)) rows.style.setProperty("font-size", String(fontSi
 if (foreground) rows.style.setProperty("color", foreground);
 }
 fitAddonRef.current?.fit();
-if (api.location.type === "popout") {
-const computed = rows ? ownerWindow?.getComputedStyle(rows) : null;
+if (isTauri()) {
+void invoke("terminal_resize", {
+sessionId,
+rows: terminal.rows,
+cols: terminal.cols,
+}).catch(() => undefined);
+}
+};
+
+const applyPopoutRendererStyles = () => {
+const terminal = terminalRef.current;
+const host = hostRef.current;
+if (!terminal || !host || api.location.type !== "popout") return;
+const ownerDocument = host.ownerDocument;
+const ownerWindow = ownerDocument.defaultView;
 try {
 const rendererCss = Array.from(terminal.element?.querySelectorAll<HTMLStyleElement>("style") ?? [])
 .map((style) => style.textContent ?? "")
@@ -316,14 +329,30 @@ const PopoutCSSStyleSheet = ownerWindow?.CSSStyleSheet;
 if (!PopoutCSSStyleSheet) return;
 const sheet = new PopoutCSSStyleSheet();
 sheet.replaceSync(rendererCss);
-ownerDocument.adoptedStyleSheets = [
-...ownerDocument.adoptedStyleSheets,
-sheet,
-];
+ownerDocument.adoptedStyleSheets = [...ownerDocument.adoptedStyleSheets, sheet];
 } catch {
 return;
 }
-}, 250);
+};
+
+const ownerDocument = hostRef.current?.ownerDocument ?? document;
+const ownerWindow = ownerDocument.defaultView ?? window;
+const observer = new MutationObserver(applyAppearance);
+observer.observe(ownerDocument.documentElement, {
+attributes: true,
+attributeFilter: ["data-theme", "data-terminal-theme"],
+});
+ownerWindow.addEventListener("remotehand-appearance-change", applyAppearance);
+const locationDisposable = api.onDidLocationChange(() => {
+const terminal = terminalRef.current;
+const host = hostRef.current;
+if (!terminal || !host) return;
+const nextWindow = host.ownerDocument.defaultView;
+const refreshAppearance = () => {
+applyAppearance();
+terminal.refresh(0, terminal.rows - 1);
+terminal.focus();
+window.setTimeout(applyPopoutRendererStyles, 250);
 };
 if (nextWindow) {
 nextWindow.requestAnimationFrame(refreshAppearance);
