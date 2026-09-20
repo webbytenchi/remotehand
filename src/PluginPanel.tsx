@@ -174,7 +174,32 @@ let ownerWindow = api.getWindow();
 const bind = (nextWindow: Window) => { ownerWindow.removeEventListener("message", onMessage); ownerWindow = nextWindow; ownerWindow.addEventListener("message", onMessage); };
 ownerWindow.addEventListener("message", onMessage);
 window.addEventListener("remotehand-appearance-change", postAppearance);
-const locationDisposable = api.onDidLocationChange(() => { bind(api.getWindow()); postAppearance(); postContext(); });
+const restorePluginStyles = () => {
+const frameDocument = iframeRef.current?.contentDocument;
+const frameWindow = iframeRef.current?.contentWindow;
+if (!frameDocument || !frameWindow) return;
+const css = Array.from(frameDocument.querySelectorAll<HTMLStyleElement>("style"))
+.map((style) => style.textContent ?? "")
+.join("\n");
+if (!css) return;
+try {
+const FrameCSSStyleSheet = frameWindow.CSSStyleSheet;
+const sheet = new FrameCSSStyleSheet();
+sheet.replaceSync(css);
+frameDocument.adoptedStyleSheets = [
+...frameDocument.adoptedStyleSheets,
+sheet,
+];
+} catch (cause) {
+console.error("Failed to restore plugin stylesheet after popout move", cause);
+}
+};
+const locationDisposable = api.onDidLocationChange(() => {
+bind(api.getWindow());
+postAppearance();
+postContext();
+window.setTimeout(restorePluginStyles, 250);
+});
 return () => { locationDisposable.dispose(); ownerWindow.removeEventListener("message", onMessage); window.removeEventListener("remotehand-appearance-change", postAppearance); };
 }, [api, pluginId, context?.targetId, context?.target]);
 useEffect(() => {
