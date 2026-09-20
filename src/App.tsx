@@ -443,6 +443,7 @@ const [settingsOpen, setSettingsOpen] = useState(false);
 const [settingsTab, setSettingsTab] = useState<"appearance" | "startup" | "papa">("appearance");
 const [papaTabUnlocked, setPapaTabUnlocked] = useState(false);
 const papaSequenceRef = useRef<string[]>([]);
+const papaAudioRef = useRef<HTMLAudioElement | null>(null);
 const [pluginsOpen, setPluginsOpen] = useState(false);
 const [plugins, setPlugins] = useState<PluginInfo[]>([]);
 const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("dark");
@@ -899,6 +900,32 @@ panel.api.setTitle("Home");
 panel.api.updateParameters({ activities: recentActivities });
 }
 }, [recentActivities]);
+const stopPapaAudio = useCallback(() => {
+const audio = papaAudioRef.current;
+if (!audio) return;
+audio.pause();
+audio.currentTime = 0;
+}, []);
+const startPapaAudio = useCallback(() => {
+let audio = papaAudioRef.current;
+if (!audio) {
+audio = new Audio("/papa.mp3");
+audio.loop = true;
+papaAudioRef.current = audio;
+}
+audio.currentTime = 0;
+void audio.play().catch((error) => console.error("Failed to start audio", error));
+}, []);
+useEffect(() => {
+if (!settingsOpen || settingsTab !== "papa") stopPapaAudio();
+}, [settingsOpen, settingsTab, stopPapaAudio]);
+useEffect(() => () => {
+const audio = papaAudioRef.current;
+if (!audio) return;
+audio.pause();
+audio.currentTime = 0;
+papaAudioRef.current = null;
+}, []);
 useEffect(() => {
 if (!settingsOpen || settingsTab !== "startup" || papaTabUnlocked) {
 papaSequenceRef.current = [];
@@ -1316,7 +1343,7 @@ focusActions={false}
 tabs={<div className="settings-tabs" role="tablist" aria-label="Settings sections">
 <button type="button" role="tab" aria-selected={settingsTab === "appearance"} className={settingsTab === "appearance" ? "active" : ""} onClick={() => setSettingsTab("appearance")}>Appearance</button>
 <button type="button" role="tab" aria-selected={settingsTab === "startup"} className={settingsTab === "startup" ? "active" : ""} onClick={() => setSettingsTab("startup")}>Startup &amp; Tray</button>
-{papaTabUnlocked ? <button type="button" role="tab" aria-selected={settingsTab === "papa"} className={settingsTab === "papa" ? "active" : ""} onClick={() => setSettingsTab("papa")}>Papa</button> : null}
+{papaTabUnlocked ? <button type="button" role="tab" aria-selected={settingsTab === "papa"} className={settingsTab === "papa" ? "active" : ""} onClick={() => { setSettingsTab("papa"); startPapaAudio(); }}>Papa</button> : null}
 </div>}>
 {settingsTab === "appearance" ? (
 <div className="appearance-settings settings-tab-content">
