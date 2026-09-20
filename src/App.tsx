@@ -828,6 +828,7 @@ setSettingsLoaded(true);
 .catch((error) => {
 settingsPersistenceEnabledRef.current = false;
 console.error("Failed to load settings", error);
+setSettingsLoaded(true);
 });
 }, []);
 useEffect(() => {
