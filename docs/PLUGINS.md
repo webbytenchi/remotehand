@@ -514,9 +514,9 @@ A panel contribution points at an HTML file inside the plugin package:
 
 RemoteHand loads that HTML into a sandboxed iframe with a strict security posture:
 
-- The iframe has sandbox=allow-scripts - no same-origin access, no forms, no popups, no top-level navigation.
+- The iframe has sandbox=allow-scripts allow-same-origin - scripts and same-origin document access are enabled for the hosted srcdoc panel, while forms, popups, and top-level navigation remain unavailable.
 - A plugin-panel Content-Security-Policy meta tag is injected into the panel head before it loads.
-- The desktop release build also preserves the inline-script policy needed by the current srcdoc hosting path. This is a host-side compatibility detail; it does not grant the panel same-origin access or direct network access.
+- The desktop release build also preserves the inline-script policy needed by the current srcdoc hosting path. This is a host-side compatibility detail; direct network access remains blocked by the injected Content-Security-Policy.
 
 The plugin-panel Content-Security-Policy is:
 
