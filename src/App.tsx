@@ -1109,6 +1109,15 @@ const root = targetDocument.documentElement;
 // hidden and is revealed only after the plugin readiness handshake below.
 root.style.visibility = "hidden";
 const source = document.documentElement;
+// popout.html already loads the complete RemoteHand stylesheet bundle.
+// Dockview then copies the opener's linked stylesheets into the popout a
+// second time; those late links load asynchronously during workspace restore
+// and can expose an unstyled frame. Remove only the copied links, preserving
+// the popout's own /src/popout.css stylesheet as the stable source of truth.
+for (const link of Array.from(targetDocument.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'))) {
+const href = link.getAttribute("href") ?? "";
+if (!href.includes("popout.css")) link.remove();
+}
 root.dataset.theme = source.dataset.theme;
 root.dataset.scheme = source.dataset.scheme;
 root.dataset.terminalTheme = source.dataset.terminalTheme;
