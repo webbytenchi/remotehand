@@ -65,6 +65,20 @@ fn close_current_window(window: tauri::WebviewWindow) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn close_panel_popouts(app: tauri::AppHandle) -> Result<(), String> {
+    let popouts: Vec<_> = app
+        .webview_windows()
+        .into_iter()
+        .filter(|(label, _)| label.starts_with("panel-popout-"))
+        .map(|(_, window)| window)
+        .collect();
+    for popout in popouts {
+        popout.close().map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn hide_single_panel_popout(app: tauri::AppHandle) -> Result<(), String> {
     let mut popouts = app
         .webview_windows()
@@ -175,6 +189,7 @@ pub fn run() {
             local_os,
             reveal_path,
             close_current_window,
+            close_panel_popouts,
             hide_single_panel_popout,
             show_pending_popout,
             startup_tray::set_startup_enabled,
