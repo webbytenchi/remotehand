@@ -2,7 +2,36 @@
 
 All notable changes to RemoteHand are documented here.
 
-## `1.2.0` - unreleased
+## `1.2.1` - 2026-09-21
+
+### Added
+
+- **SFTP parent navigation polish.** The parent-directory action now uses a left-arrow affordance and clearer tooltip.
+- **SFTP download destination.** Completed downloads show their destination path, which can be clicked to reveal the downloaded item using the native platform file manager.
+- **Single-instance behavior.** Starting RemoteHand again restores and focuses the existing application instance instead of opening a second instance.
+- **Main-window restoration.** RemoteHand persists normal window size and position and restores maximized state across launches.
+
+### Improved
+
+- **Plugin top-bar lifecycle.** Plugin context updates no longer cause unnecessary panel lifecycle churn, keeping live top-bar contributions stable while panels are opened, closed, or popped out.
+- **Popout lifecycle.** Empty native popout windows are hidden before their final tab is removed, and disabling a plugin closes its active plugin panels/popouts.
+- **Plugin popout rendering.** Plugin panels wait for repaired cross-document styles to complete a rendering cycle before the moved iframe is revealed, reducing unstyled flashes in native popouts.
+
+### Fixed
+
+- **SFTP download summary.** Zero-value counts are omitted from completed download status.
+- **Terminal popout continuity.** Terminal styling, input, and cursor rendering remain intact when terminals move between the main workspace and popout windows.
+
+### Verification
+
+- Windows x86_64 release-build regression testing covered normal and maximized window restoration, single-instance behavior, SFTP navigation/download/reveal, plugin disable/re-enable lifecycle, last-tab popout behavior, Host Monitor top-bar updates and popouts, and terminal movement between the main workspace and popout windows.
+
+### Known observations
+
+- A brief unstyled plugin-panel frame was observed intermittently during one manual Host Monitor popout attempt but was not consistently reproducible during final release smoke testing.
+- A cosmetic title-bar animation can still be visible when RemoteHand starts maximized.
+
+## `1.2.0` - 2026-09-20
 
 ### Added
 
@@ -12,7 +41,6 @@ All notable changes to RemoteHand are documented here.
 - **Minimize to tray on close.** The main-window close action can hide RemoteHand instead of exiting when the system tray is enabled.
 - **Startup & system tray settings** in the existing Settings dialog, split into Appearance and Startup & Tray tabs.
 - **Tray quick actions.** Context-aware Show/Hide RemoteHand, Home, Connections, New Terminal, Settings, and Exit.
-- **Hidden Papa Easter egg.** Press `↑ ↑ ↓ ↓ ← → ← → B A` while Startup & Tray is active to reveal the Papa tab.
 
 ### Verification
 
