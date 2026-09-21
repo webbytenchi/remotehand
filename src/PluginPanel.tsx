@@ -171,7 +171,18 @@ const onMessage = (event: MessageEvent<PluginBridgeRequest | { type: "remotehand
 if (event.source !== iframeRef.current?.contentWindow) return;
 const message = event.data;
 if (!message) return;
-if (message.type === "remotehand.plugin.ready") { postAppearance(); postContext(); return; }
+if (message.type === "remotehand.plugin.ready") {
+postAppearance();
+postContext();
+appearanceReadyRef.current = true;
+const doc = iframeRef.current?.contentDocument;
+if (doc && stylesReadyRef.current && readyDocumentRef.current !== doc) {
+readyDocumentRef.current = doc;
+setPopoutStylesReady(true);
+doc.defaultView?.parent.dispatchEvent(new CustomEvent("remotehand-plugin-popout-ready"));
+}
+return;
+}
 if (message.type !== "remotehand.plugin.request") return;
 if (typeof message.requestId !== "string" || typeof message.method !== "string") return;
 const respond = (response: PluginBridgeResponse) => { iframeRef.current?.contentWindow?.postMessage(response, "*"); };
@@ -207,9 +218,15 @@ return () => { cancelled = true; unlisten?.(); };
 }, [pluginId]);
 const repairedDocumentRef = useRef<Document | null>(null);
 const repairSheetRef = useRef<CSSStyleSheet | null>(null);
+const appearanceReadyRef = useRef(api.location.type !== "popout");
+const stylesReadyRef = useRef(api.location.type !== "popout");
+const readyDocumentRef = useRef<Document | null>(null);
 const [popoutStylesReady, setPopoutStylesReady] = useState(api.location.type !== "popout");
 useLayoutEffect(() => {
 const markPopoutStylesReady = (doc: Document) => {
+stylesReadyRef.current = true;
+if (!appearanceReadyRef.current || readyDocumentRef.current === doc) return;
+readyDocumentRef.current = doc;
 setPopoutStylesReady(true);
 doc.defaultView?.parent.dispatchEvent(new CustomEvent("remotehand-plugin-popout-ready"));
 };
@@ -259,8 +276,17 @@ markPopoutStylesReady(doc);
 console.error("RemoteHand plugin popout style repair failed", error);
 }
 };
-if (api.location.type === "popout") setPopoutStylesReady(false);
-else setPopoutStylesReady(true);
+if (api.location.type === "popout") {
+appearanceReadyRef.current = false;
+stylesReadyRef.current = false;
+readyDocumentRef.current = null;
+setPopoutStylesReady(false);
+} else {
+appearanceReadyRef.current = true;
+stylesReadyRef.current = true;
+readyDocumentRef.current = null;
+setPopoutStylesReady(true);
+}
 repairPopoutStyles();
 const timer = window.setInterval(repairPopoutStyles, 500);
 return () => window.clearInterval(timer);
