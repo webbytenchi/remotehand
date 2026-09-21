@@ -8,6 +8,13 @@ panelId: string;
 title: string;
 context?: { targetId?: string; target?: string };
 };
+type PluginContext = PluginPanelParams["context"];
+type PluginContextHandler = (context: PluginContext) => void;
+const pluginContextHandlers = new Map<string, PluginContextHandler>();
+const pluginContextKey = (pluginId: string, panelId: string) => pluginId + ":" + panelId;
+export function sendPluginPanelContext(pluginId: string, panelId: string, context: PluginContext) {
+pluginContextHandlers.get(pluginContextKey(pluginId, panelId))?.(context);
+}
 type PluginBridgeRequest = {
 type: "remotehand.plugin.request";
 requestId: string;
@@ -157,8 +164,8 @@ useEffect(() => {
 const postAppearance = () => {
 iframeRef.current?.contentWindow?.postMessage({ type: "remotehand.appearance", appearance: readPluginAppearance() } satisfies PluginAppearanceMessage, "*");
 };
-const postContext = () => {
-iframeRef.current?.contentWindow?.postMessage({ type: "remotehand.plugin.context", context: context ?? {} }, "*");
+const postContext = (nextContext: PluginContext = context) => {
+iframeRef.current?.contentWindow?.postMessage({ type: "remotehand.plugin.context", context: nextContext ?? {} }, "*");
 };
 const onMessage = (event: MessageEvent<PluginBridgeRequest | { type: "remotehand.plugin.ready" }>) => {
 if (event.source !== iframeRef.current?.contentWindow) return;
@@ -170,6 +177,8 @@ if (typeof message.requestId !== "string" || typeof message.method !== "string")
 const respond = (response: PluginBridgeResponse) => { iframeRef.current?.contentWindow?.postMessage(response, "*"); };
 void invoke("plugin_runtime_call", { id: pluginId, method: message.method, params: message.params ?? null }).then((result) => respond({ type: "remotehand.plugin.response", requestId: message.requestId, ok: true, result })).catch((cause) => respond({ type: "remotehand.plugin.response", requestId: message.requestId, ok: false, error: String(cause) }));
 };
+const contextKey = pluginContextKey(pluginId, panelId);
+pluginContextHandlers.set(contextKey, postContext);
 let ownerWindow = api.getWindow();
 const bind = (nextWindow: Window) => { ownerWindow.removeEventListener("message", onMessage); ownerWindow = nextWindow; ownerWindow.addEventListener("message", onMessage); };
 ownerWindow.addEventListener("message", onMessage);
@@ -179,8 +188,13 @@ bind(api.getWindow());
 postAppearance();
 postContext();
 });
-return () => { locationDisposable.dispose(); ownerWindow.removeEventListener("message", onMessage); window.removeEventListener("remotehand-appearance-change", postAppearance); };
-}, [api, pluginId, html, context?.targetId, context?.target]);
+return () => {
+locationDisposable.dispose();
+ownerWindow.removeEventListener("message", onMessage);
+window.removeEventListener("remotehand-appearance-change", postAppearance);
+if (pluginContextHandlers.get(contextKey) === postContext) pluginContextHandlers.delete(contextKey);
+};
+}, [api, pluginId, panelId, html]);
 useEffect(() => {
 if (!isTauri() || !pluginId) return;
 let cancelled = false;
