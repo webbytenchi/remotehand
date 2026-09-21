@@ -129,6 +129,18 @@ pub fn run() {
     let popout_counter = Arc::new(AtomicU64::new(0));
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                if let Ok(true) = window.is_minimized() {
+                    let _ = window.unminimize();
+                }
+                let _ = window.show();
+                let _ = window.set_focus();
+                if let Some(tray_state) = app.try_state::<startup_tray::StartupTrayState>() {
+                    tray_state.sync_window_menu(app);
+                }
+            }
+        }))
         .manage(TerminalState::default())
         .manage(plugin_runtime::PluginRuntimeState::default())
         .manage(sftp_native::PersistentSftpState::default())
