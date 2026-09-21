@@ -478,13 +478,25 @@ return;
 try {
 const nextPlugins = await invoke<PluginInfo[]>("plugin_list");
 setPlugins(nextPlugins);
-const installedIds = new Set(nextPlugins.map((plugin) => plugin.manifest.id));
+const activePluginIds = new Set(
+nextPlugins.filter((plugin) => plugin.enabled).map((plugin) => plugin.manifest.id),
+);
 const api = apiRef.current;
 if (api) {
 for (const panel of [...api.panels]) {
 if (panel.api.component !== "plugin") continue;
 const pluginId = (panel.params as PluginPanelParams | undefined)?.pluginId;
-if (pluginId && !installedIds.has(pluginId)) api.removePanel(panel);
+if (pluginId && !activePluginIds.has(pluginId)) {
+const wasPopout = panel.api.location.type === "popout";
+if (wasPopout && isTauri()) {
+try {
+await invoke("close_panel_popouts");
+} catch (error) {
+console.error("Failed to close disabled plugin popout", error);
+}
+}
+api.removePanel(panel);
+}
 }
 }
 } catch (error) {
