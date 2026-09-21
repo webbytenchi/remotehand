@@ -463,7 +463,7 @@ const applyingHistoryRef = useRef(false);
 const workspaceSaveTimerRef = useRef<number | null>(null);
 const workspacePersistenceEnabledRef = useRef(true);
 const poppedOutPanelRef = useRef<{ panelId: string; count: number; window?: Window } | null>(null);
-const closingPopoutPanelRef = useRef<{ panelId: string; groupId: string } | null>(null);
+const closingPopoutPanelRef = useRef<{ panelId: string; groupId: string; hidden: boolean } | null>(null);
 useEffect(() => {
 if (!isTauri()) return;
 void invoke<string>("local_os")
@@ -1044,10 +1044,18 @@ event.api.onWillMutateLayout((mutation) => {
 if (mutation.kind !== "remove" || mutation.origin !== "user") return;
 const activePanel = event.api.activePanel;
 if (activePanel?.api.location.type !== "popout") return;
+const groupId = activePanel.api.group.id;
+const isLastPanel = event.api.panels.filter((panel) => panel.api.group.id === groupId).length === 1;
 closingPopoutPanelRef.current = {
 panelId: activePanel.id,
-groupId: activePanel.api.group.id,
+groupId,
+hidden: isLastPanel,
 };
+if (isLastPanel && isTauri()) {
+void invoke("hide_single_panel_popout").catch((error) => {
+console.error("Failed to hide popout before its last tab closed", error);
+});
+}
 });
 event.api.onDidMutateLayout((mutation) => {
 captureLayout(event.api);
