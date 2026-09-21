@@ -210,8 +210,19 @@ const repairSheetRef = useRef<CSSStyleSheet | null>(null);
 const [popoutStylesReady, setPopoutStylesReady] = useState(api.location.type !== "popout");
 useLayoutEffect(() => {
 const markPopoutStylesReady = (doc: Document) => {
+const view = doc.defaultView;
+if (!view) return;
+// A constructable stylesheet is installed synchronously, but WebView2 can
+// still paint the moved iframe once before recalculating it. Keep the iframe
+// hidden through the next rendering opportunity, then reveal it only after
+// the repaired document has completed that style/layout cycle.
+view.requestAnimationFrame(() => {
+view.requestAnimationFrame(() => {
+if (iframeRef.current?.contentDocument !== doc || api.location.type !== "popout") return;
 setPopoutStylesReady(true);
-doc.defaultView?.parent.dispatchEvent(new CustomEvent("remotehand-plugin-popout-ready"));
+view.parent.dispatchEvent(new CustomEvent("remotehand-plugin-popout-ready"));
+});
+});
 };
 const repairPopoutStyles = () => {
 if (api.location.type !== "popout") {
