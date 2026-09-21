@@ -1097,7 +1097,6 @@ captureLayout(event.api);
 });
 event.api.onDidAddPopoutGroup((popout) => {
 popout.group.activePanel?.api.setActive();
-popout.window.focus();
 poppedOutPanelRef.current = {
 panelId: popout.group.activePanel?.id ?? poppedOutPanelRef.current?.panelId ?? "",
 count: event.api.getPopouts().length,
@@ -1105,6 +1104,10 @@ window: popout.window,
 };
 const targetDocument = popout.window.document;
 const root = targetDocument.documentElement;
+// Keep Dockview's document hidden as a second visibility gate while restored
+// plugin popouts repair their styles. The native Tauri window is also created
+// hidden and is revealed only after the plugin readiness handshake below.
+root.style.visibility = "hidden";
 const source = document.documentElement;
 root.dataset.theme = source.dataset.theme;
 root.dataset.scheme = source.dataset.scheme;
