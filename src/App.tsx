@@ -1007,6 +1007,64 @@ return () => window.removeEventListener("keydown", onKeyDown);
 }, [redoLayout, undoLayout]);
 const handleReady = async (event: DockviewReadyEvent) => {
 apiRef.current = event.api;
+event.api.onDidAddPopoutGroup((popout) => {
+popout.group.activePanel?.api.setActive();
+poppedOutPanelRef.current = {
+panelId: popout.group.activePanel?.id ?? poppedOutPanelRef.current?.panelId ?? "",
+count: event.api.getPopouts().length,
+window: popout.window,
+};
+const targetDocument = popout.window.document;
+const root = targetDocument.documentElement;
+// Keep Dockview's document hidden as a second visibility gate while restored
+// plugin popouts repair their styles. The native Tauri window is also created
+// hidden and is revealed only after the plugin readiness handshake below.
+root.style.visibility = "hidden";
+const source = document.documentElement;
+// popout.html already loads the complete RemoteHand stylesheet bundle.
+// Dockview then copies the opener's linked stylesheets into the popout a
+// second time; those late links load asynchronously during workspace restore
+// and can expose an unstyled frame. Remove only the copied links, preserving
+// the popout's own /src/popout.css stylesheet as the stable source of truth.
+for (const link of Array.from(targetDocument.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'))) {
+const href = link.getAttribute("href") ?? "";
+if (!href.includes("popout.css")) link.remove();
+}
+root.dataset.theme = source.dataset.theme;
+root.dataset.scheme = source.dataset.scheme;
+root.dataset.terminalTheme = source.dataset.terminalTheme;
+for (const property of [
+"--terminal-background",
+"--terminal-foreground",
+"--ui-font-family",
+"--ui-font-size",
+"--terminal-font-family",
+"--terminal-font-size",
+]) {
+const value = source.style.getPropertyValue(property);
+if (value) root.style.setProperty(property, value);
+}
+
+const revealPopout = () => {
+root.style.visibility = "visible";
+popout.window.dispatchEvent(new CustomEvent("remotehand-appearance-change"));
+if (isTauri()) {
+void invoke("show_pending_popout").catch((error) => {
+console.error("Failed to reveal native popout after Dockview setup", error);
+});
+}
+};
+const activePanel = popout.group.activePanel;
+if (activePanel?.api.component === "plugin") {
+const onPluginReady = () => {
+popout.window.removeEventListener("remotehand-plugin-popout-ready", onPluginReady);
+revealPopout();
+};
+popout.window.addEventListener("remotehand-plugin-popout-ready", onPluginReady, { once: true });
+} else {
+revealPopout();
+}
+});
 if (isTauri()) {
 try {
 const saved = await invoke<WorkspaceLayout | null>("load_workspace");
@@ -1094,64 +1152,6 @@ console.error("Failed to close native popout after remove transaction", error);
 });
 event.api.onDidLayoutChange(() => {
 captureLayout(event.api);
-});
-event.api.onDidAddPopoutGroup((popout) => {
-popout.group.activePanel?.api.setActive();
-poppedOutPanelRef.current = {
-panelId: popout.group.activePanel?.id ?? poppedOutPanelRef.current?.panelId ?? "",
-count: event.api.getPopouts().length,
-window: popout.window,
-};
-const targetDocument = popout.window.document;
-const root = targetDocument.documentElement;
-// Keep Dockview's document hidden as a second visibility gate while restored
-// plugin popouts repair their styles. The native Tauri window is also created
-// hidden and is revealed only after the plugin readiness handshake below.
-root.style.visibility = "hidden";
-const source = document.documentElement;
-// popout.html already loads the complete RemoteHand stylesheet bundle.
-// Dockview then copies the opener's linked stylesheets into the popout a
-// second time; those late links load asynchronously during workspace restore
-// and can expose an unstyled frame. Remove only the copied links, preserving
-// the popout's own /src/popout.css stylesheet as the stable source of truth.
-for (const link of Array.from(targetDocument.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'))) {
-const href = link.getAttribute("href") ?? "";
-if (!href.includes("popout.css")) link.remove();
-}
-root.dataset.theme = source.dataset.theme;
-root.dataset.scheme = source.dataset.scheme;
-root.dataset.terminalTheme = source.dataset.terminalTheme;
-for (const property of [
-"--terminal-background",
-"--terminal-foreground",
-"--ui-font-family",
-"--ui-font-size",
-"--terminal-font-family",
-"--terminal-font-size",
-]) {
-const value = source.style.getPropertyValue(property);
-if (value) root.style.setProperty(property, value);
-}
-
-const revealPopout = () => {
-root.style.visibility = "visible";
-popout.window.dispatchEvent(new CustomEvent("remotehand-appearance-change"));
-if (isTauri()) {
-void invoke("show_pending_popout").catch((error) => {
-console.error("Failed to reveal native popout after Dockview setup", error);
-});
-}
-};
-const activePanel = popout.group.activePanel;
-if (activePanel?.api.component === "plugin") {
-const onPluginReady = () => {
-popout.window.removeEventListener("remotehand-plugin-popout-ready", onPluginReady);
-revealPopout();
-};
-popout.window.addEventListener("remotehand-plugin-popout-ready", onPluginReady, { once: true });
-} else {
-revealPopout();
-}
 });
 event.api.onDidRemovePopoutGroup(() => {
 const panelId = poppedOutPanelRef.current?.panelId;
