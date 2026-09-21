@@ -16,7 +16,7 @@ import { LocalTerminalPanel } from "./LocalTerminalPanel";
 import { SftpPanel } from "./SftpPanel";
 import { AppModal } from "./AppModal";
 import { PluginManager } from "./PluginManager";
-import { PluginPanel, type PluginPanelParams } from "./PluginPanel";
+import { PluginPanel, sendPluginPanelContext, type PluginPanelParams } from "./PluginPanel";
 import appIcon from "../src-tauri/icons/icon.png";
 import "./App.css";
 type Connection = {
@@ -691,8 +691,8 @@ title: panel.title,
 context,
 } satisfies PluginPanelParams;
 if (existing) {
-existing.api.updateParameters(params);
-existing.api.setActive();
+if (api.activePanel?.id !== existing.id) existing.api.setActive();
+sendPluginPanelContext(plugin.manifest.id, panel.id, context);
 return;
 }
 api.addPanel({
