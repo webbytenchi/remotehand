@@ -102,7 +102,7 @@ Further transfer queue polish and richer progress/ETA UX can continue later.
 - Plugin-scoped storage and host-mediated permissions - shipping
 - Host Monitor reference plugin - released separately as v0.5.0
 
-## V1.2 - Startup and System Tray — Complete
+## V1.2 - Startup, Tray, and Release Polish — Complete
 
 - Optional OS user-login startup
 - Start minimized for automatic launches
@@ -113,6 +113,10 @@ Further transfer queue polish and richer progress/ETA UX can continue later.
 - Dedicated Startup & Tray Settings tab
 - Appearance and Startup & Tray settings separated into tabs
 - Manual Windows acceptance validation for startup, minimize, tray menu actions, and exit
+- Single-instance restore/focus behavior
+- Main-window normal geometry and maximized-state restoration
+- SFTP parent/download destination workflow polish
+- Plugin and terminal popout lifecycle/rendering hardening
 
 ## Post-V1 Roadmap
 
@@ -170,45 +174,3 @@ Further transfer queue polish and richer progress/ETA UX can continue later.
 ## Guiding Rule
 
 RemoteHand should remain useful as a focused SSH/SFTP/terminal workstation manager even as later protocols are added. New protocol work should not destabilize the clean portable V1 baseline.
-Plugin architecture
-v1.0.3 — Plugin foundation
-
-Plugin API v1 foundation.
-
-Portable plugins/ directory and persisted enable/disable state.
-
-Plugin Manager UI.
-
-Safe folder-based installation.
-
-Strict manifest validation.
-
-Defensive file-count, size, path, symlink, and removal controls.
-
-Plugins disabled by default.
-
-v1.0.4 — Plugin Runtime v1
-
-Out-of-process executable plugin runtime.
-
-Versioned IPC and startup handshake.
-
-Process lifecycle and crash supervision.
-
-Generic sidebar, dock-panel, and command contributions.
-
-Plugin-owned web UI hosted through a controlled bridge.
-
-Generic Host API.
-
-Permission enforcement model.
-
-Plugin-scoped storage.
-
-Credential brokering.
-
-Public Plugin SDK documentation foundation.
-
-First production reference plugin developed separately as remotehand-plugin-vnc.
-
-The core must remain protocol-agnostic. VNC, RDP, X11, and future protocol implementations belong in independent plugin repositories.
