@@ -164,14 +164,6 @@ pub fn restore(app: &tauri::App, tracker: &WindowStateTracker) -> Result<(), Str
             });
         }
 
-        if saved.maximized {
-            window.maximize().map_err(|error| error.to_string())?;
-        }
-        if saved.fullscreen {
-            window
-                .set_fullscreen(true)
-                .map_err(|error| error.to_string())?;
-        }
     } else if let Ok(state) = WindowState::from_webview_window(&window) {
         if let Ok(mut normal) = tracker.normal.lock() {
             *normal = Some(state);
@@ -191,7 +183,13 @@ pub fn handle_event(tracker: &WindowStateTracker, window: &Window<Wry>, event: &
             if !is_maximized && !is_fullscreen {
                 if let Ok(state) = WindowState::from_window(window) {
                     if let Ok(mut normal) = tracker.normal.lock() {
-                        *normal = Some(state);
+                        *normal = Some(state.clone());
+                    }
+                    let mut normal_state = state;
+                    normal_state.maximized = false;
+                    normal_state.fullscreen = false;
+                    if let Err(error) = save_window_state(&normal_state) {
+                        log::error!("Failed to save window state: {error}");
                     }
                 }
             }
@@ -207,8 +205,11 @@ pub fn handle_event(tracker: &WindowStateTracker, window: &Window<Wry>, event: &
                 maximized: false,
                 fullscreen: false,
             });
-            state.maximized = is_maximized;
-            state.fullscreen = is_fullscreen;
+            // v1.2.1 reconstruction checkpoint #8 intentionally persists
+            // normal geometry only. Maximized/fullscreen restoration is isolated
+            // to the later #9 checkpoint.
+            state.maximized = false;
+            state.fullscreen = false;
             if let Err(error) = save_window_state(&state) {
                 log::error!("Failed to save window state: {error}");
             }
