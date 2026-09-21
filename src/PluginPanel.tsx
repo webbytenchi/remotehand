@@ -151,6 +151,12 @@ const [error, setError] = useState<string | null>(null);
 const pluginId = params?.pluginId ?? "";
 const panelId = params?.panelId ?? "";
 const context = params?.context;
+const repairedDocumentRef = useRef<Document | null>(null);
+const repairSheetRef = useRef<CSSStyleSheet | null>(null);
+const appearanceReadyRef = useRef(api.location.type !== "popout");
+const stylesReadyRef = useRef(api.location.type !== "popout");
+const readyDocumentRef = useRef<Document | null>(null);
+const [popoutStylesReady, setPopoutStylesReady] = useState(api.location.type !== "popout");
 useEffect(() => {
 let cancelled = false;
 setHtml(null);
@@ -216,12 +222,7 @@ iframeRef.current?.contentWindow?.postMessage({ type: "remotehand.plugin.event",
 }).then((dispose) => { if (cancelled) dispose(); else unlisten = dispose; });
 return () => { cancelled = true; unlisten?.(); };
 }, [pluginId]);
-const repairedDocumentRef = useRef<Document | null>(null);
-const repairSheetRef = useRef<CSSStyleSheet | null>(null);
-const appearanceReadyRef = useRef(api.location.type !== "popout");
-const stylesReadyRef = useRef(api.location.type !== "popout");
-const readyDocumentRef = useRef<Document | null>(null);
-const [popoutStylesReady, setPopoutStylesReady] = useState(api.location.type !== "popout");
+
 useLayoutEffect(() => {
 const markPopoutStylesReady = (doc: Document) => {
 stylesReadyRef.current = true;
