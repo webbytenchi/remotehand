@@ -1482,7 +1482,7 @@ title={sidebar.title}
 <DockviewReact
 className="remotehand-dockview"
 theme={resolvedTheme === "light" ? themeLight : themeDark}
-defaultTabRenderer={RemoteHandTab}
+defaultTabComponent={RemoteHandTab}
 components={components}
 watermarkComponent={WorkspaceWatermark}
 onReady={handleReady}
