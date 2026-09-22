@@ -708,16 +708,13 @@ if (api.activePanel?.id !== existing.id) existing.api.setActive();
 sendPluginPanelContext(plugin.manifest.id, panel.id, context);
 
 const ownerWindow = existing.api.getWindow();
-if (isTauri()) {
+if (existing.api.location.type === "popout") {
+ownerWindow.focus();
+} else if (isTauri()) {
 const mainWindow = getCurrentWindow();
 void mainWindow
 .show()
 .then(() => mainWindow.setFocus())
-.then(() => {
-if (existing.api.location.type === "popout") {
-window.setTimeout(() => ownerWindow.focus(), 75);
-}
-})
 .catch((error) => console.error("Failed to focus plugin panel window", error));
 } else {
 ownerWindow.focus();
