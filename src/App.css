@@ -60,6 +60,8 @@ select {
 }
 .sidebar {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
   border-right: 1px solid #1b212c;
   padding: 18px;
   background: #090d13;
