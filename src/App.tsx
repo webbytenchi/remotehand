@@ -431,6 +431,81 @@ return (
 </div>
 );
 }
+function RemoteHandTabView({
+props,
+onPopout,
+onDock,
+}: {
+props: IDockviewPanelHeaderProps;
+onPopout: (panelId: string) => void;
+onDock: (panelId: string) => void;
+}) {
+const [isPopout, setIsPopout] = useState(() => props.api.location.type === "popout");
+useEffect(() => {
+setIsPopout(props.api.location.type === "popout");
+const disposable = props.api.onDidLocationChange(() => {
+setIsPopout(props.api.location.type === "popout");
+});
+return () => disposable.dispose();
+}, [props.api]);
+const stopTabActionPointer = (event: React.PointerEvent<HTMLButtonElement>) => {
+event.preventDefault();
+event.stopPropagation();
+};
+const runTabAction = (event: React.MouseEvent<HTMLButtonElement>, action: () => void) => {
+event.preventDefault();
+event.stopPropagation();
+action();
+};
+return (
+<div className="remotehand-tab-shell">
+<DockviewDefaultTab {...props} hideClose />
+{props.tabLocation === "header" ? (
+<>
+<button
+type="button"
+className="remotehand-tab-action"
+title={isPopout ? "Dock panel back into RemoteHand" : "Pop out panel"}
+aria-label={isPopout ? "Dock panel back into RemoteHand" : "Pop out panel"}
+onPointerDown={stopTabActionPointer}
+onClick={(event) => runTabAction(event, () => {
+if (isPopout) onDock(props.api.id);
+else onPopout(props.api.id);
+})}
+>
+{isPopout ? (
+<svg viewBox="0 0 16 16" aria-hidden="true">
+<path d="M6.5 13.5h-4v-4" />
+<path d="M2.75 13.25 8 8" />
+<path d="M3.5 6.75V3.5h9v9H9.25" />
+</svg>
+) : (
+<svg viewBox="0 0 16 16" aria-hidden="true">
+<path d="M9.5 2.5h4v4" />
+<path d="M13.25 2.75 8 8" />
+<path d="M12.5 9.25v3.25h-9v-9h3.25" />
+</svg>
+)}
+</button>
+<button
+type="button"
+className="remotehand-tab-action"
+title="Close tab"
+aria-label="Close tab"
+onPointerDown={stopTabActionPointer}
+onClick={(event) => runTabAction(event, () => props.api.close())}
+>
+<svg viewBox="0 0 16 16" aria-hidden="true">
+<path d="M4 4l8 8" />
+<path d="M12 4 4 12" />
+</svg>
+</button>
+</>
+) : null}
+</div>
+);
+}
+
 function App() {
 const [connections, setConnections] = useState(initialConnections);
 const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
@@ -810,65 +885,13 @@ panel.api.setActive();
 console.error("Failed to dock panel back into RemoteHand", error);
 }
 }, []);
-const RemoteHandTab = useCallback((props: IDockviewPanelHeaderProps) => {
-const isPopout = props.api.location.type === "popout";
-const stopTabActionPointer = (event: React.PointerEvent<HTMLButtonElement>) => {
-event.preventDefault();
-event.stopPropagation();
-};
-const runTabAction = (event: React.MouseEvent<HTMLButtonElement>, action: () => void) => {
-event.preventDefault();
-event.stopPropagation();
-action();
-};
-return (
-<div className="remotehand-tab-shell">
-<DockviewDefaultTab {...props} hideClose />
-{props.tabLocation === "header" ? (
-<>
-<button
-type="button"
-className="remotehand-tab-action"
-title={isPopout ? "Dock panel back into RemoteHand" : "Pop out panel"}
-aria-label={isPopout ? "Dock panel back into RemoteHand" : "Pop out panel"}
-onPointerDown={stopTabActionPointer}
-onClick={(event) => runTabAction(event, () => {
-if (isPopout) dockPanel(props.api.id);
-else void popoutPanel(props.api.id);
-})}
->
-{isPopout ? (
-<svg viewBox="0 0 16 16" aria-hidden="true">
-<path d="M6.5 13.5h-4v-4" />
-<path d="M2.75 13.25 8 8" />
-<path d="M3.5 6.75V3.5h9v9H9.25" />
-</svg>
-) : (
-<svg viewBox="0 0 16 16" aria-hidden="true">
-<path d="M9.5 2.5h4v4" />
-<path d="M13.25 2.75 8 8" />
-<path d="M12.5 9.25v3.25h-9v-9h3.25" />
-</svg>
-)}
-</button>
-<button
-type="button"
-className="remotehand-tab-action"
-title="Close tab"
-aria-label="Close tab"
-onPointerDown={stopTabActionPointer}
-onClick={(event) => runTabAction(event, () => props.api.close())}
->
-<svg viewBox="0 0 16 16" aria-hidden="true">
-<path d="M4 4l8 8" />
-<path d="M12 4 4 12" />
-</svg>
-</button>
-</>
-) : null}
-</div>
-);
-}, [dockPanel, popoutPanel]);
+const RemoteHandTab = useCallback((props: IDockviewPanelHeaderProps) => (
+<RemoteHandTabView
+props={props}
+onPopout={(panelId) => { void popoutPanel(panelId); }}
+onDock={dockPanel}
+/>
+), [dockPanel, popoutPanel]);
 const resetLayout = useCallback(async () => {
 const api = apiRef.current;
 if (!api) return;
