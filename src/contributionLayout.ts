@@ -66,3 +66,22 @@ export function contributionOrderIndex(order: readonly string[], id: string, fal
   const index = order.indexOf(id);
   return index >= 0 ? index : fallback;
 }
+
+export function moveVisibleContribution(
+  rememberedOrder: readonly string[],
+  visibleOrder: readonly string[],
+  id: string,
+  delta: -1 | 1,
+): string[] {
+  const visibleIndex = visibleOrder.indexOf(id);
+  if (visibleIndex < 0) return [...rememberedOrder];
+  const targetVisibleIndex = visibleIndex + delta;
+  if (targetVisibleIndex < 0 || targetVisibleIndex >= visibleOrder.length) return [...rememberedOrder];
+  const targetId = visibleOrder[targetVisibleIndex];
+  const next = [...rememberedOrder];
+  const from = next.indexOf(id);
+  const to = next.indexOf(targetId);
+  if (from < 0 || to < 0) return next;
+  [next[from], next[to]] = [next[to], next[from]];
+  return next;
+}
