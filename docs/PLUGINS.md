@@ -200,8 +200,10 @@ Recognized permissions:
 | Permission | Grants |
 |---|---|
 | network.connect | Outbound network access. Declared for transparency - the host does not yet enforce this at the OS level. |
+| network.inspect | Query host network-interface identity through `network.interfaces`. |
 | clipboard.read | Read from the system clipboard. |
-| clipboard.write | Write to the system clipboard. |
+| clipboard.write | Write bounded text to the system clipboard through `clipboard.write`. |
+| tray.contribute | Publish and update generic per-plugin system-tray items through `tray.update`. |
 | credentials.use | Request a specific credential from the vault by opaque reference. |
 | credentials.store | Store a secret in the vault under the plugin namespace. |
 | vault.unlock | Request that the host unlock the vault with a passphrase. Sensitive. |
@@ -407,6 +409,57 @@ Key rules:
 - Keys must be 1 to 128 characters.
 - Allowed characters: A-Z, a-z, 0-9, dot, dash, underscore.
 - One JSON file per key, capped at 1 MiB.
+
+### clipboard.write
+
+Requires: `clipboard.write`.
+
+Writes text to the system clipboard through the host. The current host limit is 64 KiB per request.
+
+~~~json
+{
+ "type": "plugin.request",
+ "requestId": 3,
+ "method": "clipboard.write",
+ "params": { "text": "192.168.1.25" }
+}
+~~~
+
+A successful response returns a null result. Use this service from sandboxed plugin panels when a user explicitly chooses a copy action.
+
+### network.interfaces
+
+Requires: `network.inspect`.
+
+Returns network interfaces visible to the RemoteHand host. Each entry contains the interface name, an optional MAC address, and zero or more IPv4/IPv6 addresses.
+
+~~~json
+{
+ "type": "plugin.request",
+ "requestId": 4,
+ "method": "network.interfaces",
+ "params": {}
+}
+~~~
+
+Example result:
+
+~~~json
+{
+ "interfaces": [
+  {
+   "name": "Ethernet",
+   "macAddress": "00:11:22:33:44:55",
+   "addresses": [
+    { "address": "192.168.1.25", "family": "ipv4" },
+    { "address": "fe80::1234", "family": "ipv6" }
+   ]
+  }
+ ]
+}
+~~~
+
+Interface ordering is deterministic by name. Plugins decide which interfaces or addresses are useful for their own UI; core does not apply plugin-specific filtering.
 
 ### credentials.use
 
@@ -633,6 +686,8 @@ Each item in the items array describes one button:
 | size | object | no | Requested button size, clamped to bounds (see below). |
 | content | object | no | Content tree - see Content primitives. |
 | action | object | no | What happens when the user clicks. |
+| menu | object | no | Optional dropdown menu shown instead of the primary action when the item is clicked. |
+| icon | string | no | Built-in vector icon: `globe`, `ethernet`, `wifi`, `shield`, or `ipv6`. |
 
 ### Size clamping
 
@@ -666,6 +721,11 @@ Every content node has:
 - type - one of the primitives below.
 - tone - optional semantic tone: success, warning, danger, muted, or omitted (defaults to accent).
 - fontSize - optional, clamped to 8 to 18 px.
+- color - optional strict `#RRGGBB` foreground/series color.
+- backgroundColor - optional strict `#RRGGBB` background override.
+- borderColor - optional strict `#RRGGBB` border override.
+
+Series points can also supply their own strict `#RRGGBB` `color`, which takes precedence over the surrounding content tone/color.
 
 stack
 
@@ -719,6 +779,43 @@ A composite primitive: a prominent value with an inline sparkline below it. Unli
 - value - string or number.
 - series - array of points, capped at the last 60.
 
+### Menus
+
+A top-bar item may publish a dropdown menu:
+
+~~~json
+{
+ "menu": {
+  "items": [
+   {
+    "id": "copy-lan-ip",
+    "label": "Ethernet / LAN",
+    "value": "192.168.1.25",
+    "detail": "Ethernet",
+    "icon": "ethernet",
+    "action": {
+     "type": "plugin-call",
+     "method": "monitor.clipboard.write",
+     "params": { "text": "192.168.1.25" }
+    }
+   }
+  ]
+ }
+}
+~~~
+
+Menu rules:
+
+- At most 24 rows are rendered.
+- Row ids are capped at 128 characters; labels at 80; values at 256; details at 120.
+- `plugin-call` method names must match lowercase letters, numbers, dot, dash, or underscore and be at most 128 characters.
+- Clicking a menu row calls the named plugin runtime method through the existing runtime request channel.
+- When `menu` is present, clicking the top-bar item opens the menu rather than its primary `action`.
+
+### Built-in top-bar icons
+
+The generic icon names currently supported are `globe`, `ethernet`, `wifi`, `shield`, and `ipv6`. They are rendered by RemoteHand as theme-aware vector UI glyphs. Plugins should choose icons by semantic meaning; core does not attach protocol-specific behavior to them.
+
 ### Safety limits
 
 The host enforces these when parsing a topbar.update:
@@ -749,6 +846,51 @@ Currently recognized plugin events:
 Event names are matched exactly. A plugin that emits an unrecognized event name is not an error - the event is silently ignored.
 
 Events flow from the plugin runtime to the frontend over a single Tauri channel named remotehand-plugin-event. The panel bridge exposes those runtime events through window.remotehand.onEvent(name, listener). Core may forward event names that it does not interpret itself; UI behavior outside the documented core-handled events is the plugin's responsibility.
+
+## System-tray contributions
+
+A plugin that declares `tray.contribute` may publish runtime tray items by emitting a `plugin.event` named `tray.update`.
+
+~~~json
+{
+ "type": "plugin.event",
+ "event": "tray.update",
+ "payload": {
+  "items": [
+   {
+    "id": "server-1",
+    "title": "Server 1",
+    "tooltip": "Server 1 · 18 ms",
+    "tone": "success",
+    "visible": true,
+    "graphColor": "#70A7E8",
+    "backgroundColor": "#16263A",
+    "borderColor": "#3B5F8D",
+    "series": [
+     { "value": 18, "tone": "success", "color": "#70A7E8" }
+    ],
+    "action": {
+     "type": "open-panel",
+     "panel": "main",
+     "context": { "targetId": "server-1" }
+    }
+   }
+  ]
+ }
+}
+~~~
+
+Each `tray.update` replaces that plugin's current tray contribution set. Limits and behavior:
+
+- Maximum 64 tray items per update.
+- Item ids must be unique and use only letters, numbers, dot, dash, underscore, or colon.
+- Titles are required and capped at 128 characters; tooltips at 256.
+- Series are capped at 60 points. The current 32x32 tray renderer uses the most recent 12 points.
+- `tone` provides semantic fallback coloring; `graphColor`, `backgroundColor`, `borderColor`, and per-point `color` accept only strict `#RRGGBB`.
+- `visible: false` keeps the tray handle but hides it. This lets a plugin temporarily suppress an item without losing stable shell identity.
+- The supported tray action is `open-panel` with an optional context object.
+- On Windows, RemoteHand derives a deterministic GUID from the plugin id and item id so tray identity can survive icon updates and process restarts.
+- Disabling a plugin hides its retained tray handles. Permanent removal may discard those handles during uninstall.
 
 ## Installation safety
 
@@ -885,9 +1027,13 @@ It demonstrates nearly every part of the API v1 surface:
 - plugin.hello and host.ready handshake.
 - storage.plugin for persisting configured targets.
 - network.connect for ICMP monitoring.
+- network.inspect plus network.interfaces for host network identity.
+- clipboard.write for explicit copy actions from the sandboxed panel/top-bar menu.
+- tray.contribute plus tray.update for per-target live tray graphs.
 - A contributes.panels panel with sandboxed HTML and the bridge.
-- Runtime topbar.update events publishing one button per monitored target.
-- open-panel actions with context so clicking a button opens the panel on that target.
+- Runtime topbar.update events publishing target widgets and a network-identity menu.
+- Generic top-bar colors, built-in vector icons, menus, and plugin-call menu actions.
+- open-panel actions with context so clicking a tray or top-bar target opens the panel on that exact target.
 - monitor.alert events for state-change sounds.
 - Bounded configuration and package sizing.
 
