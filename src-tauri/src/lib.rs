@@ -138,11 +138,30 @@ fn focus_single_panel_popout(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn set_panel_popouts_topmost(app: tauri::AppHandle, topmost: bool) -> Result<(), String> {
-    for (label, popout) in app.webview_windows() {
-        if label.starts_with("panel-popout-") {
-            popout
-                .set_always_on_top(topmost)
+fn raise_drag_target_window(app: tauri::AppHandle, label: String) -> Result<(), String> {
+    if label != "main" && !label.starts_with("panel-popout-") {
+        return Err("refusing to raise a non-RemoteHand window".to_string());
+    }
+
+    for (candidate_label, candidate) in app.webview_windows() {
+        let is_workspace_window =
+            candidate_label == "main" || candidate_label.starts_with("panel-popout-");
+        if !is_workspace_window {
+            continue;
+        }
+        candidate
+            .set_always_on_top(candidate_label == label)
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn release_drag_target_windows(app: tauri::AppHandle) -> Result<(), String> {
+    for (label, window) in app.webview_windows() {
+        if label == "main" || label.starts_with("panel-popout-") {
+            window
+                .set_always_on_top(false)
                 .map_err(|error| error.to_string())?;
         }
     }
@@ -263,7 +282,8 @@ pub fn run() {
             hide_single_panel_popout,
             focus_main_window,
             focus_single_panel_popout,
-            set_panel_popouts_topmost,
+            raise_drag_target_window,
+            release_drag_target_windows,
             show_pending_popout,
             startup_tray::set_startup_enabled,
             startup_tray::startup_enabled,
