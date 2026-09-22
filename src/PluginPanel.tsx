@@ -196,6 +196,13 @@ if (pluginContextHandlers.get(contextKey) === postContext) pluginContextHandlers
 };
 }, [api, pluginId, panelId, html]);
 useEffect(() => {
+iframeRef.current?.contentWindow?.postMessage(
+{ type: "remotehand.plugin.context", context: context ?? {} },
+"*",
+);
+}, [context]);
+
+useEffect(() => {
 if (!isTauri() || !pluginId) return;
 let cancelled = false;
 let unlisten: (() => void) | undefined;
