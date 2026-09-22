@@ -314,10 +314,10 @@ impl StartupTrayState {
         Ok(())
     }
 
-    pub fn clear_plugin_trays(&self, plugin_id: &str) {
-        if let Ok(mut trays) = self.plugin_trays.lock() {
-            if let Some(plugin_trays) = trays.remove(plugin_id) {
-                for (_, tray) in plugin_trays {
+    pub fn hide_plugin_trays(&self, plugin_id: &str) {
+        if let Ok(trays) = self.plugin_trays.lock() {
+            if let Some(plugin_trays) = trays.get(plugin_id) {
+                for tray in plugin_trays.values() {
                     let _ = tray.set_visible(false);
                 }
             }
