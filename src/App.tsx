@@ -703,8 +703,18 @@ title: panel.title,
 context,
 } satisfies PluginPanelParams;
 if (existing) {
+existing.api.updateParameters(params);
 if (api.activePanel?.id !== existing.id) existing.api.setActive();
 sendPluginPanelContext(plugin.manifest.id, panel.id, context);
+
+const ownerWindow = existing.api.getWindow();
+ownerWindow.focus();
+if (existing.api.location.type !== "popout" && isTauri()) {
+void getCurrentWindow()
+.show()
+.then(() => getCurrentWindow().setFocus())
+.catch((error) => console.error("Failed to focus main window for plugin panel", error));
+}
 return;
 }
 api.addPanel({
