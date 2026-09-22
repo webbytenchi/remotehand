@@ -22,7 +22,7 @@ RemoteHand V1 is intentionally focused on the workflows needed for day-to-day te
 - Optional startup at user login and system-tray integration
 - Start minimized and minimize-to-tray support
 - Tray shortcuts for Home, Connections, New Terminal, and Settings
-- Terminal selection auto-copy, right-click paste, and multi-line paste confirmation
+- Terminal selection auto-copy, native xterm paste handling, right-click paste, and multi-line paste confirmation
 - Responsive Connections and Recent Activity cards
 
 ## Current V1 Architecture
@@ -69,6 +69,7 @@ Terminal interaction includes:
 - Automatic clipboard copy when terminal text is selected
 - Right-click paste workflow
 - Multi-line paste confirmation/protection
+- Isolated backend PTY ownership for restored terminal panels
 - Resize propagation to the native PTY
 - Configurable terminal font and theme
 
@@ -166,7 +167,7 @@ Settings are stored portably under `data/config/settings.json`.
 
 ## Plugins
 
-RemoteHand supports out-of-process executable plugins that extend the app without modifying core. Plugins can contribute panels, sidebar buttons, commands, and live top-bar widgets. Plugin API v1 has shipped and remains the current plugin API in v1.2.2.
+RemoteHand supports out-of-process executable plugins that extend the app without modifying core. Plugins can contribute panels, sidebar buttons, commands, and live top-bar widgets. Plugin API v1 has shipped and remains the current plugin API in v1.2.3.
 
 The plugin system is built on a simple rule: core owns infrastructure, plugins own functionality. RemoteHand core provides lifecycle, permissions, storage, IPC, and generic UI surfaces. Plugins provide protocol-specific behavior - for example, VNC, RDP, or host monitoring - that core does not need to know about.
 
@@ -211,7 +212,7 @@ RemoteHand is configured as portable-only. Tauri bundling/installers are disable
 
 ## V1 Status
 
-**Status: V1 feature baseline complete. RemoteHand v1.2.2 includes Plugin Runtime/API v1, startup and system-tray integration, SFTP workflow polish, single-instance behavior, improved window/popout restoration, and corrected PTY geometry synchronization for restored terminal sessions. The separate RemoteHand Host Monitor reference plugin v0.5.0 is validated on Windows x86_64.**
+**Status: V1 feature baseline complete. RemoteHand v1.2.3 includes Plugin Runtime/API v1, startup and system-tray integration, SFTP workflow polish, single-instance behavior, improved window/popout restoration, corrected PTY geometry synchronization, isolated restored-terminal PTY lifecycles, and native xterm paste handling. The separate RemoteHand Host Monitor reference plugin v0.5.0 is validated on Windows x86_64.**
 
 The current V1 has been exercised on the Windows Tauri build for the primary workspace, terminal, connection, Home, persistence, credential-vault, and SFTP workflows. Remaining work belongs to post-V1 expansion and hardening rather than the original bootstrap phase.
 

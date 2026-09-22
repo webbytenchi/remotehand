@@ -86,9 +86,6 @@ async function writeTerminal(sessionId: string, data: string) {
 await invoke("terminal_write", { sessionId, data });
 }
 
-function normalizePaste(text: string): string {
- return text.replace(/\r\n|\r|\n/g, "\r");
-}
 
 export function LocalTerminalPanel({
 api,
@@ -97,6 +94,7 @@ params,
 const hostRef = useRef<HTMLDivElement>(null);
 const terminalRef = useRef<Terminal | null>(null);
 const fitAddonRef = useRef<FitAddon | null>(null);
+const backendSessionIdRef = useRef<string | null>(null);
 const outputRef = useRef("");
 const [searchOpen, setSearchOpen] = useState(false);
 const [searchQuery, setSearchQuery] = useState("");
@@ -108,9 +106,17 @@ const sessionId = api.id;
 const shell = params?.shell ?? "default";
 const ssh = params?.ssh;
 const initialCommand = params?.initialCommand;
+const sendPaste = (text: string) => {
+const terminal = terminalRef.current;
+if (!terminal) return;
+terminal.paste(text);
+terminal.focus();
+};
 useEffect(() => {
 const host = hostRef.current;
 if (!host) return;
+const backendSessionId = `${sessionId}:${crypto.randomUUID()}`;
+backendSessionIdRef.current = backendSessionId;
 const fitAddon = new FitAddon();
 fitAddonRef.current = fitAddon;
 const terminal = new Terminal({
@@ -163,12 +169,17 @@ let cancelled = false;
 let unlistenOutput: UnlistenFn | undefined;
 let unlistenExit: UnlistenFn | undefined;
 let resizeObserver: ResizeObserver | undefined;
+let inputWriteQueue = Promise.resolve();
 
 const inputDisposable = terminal.onData((data) => {
-void writeTerminal(sessionId, data).catch((error) => {
+inputWriteQueue = inputWriteQueue
+.then(() => writeTerminal(backendSessionId, data))
+.catch((error) => {
+if (!cancelled) {
 terminal.writeln(
 "\r\n[RemoteHand] terminal input failed: " + String(error),
 );
+}
 });
 });
 
@@ -184,7 +195,7 @@ const start = async () => {
 unlistenOutput = await listen<TerminalOutputEvent>(
 "terminal-output",
 (event) => {
-if (event.payload.sessionId !== sessionId) return;
+if (event.payload.sessionId !== backendSessionId) return;
 outputRef.current += event.payload.data;
 if (outputRef.current.length > 2_000_000) {
 outputRef.current = outputRef.current.slice(-1_000_000);
@@ -201,7 +212,7 @@ return;
 unlistenExit = await listen<TerminalExitEvent>(
 "terminal-exit",
 (event) => {
-if (event.payload.sessionId !== sessionId) return;
+if (event.payload.sessionId !== backendSessionId) return;
 terminal.writeln("\r\n[RemoteHand] shell exited.");
 setStatus("Exited");
 },
@@ -217,7 +228,7 @@ fitAddon.fit();
 
 if (ssh) {
 await invoke("ssh_start", {
-sessionId,
+sessionId: backendSessionId,
 host: ssh.host,
 port: ssh.port,
 user: ssh.user,
@@ -227,7 +238,7 @@ initialCommand,
 });
 } else {
 await invoke("terminal_start", {
-sessionId,
+sessionId: backendSessionId,
 shell,
 rows: terminal.rows,
 cols: terminal.cols,
@@ -235,6 +246,7 @@ cols: terminal.cols,
 }
 
 if (cancelled) {
+void invoke("terminal_close", { sessionId: backendSessionId }).catch(() => undefined);
 unlistenOutput?.();
 unlistenExit?.();
 return;
@@ -261,7 +273,7 @@ return;
 
 fitAddon.fit();
 await invoke("terminal_resize", {
-sessionId,
+sessionId: backendSessionId,
 rows: terminal.rows,
 cols: terminal.cols,
 });
@@ -287,7 +299,7 @@ fitAddon.fit();
 if (terminal.cols === previousCols && terminal.rows === previousRows) return;
 
 void invoke("terminal_resize", {
-sessionId,
+sessionId: backendSessionId,
 rows: terminal.rows,
 cols: terminal.cols,
 }).catch(() => undefined);
@@ -312,6 +324,10 @@ inputDisposable.dispose();
 selectionDisposable.dispose();
 unlistenOutput?.();
 unlistenExit?.();
+void invoke("terminal_close", { sessionId: backendSessionId }).catch(() => undefined);
+if (backendSessionIdRef.current === backendSessionId) {
+backendSessionIdRef.current = null;
+}
 terminal.dispose();
 terminalRef.current = null;
 fitAddonRef.current = null;
@@ -339,8 +355,10 @@ if (foreground) rows.style.setProperty("color", foreground);
 }
 fitAddonRef.current?.fit();
 if (isTauri()) {
+const backendSessionId = backendSessionIdRef.current;
+if (!backendSessionId) return;
 void invoke("terminal_resize", {
-sessionId,
+sessionId: backendSessionId,
 rows: terminal.rows,
 cols: terminal.cols,
 }).catch(() => undefined);
@@ -419,8 +437,7 @@ setPendingPaste(text);
 return;
 }
 
-await writeTerminal(sessionId, normalizePaste(text));
-terminalRef.current?.focus();
+sendPaste(text);
 })
 .catch(() => undefined);
 };
@@ -463,8 +480,7 @@ setPendingPaste(text);
 return;
 }
 
-await writeTerminal(sessionId, normalizePaste(text));
-terminalRef.current?.focus();
+sendPaste(text);
 };
 const search = () => {
 const query = searchQuery.trim();
@@ -561,7 +577,7 @@ onConfirm={() => {
 const text = pendingPaste;
 setPendingPaste(null);
 if (!text) return;
-void writeTerminal(sessionId, normalizePaste(text)).finally(() => terminalRef.current?.focus());
+sendPaste(text);
 }}
 onCancel={() => {
 setPendingPaste(null);

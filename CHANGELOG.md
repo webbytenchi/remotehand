@@ -2,6 +2,24 @@
 
 All notable changes to RemoteHand are documented here.
 
+## `1.2.3` - 2026-09-22
+
+### Fixed
+
+- **Restored terminal session isolation.** Each mounted terminal panel now owns a unique backend PTY session and closes that exact session during cleanup. Restored Dockview panels no longer reuse stale backend sessions across React mount lifecycles, preventing the first typed or pasted character from being swallowed after restart.
+- **Terminal paste semantics.** Toolbar, right-click, and confirmed multi-line paste now use xterm's native paste path instead of rewriting newlines and bulk-writing clipboard text directly to the PTY.
+- **Ordered terminal input forwarding.** xterm-generated terminal replies and user input are serialized before they reach the native PTY so control replies cannot be overtaken by typing or paste data.
+
+### Verification
+
+- Windows x86_64 manual testing covered restoring a PowerShell panel across application restart, typing directly into the restored terminal, and pasting multi-line PowerShell without the previous single beep or missing first character.
+- SSH paste testing covered multi-line commands, shell continuations, loops, and here-documents, with behavior compared against Windows Terminal/OpenSSH and MobaXterm.
+- Restored SSH terminal rendering and resize behavior from v1.2.2 remained intact during regression testing.
+
+### Notes
+
+- RemoteHand continues to use the existing `portable-pty` backend. The fix isolates runtime PTY ownership without changing the terminal backend architecture.
+
 ## `1.2.2` - 2026-09-22
 
 ### Fixed
