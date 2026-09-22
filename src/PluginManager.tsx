@@ -21,7 +21,7 @@ type PluginInfo = {
 };
 
 type TopbarTone = "accent" | "success" | "warning" | "danger" | "muted";
-type TopbarSeriesPoint = { value?: number | null; tone?: TopbarTone };
+type TopbarSeriesPoint = { value?: number | null; tone?: TopbarTone; color?: string };
 type TopbarContent = {
   type: "text" | "metric" | "sparkline" | "metric-sparkline" | "status" | "progress" | "stack";
   label?: string;
@@ -30,6 +30,9 @@ type TopbarContent = {
   series?: TopbarSeriesPoint[];
   children?: TopbarContent[];
   fontSize?: number;
+  color?: string;
+  backgroundColor?: string;
+  borderColor?: string;
 };
 type TopbarAction = {
   type: "open-panel";
@@ -81,6 +84,10 @@ function parseTone(value: unknown): TopbarTone | undefined {
     : undefined;
 }
 
+function parseHexColor(value: unknown): string | undefined {
+  return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value) ? value : undefined;
+}
+
 function parseTopbarContent(input: unknown, depth = 0): TopbarContent | undefined {
   if (!input || typeof input !== "object" || depth > 2) return undefined;
   const value = input as Record<string, unknown>;
@@ -90,7 +97,7 @@ function parseTopbarContent(input: unknown, depth = 0): TopbarContent | undefine
     if (!entry || typeof entry !== "object") return [];
     const record = entry as Record<string, unknown>;
     if (record.value != null && typeof record.value !== "number") return [];
-    return [{ value: record.value as number | null | undefined, tone: parseTone(record.tone) }];
+    return [{ value: record.value as number | null | undefined, tone: parseTone(record.tone), color: parseHexColor(record.color) }];
   });
   const children = value.type === "stack" && Array.isArray(value.children)
     ? value.children.slice(0, 6).flatMap((child) => {
@@ -108,6 +115,9 @@ function parseTopbarContent(input: unknown, depth = 0): TopbarContent | undefine
     fontSize: typeof value.fontSize === "number" && Number.isFinite(value.fontSize)
       ? Math.min(18, Math.max(8, value.fontSize))
       : undefined,
+    color: parseHexColor(value.color),
+    backgroundColor: parseHexColor(value.backgroundColor),
+    borderColor: parseHexColor(value.borderColor),
   };
 }
 
@@ -434,16 +444,16 @@ export function PluginManager({
       </span>;
     }
     if (content.type === "text") {
-      return <span key={key} style={{ position: "relative", zIndex: 2, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: fontSize ?? 11, fontWeight: 600, lineHeight: 1.05, color: tone.text }}>{content.label ?? content.value ?? ""}</span>;
+      return <span key={key} style={{ position: "relative", zIndex: 2, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: fontSize ?? 11, fontWeight: 600, lineHeight: 1.05, color: content.color ?? tone.text }}>{content.label ?? content.value ?? ""}</span>;
     }
     if (content.type === "metric") {
-      return <span key={key} style={{ position: "relative", zIndex: 2, fontSize: fontSize ?? 14, fontWeight: 700, lineHeight: 1.05 }}>{content.value == null ? "—" : String(content.value)}</span>;
+      return <span key={key} style={{ position: "relative", zIndex: 2, fontSize: fontSize ?? 14, fontWeight: 700, lineHeight: 1.05, color: content.color }}>{content.value == null ? "—" : String(content.value)}</span>;
     }
     if (content.type === "status") {
-      return <span key={key} style={{ position: "relative", zIndex: 2, fontSize: fontSize ?? 12, fontWeight: 700, lineHeight: 1.1, color: tone.text }}>{content.label || content.value || ""}</span>;
+      return <span key={key} style={{ position: "relative", zIndex: 2, fontSize: fontSize ?? 12, fontWeight: 700, lineHeight: 1.1, color: content.color ?? tone.text }}>{content.label || content.value || ""}</span>;
     }
     if (content.type === "progress") {
-      return <span key={key} style={{ position: "relative", zIndex: 2, display: "grid", gap: 3 }}><span style={{ fontSize: fontSize ?? 12, fontWeight: 700 }}>{content.label || ""}</span><span style={{ display: "block", height: 7, borderRadius: 999, background: "var(--border, #39465a)", overflow: "hidden" }}><span style={{ display: "block", height: "100%", width: `${Math.max(0, Math.min(100, Number(content.value) || 0))}%`, background: tone.text }} /></span></span>;
+      return <span key={key} style={{ position: "relative", zIndex: 2, display: "grid", gap: 3 }}><span style={{ fontSize: fontSize ?? 12, fontWeight: 700 }}>{content.label || ""}</span><span style={{ display: "block", height: 7, borderRadius: 999, background: "var(--border, #39465a)", overflow: "hidden" }}><span style={{ display: "block", height: "100%", width: `${Math.max(0, Math.min(100, Number(content.value) || 0))}%`, background: content.color ?? tone.text }} /></span></span>;
     }
     const series = content.series?.slice(-60) ?? [];
     const max = Math.max(1, ...series.map((entry) => Number(entry.value) || 0));
@@ -452,11 +462,11 @@ export function PluginManager({
         {series.map((entry, index) => {
           const pointTone = toneVars(entry.tone || content.tone);
           const height = entry.value == null ? 4 : Math.max(3, Math.round(((Number(entry.value) || 0) / max) * Math.max(8, size.height - 24) * 0.88));
-          return <span key={`${key}:${index}`} style={{ flex: 1, minWidth: 1, height, borderRadius: 1, background: pointTone.text }} />;
+          return <span key={`${key}:${index}`} style={{ flex: 1, minWidth: 1, height, borderRadius: 1, background: entry.color ?? content.color ?? pointTone.text }} />;
         })}
       </span>;
     }
-    return <span key={key} style={{ display: "contents" }}><span style={{ position: "relative", zIndex: 2, fontSize: fontSize ?? 14, fontWeight: 700, lineHeight: 1.05 }}>{content.value == null ? "—" : String(content.value)}</span>{series.length ? <span aria-hidden="true" style={{ position: "absolute", left: 4, right: 4, bottom: 4, height: Math.max(16, Math.min(30, size.height - 22)), display: "flex", alignItems: "flex-end", gap: 1, opacity: 0.78 }}>{series.map((entry, index) => { const pointTone = toneVars(entry.tone || content.tone); const height = entry.value == null ? 5 : Math.max(3, Math.round(((Number(entry.value) || 0) / max) * Math.max(10, size.height - 18) * 0.88)); return <span key={`${key}:${index}`} style={{ flex: 1, minWidth: 1, height, borderRadius: 1, background: pointTone.text }} />; })}</span> : null}</span>;
+    return <span key={key} style={{ display: "contents" }}><span style={{ position: "relative", zIndex: 2, fontSize: fontSize ?? 14, fontWeight: 700, lineHeight: 1.05 }}>{content.value == null ? "—" : String(content.value)}</span>{series.length ? <span aria-hidden="true" style={{ position: "absolute", left: 4, right: 4, bottom: 4, height: Math.max(16, Math.min(30, size.height - 22)), display: "flex", alignItems: "flex-end", gap: 1, opacity: 0.78 }}>{series.map((entry, index) => { const pointTone = toneVars(entry.tone || content.tone); const height = entry.value == null ? 5 : Math.max(3, Math.round(((Number(entry.value) || 0) / max) * Math.max(10, size.height - 18) * 0.88)); return <span key={`${key}:${index}`} style={{ flex: 1, minWidth: 1, height, borderRadius: 1, background: entry.color ?? content.color ?? pointTone.text }} />; })}</span> : null}</span>;
   };
 
   const renderedTopbar = Object.entries(topbarItems).flatMap(([pluginId, items]) =>
@@ -491,9 +501,9 @@ export function PluginManager({
             gap: 1,
             padding: "3px 7px",
             marginLeft: 6,
-            border: `1px solid ${hasGenericContent ? genericTone.border : (legacySeverity === "offline" ? "var(--danger-border, #7d3b3b)" : legacySeverity === "high-latency" ? "var(--warning-border, #80622e)" : legacySeverity === "normal" ? "var(--success-text, #355f47)" : "var(--border, #39465a)")}`,
+            border: `1px solid ${hasGenericContent ? (item.content?.borderColor ?? genericTone.border) : (legacySeverity === "offline" ? "var(--danger-border, #7d3b3b)" : legacySeverity === "high-latency" ? "var(--warning-border, #80622e)" : legacySeverity === "normal" ? "var(--success-text, #355f47)" : "var(--border, #39465a)")}`,
             borderRadius: 7,
-            background: hasGenericContent ? genericTone.surface : (legacySeverity === "offline" ? "var(--danger-surface, #29171a)" : legacySeverity === "high-latency" ? "var(--warning-surface, #2a2417)" : legacySeverity === "normal" ? "var(--success-surface, #111a17)" : "var(--surface-raised, #1d252f)"),
+            background: hasGenericContent ? (item.content?.backgroundColor ?? genericTone.surface) : (legacySeverity === "offline" ? "var(--danger-surface, #29171a)" : legacySeverity === "high-latency" ? "var(--warning-surface, #2a2417)" : legacySeverity === "normal" ? "var(--success-surface, #111a17)" : "var(--surface-raised, #1d252f)"),
             color: hasGenericContent ? "var(--text, #dce4ee)" : "#dce4ee",
             cursor: "pointer",
             textAlign: "center",
