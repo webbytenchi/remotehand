@@ -1382,25 +1382,25 @@ console.error("Failed to close empty popout window or restore main-window focus"
 });
 event.api.onDidRemovePanel((panel) => {
 const sessionId = panel.id;
-const popoutWindow =
-poppedOutPanelRef.current?.panelId === sessionId
-? poppedOutPanelRef.current.window
+const panelWindow =
+panel.api.location.type === "popout"
+? (panel.api.getWindow() as RemoteHandPopoutWindow)
 : undefined;
+const nativeLabel = panelWindow?.__REMOTEHAND_NATIVE_WINDOW_LABEL__;
 window.setTimeout(() => {
 if (event.api.getPanel(sessionId)) return;
-if (!popoutWindow) return;
-if (!popoutWindow.closed) {
-popoutWindow.close();
-}
-if (!isTauri()) return;
-void getAllWindows().then(async (windows) => {
-const nativePopouts = windows.filter((candidate) =>
-candidate.label.startsWith("panel-popout-")
+if (!panelWindow) return;
+const popoutStillHasPanels = event.api.panels.some(
+(current) =>
+current.api.location.type === "popout" &&
+current.api.getWindow() === panelWindow,
 );
-if (nativePopouts.length === 1) {
-await nativePopouts[0].close();
+if (popoutStillHasPanels) return;
+if (!panelWindow.closed) {
+panelWindow.close();
 }
-}).catch((error) => {
+if (!isTauri() || !nativeLabel) return;
+void invoke("close_panel_popout", { label: nativeLabel }).catch((error) => {
 console.error("Failed to close native popout after its last tab closed", error);
 });
 }, 0);
