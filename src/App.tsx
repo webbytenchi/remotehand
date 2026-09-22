@@ -123,6 +123,40 @@ directory: string;
 type RemoteHandPopoutWindow = Window & {
 __REMOTEHAND_NATIVE_WINDOW_LABEL__?: string;
 };
+const tabDragAssistDocuments = new WeakSet<Document>();
+
+function installTabDragWindowAssist(targetDocument: Document) {
+if (tabDragAssistDocuments.has(targetDocument) || !isTauri()) return;
+tabDragAssistDocuments.add(targetDocument);
+const setPopoutsTopmost = async (topmost: boolean) => {
+try {
+const windows = await getAllWindows();
+await Promise.all(
+windows
+.filter((candidate) => candidate.label.startsWith("panel-popout-"))
+.map((candidate) => candidate.setAlwaysOnTop(topmost)),
+);
+} catch (error) {
+console.error("Failed to update popout stacking during tab drag", error);
+}
+};
+const isRemoteHandTabDrag = (event: DragEvent) => {
+const target = event.target as { closest?: (selector: string) => Element | null } | null;
+return Boolean(target?.closest?.(".remotehand-tab-shell"));
+};
+const onDragStart = (event: DragEvent) => {
+if (!isRemoteHandTabDrag(event)) return;
+void setPopoutsTopmost(true);
+};
+const release = () => {
+void setPopoutsTopmost(false);
+};
+targetDocument.addEventListener("dragstart", onDragStart, true);
+targetDocument.addEventListener("dragend", release, true);
+targetDocument.addEventListener("drop", release, true);
+targetDocument.defaultView?.addEventListener("beforeunload", release, { once: true });
+}
+
 const HOME_MESSAGES = [
 "Welcome back. Here is your recent activity.",
 "Good to see you again. Pick up where you left off.",
@@ -517,6 +551,9 @@ onClick={(event) => runTabAction(event, () => props.api.close())}
 }
 
 function App() {
+useEffect(() => {
+installTabDragWindowAssist(document);
+}, []);
 const [connections, setConnections] = useState(initialConnections);
 const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
 const [homeMessageIndex, setHomeMessageIndex] = useState(() => Math.floor(Math.random() * HOME_MESSAGES.length));
@@ -1324,6 +1361,7 @@ count: event.api.getPopouts().length,
 window: popout.window,
 };
 const targetDocument = popout.window.document;
+installTabDragWindowAssist(targetDocument);
 const root = targetDocument.documentElement;
 const source = document.documentElement;
 root.dataset.theme = source.dataset.theme;
