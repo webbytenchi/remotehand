@@ -2,6 +2,38 @@
 
 All notable changes to RemoteHand are documented here.
 
+## `1.2.4` - 2026-09-23
+
+### Added
+
+- **Generic plugin system-tray contributions.** Running plugins with the `tray.contribute` permission can publish per-item tray icons with bounded live series data, semantic tones, optional `#RRGGBB` graph/background/border overrides, visibility control, tooltips, and `open-panel` actions carrying panel context.
+- **Stable Windows plugin tray identity.** Plugin tray items use deterministic GUIDs derived from plugin and item ids, preserving their shell identity across updates and application restarts.
+- **Generic plugin top-bar menus and icons.** Top-bar items can expose bounded dropdown menus whose rows invoke plugin runtime methods, plus built-in `globe`, `ethernet`, `wifi`, `shield`, and `ipv6` vector icons.
+- **Generic top-bar color overrides.** Top-bar content and series points can supply validated text/graph, background, and border colors.
+- **Plugin host services for network identity and clipboard writes.** `network.interfaces` exposes local interface names, MAC addresses, and IP addresses behind `network.inspect`; `clipboard.write` writes bounded text behind `clipboard.write`.
+
+### Improved
+
+- **Plugin tray lifecycle.** Normal plugin disable hides contributed tray icons without destroying their stable shell handles, so re-enable and restart behavior remains predictable.
+- **Plugin panel targeting and focus.** Tray and top-bar `open-panel` actions preserve live target context and focus the owning docked or single-popout Host Monitor panel, including restoration from minimized state.
+- **Generic contribution validation.** New tray, top-bar menu, icon, and color fields are parsed defensively with bounded item counts, text sizes, series sizes, and strict color/method formats.
+
+### Fixed
+
+- **Plugin disable freeze.** Removed duplicate tray cleanup during runtime shutdown that could block while disabling a plugin.
+- **Tray target routing.** Clicking a per-target tray graph now delivers the clicked target context rather than falling back to a previously selected or default target.
+- **GUID tray tooltip updates.** Windows GUID-backed tray icons now update tooltip text correctly.
+
+### Verification
+
+- Host Monitor integration was manually exercised on Windows with multiple per-target tray icons, disable/re-enable, target disable/re-enable, stable tray ordering/identity, docked and popped-out panel focus, exact target routing, and top-bar interaction.
+- RemoteHand frontend builds and Rust checks/tests were run repeatedly throughout the feature branch. A final pre-tag validation pass is required before the `v1.2.4` fallback tag is created.
+
+### Notes
+
+- Plugin API remains version 1; these are backward-compatible additions to the existing generic plugin host surface.
+- The `tray-icon` crate remains vendored temporarily to backport upstream Windows GUID support.
+
 ## `1.2.3` - 2026-09-22
 
 ### Fixed
