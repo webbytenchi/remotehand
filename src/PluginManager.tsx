@@ -573,7 +573,14 @@ export function PluginManager({
                     </div>
                     <span className="plugin-meta">v{plugin.manifest.version} · {plugin.manifest.author} · API {plugin.manifest.apiVersion}</span>
                     <p>{plugin.manifest.description}</p>
-                    <div className="plugin-permissions"><strong>Permissions</strong>{plugin.manifest.permissions.length ? plugin.manifest.permissions.map((permission) => <span key={permission}>{permission}</span>) : <span>None</span>}</div>
+                    <div className="plugin-permissions">
+                      <strong>Permissions</strong>
+                      <div className="plugin-capabilities">
+                        {plugin.manifest.permissions.length
+                          ? plugin.manifest.permissions.map((permission) => <span key={permission}>{permission}</span>)
+                          : <span>None</span>}
+                      </div>
+                    </div>
                   </div>
                   <div className="plugin-actions">
                     <button type="button" onClick={() => void setEnabled(plugin, !plugin.enabled)} disabled={busy} style={{ ...managerButtonStyle, opacity: busy ? 0.45 : 1, cursor: busy ? "default" : "pointer" }}>{plugin.enabled ? "Disable" : "Enable"}</button>
