@@ -203,6 +203,14 @@ pub struct TrayIconAttributes {
     ///   on the user's panel.  This may not be shown in all visualizations.
     /// - **Windows:** Unsupported.
     pub title: Option<String>,
+
+    /// A stable identity for the tray icon, as a UUID in `u128` form. **Windows only**.
+    ///
+    /// Windows remembers per-icon user settings keyed on the icon identity.
+    /// A fixed GUID lets those settings survive application restarts and updates.
+    ///
+    /// - **Linux / macOS:** Ignored.
+    pub guid: Option<u128>,
 }
 
 impl Default for TrayIconAttributes {
@@ -216,6 +224,7 @@ impl Default for TrayIconAttributes {
             menu_on_left_click: true,
             menu_on_right_click: true,
             title: None,
+            guid: None,
         }
     }
 }
@@ -322,6 +331,12 @@ impl TrayIconBuilder {
     /// - **Linux:** Unsupported.
     pub fn with_menu_on_right_click(mut self, enable: bool) -> Self {
         self.attrs.menu_on_right_click = enable;
+        self
+    }
+
+    /// Set a stable identity GUID for this tray icon. **Windows only**.
+    pub fn with_guid(mut self, guid: u128) -> Self {
+        self.attrs.guid = Some(guid);
         self
     }
 
