@@ -65,6 +65,17 @@ fn close_current_window(window: tauri::WebviewWindow) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn close_panel_popout(app: tauri::AppHandle, label: String) -> Result<(), String> {
+    if !label.starts_with("panel-popout-") {
+        return Err("refusing to close a non-panel popout window".to_string());
+    }
+    let window = app
+        .get_webview_window(&label)
+        .ok_or_else(|| format!("panel popout {label} is not available"))?;
+    window.close().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 fn close_panel_popouts(app: tauri::AppHandle) -> Result<(), String> {
     let popouts: Vec<_> = app
         .webview_windows()
@@ -235,6 +246,7 @@ pub fn run() {
             local_os,
             reveal_path,
             close_current_window,
+            close_panel_popout,
             close_panel_popouts,
             hide_single_panel_popout,
             focus_main_window,
@@ -276,6 +288,11 @@ pub fn run() {
                 .on_new_window(move |url, features| {
                     let sequence = popout_counter.fetch_add(1, Ordering::Relaxed) + 1;
                     let label = format!("panel-popout-{sequence}");
+                    let native_label = label.clone();
+                    let init_script = format!(
+                        "window.__REMOTEHAND_NATIVE_WINDOW_LABEL__ = {};",
+                        serde_json::to_string(&native_label).expect("window label serializes")
+                    );
                     let builder = tauri::WebviewWindowBuilder::new(
                         &popout_app,
                         label,
@@ -283,6 +300,7 @@ pub fn run() {
                             "about:blank".parse().expect("valid about:blank URL"),
                         ),
                     )
+                    .initialization_script(&init_script)
                     .window_features(features)
                     // Dockview first receives an about:blank native WebView, then
                     // navigates it to popout.html and moves the panel DOM into it.
