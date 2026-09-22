@@ -36,6 +36,13 @@ impl Default for Settings {
         }
     }
 }
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct UiContributionLayout {
+    pub sidebar_order: Vec<String>,
+    pub topbar_order: Vec<String>,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SavedConnection {
@@ -77,6 +84,9 @@ fn settings_path() -> Result<PathBuf, String> {
 fn recent_activity_path() -> Result<PathBuf, String> {
     Ok(data_root()?.join("activity").join("recent.json"))
 }
+fn ui_contribution_layout_path() -> Result<PathBuf, String> {
+    Ok(data_root()?.join("config").join("ui-contributions.json"))
+}
 #[tauri::command]
 pub fn load_settings() -> Result<Settings, String> {
     let path = settings_path()?;
@@ -96,6 +106,27 @@ pub fn save_settings(settings: Settings) -> Result<(), String> {
     let contents = serde_json::to_string_pretty(&settings).map_err(|error| error.to_string())?;
     fs::write(path, contents).map_err(|error| error.to_string())
 }
+#[tauri::command]
+pub fn load_ui_contribution_layout() -> Result<UiContributionLayout, String> {
+    let path = ui_contribution_layout_path()?;
+    if !path.exists() {
+        return Ok(UiContributionLayout::default());
+    }
+    let contents = fs::read_to_string(&path).map_err(|error| error.to_string())?;
+    serde_json::from_str(&contents).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn save_ui_contribution_layout(layout: UiContributionLayout) -> Result<(), String> {
+    let path = ui_contribution_layout_path()?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| "failed to resolve config directory".to_string())?;
+    fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    let contents = serde_json::to_string_pretty(&layout).map_err(|error| error.to_string())?;
+    fs::write(path, contents).map_err(|error| error.to_string())
+}
+
 #[tauri::command]
 pub fn load_connections() -> Result<Vec<SavedConnection>, String> {
     let path = connections_path()?;
