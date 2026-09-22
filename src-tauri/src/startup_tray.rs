@@ -374,6 +374,34 @@ impl StartupTrayState {
             log::warn!("Failed to hide plugin trays for {plugin_id}: {error}");
         }
     }
+
+    pub fn remove_plugin_trays(&self, app: &AppHandle, plugin_id: &str) {
+        let prefix = format!("plugin-tray:{plugin_id}:");
+        if let Ok(mut actions) = self.plugin_tray_actions.lock() {
+            actions.retain(|key, _| !key.starts_with(&prefix));
+        }
+
+        let plugin_id = plugin_id.to_string();
+        let plugin_id_for_main = plugin_id.clone();
+        if let Err(error) = app.run_on_main_thread(move || {
+            let prefix = format!("plugin-tray:{plugin_id_for_main}:");
+            PLUGIN_TRAYS.with(|slot| {
+                let mut trays = slot.borrow_mut();
+                let keys: Vec<String> = trays
+                    .keys()
+                    .filter(|key| key.starts_with(&prefix))
+                    .cloned()
+                    .collect();
+                for key in keys {
+                    if let Some(tray) = trays.remove(&key) {
+                        let _ = tray.set_visible(false);
+                    }
+                }
+            });
+        }) {
+            log::warn!("Failed to remove plugin trays for {plugin_id}: {error}");
+        }
+    }
 }
 
 pub fn handle_plugin_tray_event(app: &AppHandle, event: TrayIconEvent) {
