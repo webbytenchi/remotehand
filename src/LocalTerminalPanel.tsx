@@ -105,6 +105,16 @@ const sessionId = api.id;
 const shell = params?.shell ?? "default";
 const ssh = params?.ssh;
 const initialCommand = params?.initialCommand;
+const sendPaste = (text: string) => {
+const terminal = terminalRef.current;
+if (!terminal) return;
+if (!ssh && shell === "powershell") {
+terminal.input(text, true);
+} else {
+terminal.paste(text);
+}
+terminal.focus();
+};
 useEffect(() => {
 const host = hostRef.current;
 if (!host) return;
@@ -113,7 +123,6 @@ fitAddonRef.current = fitAddon;
 const terminal = new Terminal({
 cursorBlink: true,
 convertEol: false,
-ignoreBracketedPasteMode: !ssh && shell === "powershell",
 documentOverride: host.ownerDocument,
 fontFamily: getComputedStyle(host.ownerDocument.documentElement).getPropertyValue("--terminal-font-family").trim() || ["JetBrains Mono", "Cascadia Code", "Cascadia Mono", "Consolas", "Liberation Mono", "monospace"].join(", "),
 fontSize: Number.parseInt(getComputedStyle(host.ownerDocument.documentElement).getPropertyValue("--terminal-font-size"), 10) || 13,
@@ -417,10 +426,7 @@ setPendingPaste(text);
 return;
 }
 
-const terminal = terminalRef.current;
-if (!terminal) return;
-terminal.paste(text);
-terminal.focus();
+sendPaste(text);
 })
 .catch(() => undefined);
 };
@@ -463,10 +469,7 @@ setPendingPaste(text);
 return;
 }
 
-const terminal = terminalRef.current;
-if (!terminal) return;
-terminal.paste(text);
-terminal.focus();
+sendPaste(text);
 };
 const search = () => {
 const query = searchQuery.trim();
@@ -563,10 +566,7 @@ onConfirm={() => {
 const text = pendingPaste;
 setPendingPaste(null);
 if (!text) return;
-const terminal = terminalRef.current;
-if (!terminal) return;
-terminal.paste(text);
-terminal.focus();
+sendPaste(text);
 }}
 onCancel={() => {
 setPendingPaste(null);
