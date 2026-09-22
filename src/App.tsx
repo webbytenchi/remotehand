@@ -458,7 +458,7 @@ const [pluginsOpen, setPluginsOpen] = useState(false);
 const [plugins, setPlugins] = useState<PluginInfo[]>([]);
 const [topbarContributionItems, setTopbarContributionItems] = useState<Array<{ id: string; label: string }>>([]);
 const [uiContributionLayout, setUiContributionLayout] = useState<UiContributionLayout>(EMPTY_UI_CONTRIBUTION_LAYOUT);
-const [uiContributionLayoutLoaded, setUiContributionLayoutLoaded] = useState(() => !isTauri());
+const [uiContributionLayoutLoaded, setUiContributionLayoutLoaded] = useState(false);
 const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("dark");
 const [settingsLoaded, setSettingsLoaded] = useState(() => !isTauri());
 const settingsPersistenceEnabledRef = useRef(true);
