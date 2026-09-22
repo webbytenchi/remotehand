@@ -252,7 +252,8 @@ fn apply_plugin_tray_update(plugin_id: &str, update: PluginTrayUpdate) -> Result
                 continue;
             }
 
-            let tray = tray_icon::TrayIconBuilder::with_id(key.clone())
+            let tray = tray_icon::TrayIconBuilder::new()
+                .with_id(key.clone())
                 .with_guid(stable_plugin_tray_guid(&key))
                 .with_icon(icon)
                 .with_tooltip(&tooltip)
@@ -331,8 +332,9 @@ impl StartupTrayState {
         }
 
         let plugin_id = plugin_id.to_string();
+        let plugin_id_for_main = plugin_id.clone();
         if let Err(error) = app.run_on_main_thread(move || {
-            let prefix = format!("plugin-tray:{plugin_id}:");
+            let prefix = format!("plugin-tray:{plugin_id_for_main}:");
             PLUGIN_TRAYS.with(|slot| {
                 for (key, tray) in slot.borrow().iter() {
                     if key.starts_with(&prefix) {
