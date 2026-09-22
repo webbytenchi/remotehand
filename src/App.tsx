@@ -529,12 +529,12 @@ const legacyTheme = localStorage.getItem(THEME_KEY);
 return { ...DEFAULT_SETTINGS, theme: legacyTheme === "light" ? "light" : "dark" };
 });
 const [settingsOpen, setSettingsOpen] = useState(false);
-const [settingsTab, setSettingsTab] = useState<"appearance" | "startup" | "layout" | "papa">("appearance");
+const [settingsTab, setSettingsTab] = useState<"appearance" | "startup" | "layout" | "plugins" | "papa">("appearance");
 const [papaTabUnlocked, setPapaTabUnlocked] = useState(false);
 const [papaConfettiActive, setPapaConfettiActive] = useState(false);
 const papaSequenceRef = useRef<string[]>([]);
 const papaAudioRef = useRef<HTMLAudioElement | null>(null);
-const [pluginsOpen, setPluginsOpen] = useState(false);
+const [pluginSettingsHost, setPluginSettingsHost] = useState<HTMLDivElement | null>(null);
 const [plugins, setPlugins] = useState<PluginInfo[]>([]);
 const [topbarContributionItems, setTopbarContributionItems] = useState<Array<{ id: string; label: string }>>([]);
 const [uiContributionLayout, setUiContributionLayout] = useState<UiContributionLayout>(EMPTY_UI_CONTRIBUTION_LAYOUT);
@@ -1427,7 +1427,7 @@ const commands = [
 { label: "Split terminal right", hint: "Split", run: () => addTerminal("right") },
 { label: "Split terminal below", hint: "Split", run: () => addTerminal("below") },
 { label: "Open connections", hint: "Panel", run: addConnections },
-{ label: "Manage plugins", hint: "Add-ons", run: () => setPluginsOpen(true) },
+{ label: "Manage plugins", hint: "Add-ons", run: () => { setSettingsTab("plugins"); setSettingsOpen(true); } },
 { label: "Float active panel", hint: "Layout", run: popoutActive },
 { label: "Undo layout change", hint: "Ctrl/Cmd+Z", run: undoLayout },
 { label: "Redo layout change", hint: "Ctrl/Cmd+Y", run: redoLayout },
@@ -1464,7 +1464,6 @@ sidebarAvailableIds,
 );
 
 const coreTopbarItems = [
-{ id: "core:plugins", label: "Plugins" },
 { id: "core:settings", label: "Settings" },
 ];
 const topbarCatalog = [...topbarContributionItems, ...coreTopbarItems];
@@ -1508,7 +1507,6 @@ return (
 </div>
 </div>
 <div className="topbar-actions">
-<button className="topbar-button icon-button" style={{ order: contributionOrderIndex(resolvedTopbarOrder, "core:plugins") }} type="button" onClick={() => setPluginsOpen(true)} title="Plugins" aria-label="Plugins">🧩</button>
 <button
 className="topbar-button icon-button settings-button"
 style={{ order: contributionOrderIndex(resolvedTopbarOrder, "core:settings") }}
@@ -1609,8 +1607,9 @@ popoutUrl="popout.html"
 </section>
 </section>
 <PluginManager
-open={pluginsOpen}
-onClose={() => setPluginsOpen(false)}
+open={settingsOpen && settingsTab === "plugins"}
+onClose={() => setSettingsOpen(false)}
+embeddedHost={pluginSettingsHost}
 onChanged={() => void refreshPlugins()}
 topbarOrder={resolvedTopbarOrder}
 onTopbarItemsChanged={setTopbarContributionItems}
@@ -1631,6 +1630,7 @@ tabs={<div className="settings-tabs" role="tablist" aria-label="Settings section
 <button type="button" role="tab" aria-selected={settingsTab === "appearance"} className={settingsTab === "appearance" ? "active" : ""} onClick={() => setSettingsTab("appearance")}>Appearance</button>
 <button type="button" role="tab" aria-selected={settingsTab === "startup"} className={settingsTab === "startup" ? "active" : ""} onClick={() => setSettingsTab("startup")}>Startup &amp; Tray</button>
 <button type="button" role="tab" aria-selected={settingsTab === "layout"} className={settingsTab === "layout" ? "active" : ""} onClick={() => setSettingsTab("layout")}>Interface</button>
+<button type="button" role="tab" aria-selected={settingsTab === "plugins"} className={settingsTab === "plugins" ? "active" : ""} onClick={() => setSettingsTab("plugins")}>Plugins</button>
 {papaTabUnlocked ? <span className="papa-tab-reveal"><button type="button" role="tab" aria-selected={settingsTab === "papa"} className={settingsTab === "papa" ? "active" : ""} onClick={() => { setSettingsTab("papa"); startPapaAudio(); }}>Papa</button>{papaConfettiActive ? <span className="papa-heart-confetti" aria-hidden="true">{Array.from({ length: 10 }, (_, index) => <span key={index}>♥</span>)}</span> : null}</span> : null}
 </div>}>
 {settingsTab === "appearance" ? (
@@ -1771,6 +1771,13 @@ return <div key={id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1
 </section>
 </div>
 <button type="button" className="settings-reset" onClick={resetContributionOrdering}>Reset interface order</button>
+</div>
+) : settingsTab === "plugins" ? (
+<div className="settings-tab-content">
+<div className="settings-section-heading">
+<span>Install, enable, disable, and remove RemoteHand plugins.</span>
+</div>
+<div ref={setPluginSettingsHost} />
 </div>
 ) : (
 <div className="settings-tab-content papa-settings">
