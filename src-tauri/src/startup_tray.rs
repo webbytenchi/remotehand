@@ -1,7 +1,10 @@
-use std::sync::{Arc, Mutex};
+use std::{collections::BTreeMap, sync::{Arc, Mutex}};
+
+use serde::{Deserialize, Serialize};
 
 use tauri::{
     menu::{MenuBuilder, MenuItem, MenuItemBuilder, PredefinedMenuItem},
+    image::Image,
     tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, State, Wry, Window,
 };
@@ -13,6 +16,8 @@ pub struct StartupTrayState {
     window_item: Arc<Mutex<Option<MenuItem<Wry>>>>,
     minimize_to_tray_on_close: Arc<Mutex<bool>>,
     show_in_system_tray: Arc<Mutex<bool>>,
+    plugin_trays: Arc<Mutex<BTreeMap<String, BTreeMap<String, TrayIcon>>>>,
+    plugin_tray_actions: Arc<Mutex<BTreeMap<String, PluginTrayAction>>>,
 }
 
 impl Default for StartupTrayState {
@@ -22,6 +27,8 @@ impl Default for StartupTrayState {
             window_item: Arc::new(Mutex::new(None)),
             minimize_to_tray_on_close: Arc::new(Mutex::new(false)),
             show_in_system_tray: Arc::new(Mutex::new(true)),
+            plugin_trays: Arc::new(Mutex::new(BTreeMap::new())),
+            plugin_tray_actions: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 }
@@ -51,6 +58,267 @@ impl StartupTrayState {
         }
         let _ = app.emit("remotehand-tray-visibility-changed", value);
         Ok(())
+    }
+}
+
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PluginTrayAction {
+    #[serde(rename = "type")]
+    pub action_type: String,
+    #[serde(default)]
+    pub panel: String,
+    #[serde(default)]
+    pub context: serde_json::Value,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PluginTrayPoint {
+    #[serde(default)]
+    value: Option<f64>,
+    #[serde(default)]
+    tone: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PluginTrayItem {
+    id: String,
+    title: String,
+    #[serde(default)]
+    tooltip: String,
+    #[serde(default)]
+    tone: String,
+    #[serde(default)]
+    series: Vec<PluginTrayPoint>,
+    #[serde(default)]
+    action: Option<PluginTrayAction>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PluginTrayUpdate {
+    #[serde(default)]
+    items: Vec<PluginTrayItem>,
+}
+
+fn valid_tray_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_' | b':'))
+}
+
+fn tray_color(tone: &str) -> [u8; 4] {
+    match tone {
+        "success" => [56, 189, 126, 255],
+        "warning" => [232, 176, 74, 255],
+        "danger" => [226, 91, 91, 255],
+        "accent" => [87, 156, 231, 255],
+        _ => [155, 166, 180, 255],
+    }
+}
+
+fn set_pixel(bytes: &mut [u8], x: usize, y: usize, color: [u8; 4]) {
+    const SIZE: usize = 32;
+    if x >= SIZE || y >= SIZE {
+        return;
+    }
+    let offset = (y * SIZE + x) * 4;
+    bytes[offset..offset + 4].copy_from_slice(&color);
+}
+
+fn plugin_tray_icon(item: &PluginTrayItem) -> Image<'static> {
+    const SIZE: usize = 32;
+    let mut bytes = vec![0u8; SIZE * SIZE * 4];
+    let border = [210, 218, 228, 210];
+    for x in 3..29 {
+        set_pixel(&mut bytes, x, 3, border);
+        set_pixel(&mut bytes, x, 28, border);
+    }
+    for y in 3..29 {
+        set_pixel(&mut bytes, 3, y, border);
+        set_pixel(&mut bytes, 28, y, border);
+    }
+
+    let points = if item.series.len() > 12 {
+        &item.series[item.series.len() - 12..]
+    } else {
+        &item.series[..]
+    };
+    let max = points
+        .iter()
+        .filter_map(|point| point.value)
+        .filter(|value| value.is_finite() && *value >= 0.0)
+        .fold(1.0f64, f64::max);
+
+    if points.is_empty() {
+        let color = tray_color(&item.tone);
+        for y in 13..19 {
+            for x in 13..19 {
+                set_pixel(&mut bytes, x, y, color);
+            }
+        }
+    } else {
+        let bar_width = 2usize;
+        let gap = 0usize;
+        let total_width = points.len() * (bar_width + gap);
+        let start_x = 16usize.saturating_sub(total_width / 2);
+        for (index, point) in points.iter().enumerate() {
+            let height = match point.value {
+                Some(value) if value.is_finite() && value >= 0.0 => {
+                    ((value / max) * 20.0).round().clamp(3.0, 20.0) as usize
+                }
+                _ => 3,
+            };
+            let color = tray_color(point.tone.as_deref().unwrap_or(&item.tone));
+            let x0 = start_x + index * (bar_width + gap);
+            for x in x0..(x0 + bar_width).min(28) {
+                for y in (27usize.saturating_sub(height))..27 {
+                    set_pixel(&mut bytes, x, y, color);
+                }
+            }
+        }
+    }
+
+    Image::new_owned(bytes, SIZE as u32, SIZE as u32)
+}
+
+impl StartupTrayState {
+    pub fn sync_plugin_trays(
+        &self,
+        app: &AppHandle,
+        plugin_id: &str,
+        payload: serde_json::Value,
+    ) -> Result<(), String> {
+        let update: PluginTrayUpdate = serde_json::from_value(payload)
+            .map_err(|error| format!("invalid tray.update payload: {error}"))?;
+        if update.items.len() > 64 {
+            return Err("tray.update exceeds the 64 item limit".to_string());
+        }
+
+        let mut seen = std::collections::BTreeSet::new();
+        for item in &update.items {
+            if !valid_tray_id(&item.id) || !seen.insert(item.id.clone()) {
+                return Err("tray.update contains an invalid or duplicate item id".to_string());
+            }
+            if item.title.trim().is_empty() || item.title.len() > 128 || item.tooltip.len() > 256 {
+                return Err("tray.update contains invalid text".to_string());
+            }
+            if item.series.len() > 60 {
+                return Err("tray.update series exceeds the 60 point limit".to_string());
+            }
+            if let Some(action) = item.action.as_ref() {
+                if action.action_type != "open-panel" || action.panel.is_empty() || action.panel.len() > 128 {
+                    return Err("tray.update contains an unsupported action".to_string());
+                }
+            }
+        }
+
+        let mut trays = self
+            .plugin_trays
+            .lock()
+            .map_err(|_| "plugin tray state lock poisoned".to_string())?;
+        let plugin_trays = trays.entry(plugin_id.to_string()).or_default();
+
+        let wanted: std::collections::BTreeSet<String> =
+            update.items.iter().map(|item| item.id.clone()).collect();
+        let stale: Vec<String> = plugin_trays
+            .keys()
+            .filter(|id| !wanted.contains(*id))
+            .cloned()
+            .collect();
+        for id in stale {
+            if let Some(tray) = plugin_trays.remove(&id) {
+                let _ = tray.set_visible(false);
+            }
+            if let Ok(mut actions) = self.plugin_tray_actions.lock() {
+                actions.remove(&format!("{plugin_id}:{id}"));
+            }
+        }
+
+        for item in update.items {
+            let key = format!("{plugin_id}:{}", item.id);
+            if let Ok(mut actions) = self.plugin_tray_actions.lock() {
+                if let Some(action) = item.action.clone() {
+                    actions.insert(key.clone(), action);
+                } else {
+                    actions.remove(&key);
+                }
+            }
+
+            let tooltip = if item.tooltip.is_empty() {
+                item.title.clone()
+            } else {
+                item.tooltip.clone()
+            };
+            let icon = plugin_tray_icon(&item);
+            if let Some(tray) = plugin_trays.get(&item.id) {
+                tray.set_icon(Some(icon)).map_err(|error| error.to_string())?;
+                tray.set_tooltip(Some(&tooltip)).map_err(|error| error.to_string())?;
+                tray.set_visible(true).map_err(|error| error.to_string())?;
+                continue;
+            }
+
+            let actions = self.plugin_tray_actions.clone();
+            let plugin_id_for_click = plugin_id.to_string();
+            let item_id_for_click = item.id.clone();
+            let tray = TrayIconBuilder::with_id(format!("plugin-tray:{plugin_id}:{}", item.id))
+                .icon(icon)
+                .tooltip(&tooltip)
+                .show_menu_on_left_click(false)
+                .on_tray_icon_event(move |tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        let app = tray.app_handle();
+                        show_main(&app);
+                        let action = actions
+                            .lock()
+                            .ok()
+                            .and_then(|guard| guard.get(&format!("{plugin_id_for_click}:{item_id_for_click}")).cloned());
+                        if let Some(action) = action {
+                            let envelope = serde_json::json!({
+                                "pluginId": plugin_id_for_click,
+                                "event": "tray.action",
+                                "payload": {
+                                    "itemId": item_id_for_click,
+                                    "action": action,
+                                }
+                            });
+                            let _ = app.emit("remotehand-plugin-event", envelope);
+                        }
+                    }
+                })
+                .build(app)
+                .map_err(|error| error.to_string())?;
+            plugin_trays.insert(item.id, tray);
+        }
+
+        if plugin_trays.is_empty() {
+            trays.remove(plugin_id);
+        }
+        Ok(())
+    }
+
+    pub fn clear_plugin_trays(&self, plugin_id: &str) {
+        if let Ok(mut trays) = self.plugin_trays.lock() {
+            if let Some(plugin_trays) = trays.remove(plugin_id) {
+                for (_, tray) in plugin_trays {
+                    let _ = tray.set_visible(false);
+                }
+            }
+        }
+        if let Ok(mut actions) = self.plugin_tray_actions.lock() {
+            let prefix = format!("{plugin_id}:");
+            actions.retain(|key, _| !key.starts_with(&prefix));
+        }
     }
 }
 
