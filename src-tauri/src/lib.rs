@@ -301,6 +301,7 @@ pub fn run() {
                         ),
                     )
                     .initialization_script(&init_script)
+                    .disable_drag_drop_handler()
                     .window_features(features)
                     // Dockview first receives an about:blank native WebView, then
                     // navigates it to popout.html and moves the panel DOM into it.
