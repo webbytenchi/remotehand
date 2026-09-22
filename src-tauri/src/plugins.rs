@@ -17,6 +17,7 @@ const ALLOWED_PERMISSIONS: &[&str] = &[
     "credentials.store",
     "vault.unlock",
     "storage.plugin",
+    "tray.contribute",
 ];
 const ALLOWED_CONTRIBUTION_KINDS: &[&str] = &["sidebar", "panel", "command"];
 #[derive(Clone, Debug, Deserialize, Serialize)]
