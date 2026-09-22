@@ -243,6 +243,7 @@ impl TrayIcon {
                     nid.szTip[i] = tip[i];
                 }
             }
+            apply_guid(&mut nid, self.guid);
 
             if Shell_NotifyIconW(NIM_MODIFY, &nid) == 0 {
                 return Err(crate::Error::OsError(std::io::Error::last_os_error()));
