@@ -799,34 +799,76 @@ console.error("Failed to pop out panel", error);
 const popoutActive = useCallback(async () => {
 await popoutPanel();
 }, [popoutPanel]);
-const RemoteHandTab = useCallback((props: IDockviewPanelHeaderProps) => (
+const dockPanel = useCallback((panelId: string) => {
+const api = apiRef.current;
+const panel = api?.getPanel(panelId);
+if (!api || !panel || panel.api.location.type !== "popout") return;
+try {
+panel.api.moveTo({ position: "right" });
+panel.api.setActive();
+} catch (error) {
+console.error("Failed to dock panel back into RemoteHand", error);
+}
+}, []);
+const RemoteHandTab = useCallback((props: IDockviewPanelHeaderProps) => {
+const isPopout = props.api.location.type === "popout";
+const stopTabActionPointer = (event: React.PointerEvent<HTMLButtonElement>) => {
+event.preventDefault();
+event.stopPropagation();
+};
+const runTabAction = (event: React.MouseEvent<HTMLButtonElement>, action: () => void) => {
+event.preventDefault();
+event.stopPropagation();
+action();
+};
+return (
 <div className="remotehand-tab-shell">
-<DockviewDefaultTab {...props} />
-{props.tabLocation === "header" && props.api.location.type !== "popout" ? (
+<DockviewDefaultTab {...props} hideClose />
+{props.tabLocation === "header" ? (
+<>
 <button
 type="button"
-className="remotehand-tab-popout"
-title="Pop out panel"
-aria-label="Pop out panel"
-onPointerDown={(event) => {
-event.preventDefault();
-event.stopPropagation();
-}}
-onClick={(event) => {
-event.preventDefault();
-event.stopPropagation();
-void popoutPanel(props.api.id);
-}}
+className="remotehand-tab-action"
+title={isPopout ? "Dock panel back into RemoteHand" : "Pop out panel"}
+aria-label={isPopout ? "Dock panel back into RemoteHand" : "Pop out panel"}
+onPointerDown={stopTabActionPointer}
+onClick={(event) => runTabAction(event, () => {
+if (isPopout) dockPanel(props.api.id);
+else void popoutPanel(props.api.id);
+})}
 >
+{isPopout ? (
+<svg viewBox="0 0 16 16" aria-hidden="true">
+<path d="M6.5 13.5h-4v-4" />
+<path d="M2.75 13.25 8 8" />
+<path d="M3.5 6.75V3.5h9v9H9.25" />
+</svg>
+) : (
 <svg viewBox="0 0 16 16" aria-hidden="true">
 <path d="M9.5 2.5h4v4" />
 <path d="M13.25 2.75 8 8" />
 <path d="M12.5 9.25v3.25h-9v-9h3.25" />
 </svg>
+)}
 </button>
+<button
+type="button"
+className="remotehand-tab-action"
+title="Close tab"
+aria-label="Close tab"
+onPointerDown={stopTabActionPointer}
+onClick={(event) => runTabAction(event, () => props.api.close())}
+>
+<svg viewBox="0 0 16 16" aria-hidden="true">
+<path d="M4 4l8 8" />
+<path d="M12 4 4 12" />
+</svg>
+</button>
+</>
 ) : null}
 </div>
-), [popoutPanel]);
+);
+}, [dockPanel, popoutPanel]);
 const resetLayout = useCallback(async () => {
 const api = apiRef.current;
 if (!api) return;
