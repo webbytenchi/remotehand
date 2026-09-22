@@ -241,7 +241,7 @@ select {
   min-width: 0;
   flex: 1 1 auto;
 }
-.remotehand-tab-popout {
+.remotehand-tab-action {
   display: inline-grid;
   place-items: center;
   flex: 0 0 auto;
@@ -254,15 +254,15 @@ select {
   opacity: 0.58;
   cursor: pointer;
 }
-.remotehand-tab-popout:hover {
+.remotehand-tab-action:hover {
   opacity: 1;
   background: color-mix(in srgb, currentColor 10%, transparent);
 }
-.remotehand-tab-popout:focus-visible {
+.remotehand-tab-action:focus-visible {
   outline: 1px solid currentColor;
   outline-offset: -2px;
 }
-.remotehand-tab-popout svg {
+.remotehand-tab-action svg {
   width: 13px;
   height: 13px;
   fill: none;
