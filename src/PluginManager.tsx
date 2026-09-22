@@ -287,6 +287,7 @@ function clampTopbarSize(size?: { width?: number; height?: number }) {
 export function PluginManager({
   open,
   onClose,
+  embeddedHost = null,
   onChanged,
   onOpenPluginPanel,
   topbarOrder = [],
@@ -294,6 +295,7 @@ export function PluginManager({
 }: {
   open: boolean;
   onClose: () => void;
+  embeddedHost?: HTMLElement | null;
   onChanged?: () => void;
   onOpenPluginPanel?: (pluginId: string, panelId: string, context?: { targetId?: string; target?: string }) => void;
   topbarOrder?: string[];
@@ -324,6 +326,10 @@ export function PluginManager({
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   useEffect(() => {
     if (open) void refresh();
@@ -739,62 +745,69 @@ export function PluginManager({
     color: "var(--danger-text, #efaaaa)",
   };
 
+  const managerContent = (
+    <div className="plugin-manager">
+      <div className="plugin-manager-heading">
+        <div>
+          <strong>Installed add-ons</strong>
+          <span>Plugins are disabled by default and only receive permissions declared in their manifest.</span>
+        </div>
+        <div className="plugin-manager-toolbar">
+          <button type="button" onClick={() => void install()} disabled={loading}>Install from folder</button>
+          <button type="button" onClick={() => void refresh()} disabled={loading}>{loading ? "Refreshing…" : "Refresh"}</button>
+        </div>
+      </div>
+      <div className="plugin-security-note">
+        <strong>Plugin API v1 security model</strong>
+        <span>RemoteHand validates manifests, permissions, and contributions. Executable plugins run out of process through the Plugin Runtime v1 host.</span>
+      </div>
+      {error ? <div className="plugin-error">{error}</div> : null}
+      {!loading && plugins.length === 0 ? (
+        <div className="plugin-empty"><strong>No plugins installed</strong><span>Choose Install from folder to validate and copy an add-on into RemoteHand&apos;s portable plugins directory.</span></div>
+      ) : null}
+      <div className="plugin-list">
+        {plugins.map((plugin) => {
+          const busy = busyId === plugin.manifest.id;
+          return (
+            <article className="plugin-card" key={plugin.manifest.id}>
+              <div className="plugin-card-main">
+                <div className="plugin-title-row">
+                  <strong>{plugin.manifest.name}</strong>
+                  <span className={plugin.enabled ? "plugin-status enabled" : "plugin-status"}>{plugin.enabled ? "Enabled" : "Disabled"}</span>
+                </div>
+                <span className="plugin-meta">v{plugin.manifest.version} · {plugin.manifest.author} · API {plugin.manifest.apiVersion}</span>
+                <p>{plugin.manifest.description}</p>
+                <div className="plugin-permissions">
+                  <strong>Permissions</strong>
+                  <div className="plugin-capabilities">
+                    {plugin.manifest.permissions.length
+                      ? plugin.manifest.permissions.map((permission) => <span key={permission}>{permission}</span>)
+                      : <span>None</span>}
+                  </div>
+                </div>
+              </div>
+              <div className="plugin-actions">
+                <button type="button" onClick={() => void setEnabled(plugin, !plugin.enabled)} disabled={busy} style={{ ...managerButtonStyle, opacity: busy ? 0.45 : 1, cursor: busy ? "default" : "pointer" }}>{plugin.enabled ? "Disable" : "Enable"}</button>
+                <button type="button" onClick={() => requestRemove(plugin)} disabled={busy || plugin.enabled} style={{ ...managerRemoveStyle, opacity: busy || plugin.enabled ? 0.45 : 1, cursor: busy || plugin.enabled ? "default" : "pointer" }}>Remove</button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   return (
     <>
       {typeof document !== "undefined" && document.querySelector(".topbar-actions") && renderedTopbar.length
         ? createPortal(renderedTopbar, document.querySelector(".topbar-actions")!)
         : null}
-      <AppModal open={open} title="Plugins" confirmLabel="Done" onConfirm={onClose} onCancel={onClose} focusActions={false}>
-        <div className="plugin-manager">
-          <div className="plugin-manager-heading">
-            <div>
-              <strong>Installed add-ons</strong>
-              <span>Plugins are disabled by default and only receive permissions declared in their manifest.</span>
-            </div>
-            <div className="plugin-manager-toolbar">
-              <button type="button" onClick={() => void install()} disabled={loading}>Install from folder</button>
-              <button type="button" onClick={() => void refresh()} disabled={loading}>{loading ? "Refreshing…" : "Refresh"}</button>
-            </div>
-          </div>
-          <div className="plugin-security-note">
-            <strong>Plugin API v1 security model</strong>
-            <span>RemoteHand validates manifests, permissions, and contributions. Executable plugins run out of process through the Plugin Runtime v1 host.</span>
-          </div>
-          {error ? <div className="plugin-error">{error}</div> : null}
-          {!loading && plugins.length === 0 ? (
-            <div className="plugin-empty"><strong>No plugins installed</strong><span>Choose Install from folder to validate and copy an add-on into RemoteHand&apos;s portable plugins directory.</span></div>
-          ) : null}
-          <div className="plugin-list">
-            {plugins.map((plugin) => {
-              const busy = busyId === plugin.manifest.id;
-              return (
-                <article className="plugin-card" key={plugin.manifest.id}>
-                  <div className="plugin-card-main">
-                    <div className="plugin-title-row">
-                      <strong>{plugin.manifest.name}</strong>
-                      <span className={plugin.enabled ? "plugin-status enabled" : "plugin-status"}>{plugin.enabled ? "Enabled" : "Disabled"}</span>
-                    </div>
-                    <span className="plugin-meta">v{plugin.manifest.version} · {plugin.manifest.author} · API {plugin.manifest.apiVersion}</span>
-                    <p>{plugin.manifest.description}</p>
-                    <div className="plugin-permissions">
-                      <strong>Permissions</strong>
-                      <div className="plugin-capabilities">
-                        {plugin.manifest.permissions.length
-                          ? plugin.manifest.permissions.map((permission) => <span key={permission}>{permission}</span>)
-                          : <span>None</span>}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="plugin-actions">
-                    <button type="button" onClick={() => void setEnabled(plugin, !plugin.enabled)} disabled={busy} style={{ ...managerButtonStyle, opacity: busy ? 0.45 : 1, cursor: busy ? "default" : "pointer" }}>{plugin.enabled ? "Disable" : "Enable"}</button>
-                    <button type="button" onClick={() => requestRemove(plugin)} disabled={busy || plugin.enabled} style={{ ...managerRemoveStyle, opacity: busy || plugin.enabled ? 0.45 : 1, cursor: busy || plugin.enabled ? "default" : "pointer" }}>Remove</button>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </div>
-      </AppModal>
+      {open && embeddedHost ? createPortal(managerContent, embeddedHost) : null}
+      {!embeddedHost ? (
+        <AppModal open={open} title="Plugins" confirmLabel="Done" onConfirm={onClose} onCancel={onClose} focusActions={false}>
+          {managerContent}
+        </AppModal>
+      ) : null}
       <AppModal open={removeTarget !== null} title="Remove plugin?" confirmLabel="Remove" onConfirm={() => void confirmRemove()} onCancel={() => setRemoveTarget(null)}>
         <p>This removes the selected plugin from RemoteHand&apos;s portable plugin directory.</p>
       </AppModal>
