@@ -2,6 +2,28 @@
 
 All notable changes to RemoteHand are documented here.
 
+## `1.2.5` - 2026-09-23
+
+### Added
+
+- **Host-owned interface contribution ordering.** RemoteHand now controls ordering for built-in and plugin sidebar/top-bar contributions using stable contribution identities.
+- **Interface ordering settings.** Settings → Interface lets users reorder sidebar and top-bar items and reset them to defaults.
+- **Portable ordering persistence.** Interface order is stored in `data/config/ui-contributions.json` and restored across application restarts.
+
+### Improved
+
+- **Plugin responsibility boundary.** Plugins publish or declare their contributions while RemoteHand owns final presentation order.
+- **Dynamic contribution handling.** Temporarily unavailable plugin items retain their remembered positions, while newly discovered items are appended deterministically.
+- **Safe ordering fallback.** Missing, partial, or invalid saved ordering falls back to the default/legacy contribution order without blocking the UI.
+
+### Verification
+
+- Frontend tests: 7 passed.
+- Production frontend build: passed.
+- `cargo check`: passed.
+- Rust tests: 31 passed, 0 failed.
+- Manual Windows acceptance covered sidebar ordering, Host Monitor top-bar ordering, restart persistence, plugin disable/re-enable position restoration, reset behavior, and corrupt-config fallback.
+
 ## `1.2.4` - 2026-09-23
 
 ### Added
