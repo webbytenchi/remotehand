@@ -108,11 +108,7 @@ const initialCommand = params?.initialCommand;
 const sendPaste = (text: string) => {
 const terminal = terminalRef.current;
 if (!terminal) return;
-if (!ssh && shell === "powershell") {
-terminal.input(text, true);
-} else {
 terminal.paste(text);
-}
 terminal.focus();
 };
 useEffect(() => {
@@ -170,12 +166,17 @@ let cancelled = false;
 let unlistenOutput: UnlistenFn | undefined;
 let unlistenExit: UnlistenFn | undefined;
 let resizeObserver: ResizeObserver | undefined;
+let inputWriteQueue = Promise.resolve();
 
 const inputDisposable = terminal.onData((data) => {
-void writeTerminal(sessionId, data).catch((error) => {
+inputWriteQueue = inputWriteQueue
+.then(() => writeTerminal(sessionId, data))
+.catch((error) => {
+if (!cancelled) {
 terminal.writeln(
 "\r\n[RemoteHand] terminal input failed: " + String(error),
 );
+}
 });
 });
 
