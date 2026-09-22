@@ -562,6 +562,7 @@ const applyingHistoryRef = useRef(false);
 const workspaceSaveTimerRef = useRef<number | null>(null);
 const workspacePersistenceEnabledRef = useRef(true);
 const poppedOutPanelRef = useRef<{ panelId: string; count: number; window?: Window } | null>(null);
+const popoutWindowsRef = useRef<Map<string, RemoteHandPopoutWindow>>(new Map());
 const closingPopoutPanelRef = useRef<{ panelId: string; groupId: string; hidden: boolean } | null>(null);
 const mainReturnGroupRef = useRef<Map<string, string>>(new Map());
 useEffect(() => {
@@ -1316,6 +1317,7 @@ captureLayout(event.api);
 event.api.onDidAddPopoutGroup((popout) => {
 popout.group.activePanel?.api.setActive();
 popout.window.focus();
+popoutWindowsRef.current.set(popout.id, popout.window as RemoteHandPopoutWindow);
 poppedOutPanelRef.current = {
 panelId: popout.group.activePanel?.id ?? poppedOutPanelRef.current?.panelId ?? "",
 count: event.api.getPopouts().length,
@@ -1359,29 +1361,20 @@ popout.window.addEventListener("remotehand-plugin-popout-ready", onPluginReady, 
 revealPopout();
 }
 });
-event.api.onDidRemovePopoutGroup(() => {
-const previous = poppedOutPanelRef.current;
-const panelId = previous?.panelId;
-const popoutWindow = previous?.window as RemoteHandPopoutWindow | undefined;
+event.api.onDidRemovePopoutGroup((removedPopout) => {
+const popoutWindow = popoutWindowsRef.current.get(removedPopout.id);
+popoutWindowsRef.current.delete(removedPopout.id);
 const nativeLabel = popoutWindow?.__REMOTEHAND_NATIVE_WINDOW_LABEL__;
 window.setTimeout(() => {
+if (popoutWindow && !popoutWindow.closed) {
+popoutWindow.close();
+}
+if (isTauri() && nativeLabel) {
+void invoke("close_panel_popout", { label: nativeLabel }).catch(() => undefined);
+}
+const panelId = poppedOutPanelRef.current?.panelId;
 if (panelId) {
 event.api.getPanel(panelId)?.api.setActive();
-}
-if (popoutWindow && !popoutWindow.closed) {
-const stillOwnsPanels = event.api.panels.some(
-(current) =>
-current.api.location.type === "popout" &&
-current.api.getWindow() === popoutWindow,
-);
-if (!stillOwnsPanels) {
-popoutWindow.close();
-if (isTauri() && nativeLabel) {
-void invoke("close_panel_popout", { label: nativeLabel }).catch((error) => {
-console.error("Failed to close native popout after its last tab moved", error);
-});
-}
-}
 }
 poppedOutPanelRef.current = null;
 }, 0);
