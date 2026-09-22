@@ -2145,6 +2145,17 @@ border-color: var(--accent-border);
 background: var(--accent-surface);
 color: var(--accent);
 }
+.plugin-permissions {
+display: flex;
+align-items: center;
+gap: 8px;
+flex-wrap: wrap;
+font-size: 11px;
+}
+.plugin-permissions > strong {
+color: #aeb8c6;
+font-weight: 600;
+}
 .plugin-capabilities {
 display: flex;
 flex-wrap: wrap;
@@ -2153,9 +2164,12 @@ gap: 5px;
 .plugin-capabilities span {
 border: 1px solid #303c4c;
 border-radius: 999px;
-color: #8f9bad;
+background: #111823;
+color: #9eabba;
 padding: 2px 7px;
 font-size: 10px;
+line-height: 1.4;
+white-space: nowrap;
 }
 .plugin-actions {
 display: flex;
@@ -2181,6 +2195,14 @@ color: #29313d;
 }
 html[data-theme="light"] .plugin-card-main p {
 color: #566276;
+}
+html[data-theme="light"] .plugin-permissions > strong {
+color: #566276;
+}
+html[data-theme="light"] .plugin-capabilities span {
+border-color: #c7ced8;
+color: #647184;
+background: #f5f7fa;
 }
 .plugin-manager-toolbar {
 display: flex;
