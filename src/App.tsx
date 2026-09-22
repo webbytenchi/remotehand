@@ -553,6 +553,7 @@ const workspaceSaveTimerRef = useRef<number | null>(null);
 const workspacePersistenceEnabledRef = useRef(true);
 const poppedOutPanelRef = useRef<{ panelId: string; count: number; window?: Window } | null>(null);
 const closingPopoutPanelRef = useRef<{ panelId: string; groupId: string; hidden: boolean } | null>(null);
+const popoutReturnGroupRef = useRef<Map<string, string>>(new Map());
 useEffect(() => {
 if (!isTauri()) return;
 void invoke<string>("local_os")
@@ -864,9 +865,13 @@ const api = apiRef.current;
 const panel = panelId ? api?.getPanel(panelId) : api?.activePanel;
 if (!api || !panel) return;
 if (panel.api.location.type === "popout") return;
+const sourceGroupId = panel.api.group.id;
 try {
 const opened = await api.addPopoutGroup(panel);
-if (opened) poppedOutPanelRef.current = { panelId: panel.id, count: api.getPopouts().length };
+if (opened) {
+popoutReturnGroupRef.current.set(panel.id, sourceGroupId);
+poppedOutPanelRef.current = { panelId: panel.id, count: api.getPopouts().length };
+}
 } catch (error) {
 console.error("Failed to pop out panel", error);
 }
@@ -879,8 +884,16 @@ const api = apiRef.current;
 const panel = api?.getPanel(panelId);
 if (!api || !panel || panel.api.location.type !== "popout") return;
 try {
-const gridGroup = api.groups.find((group) => group.api.location.type === "grid") ?? api.addGroup();
-panel.api.moveTo({ group: gridGroup, position: "right" });
+const rememberedGroupId = popoutReturnGroupRef.current.get(panelId);
+const rememberedGroup = rememberedGroupId
+? api.groups.find((group) => group.id === rememberedGroupId && group.api.location.type === "grid")
+: undefined;
+const fallbackGroup = api.groups.find((group) => group.api.location.type === "grid") ?? api.addGroup();
+panel.api.moveTo({
+group: rememberedGroup ?? fallbackGroup,
+position: rememberedGroup ? "center" : "right",
+});
+popoutReturnGroupRef.current.delete(panelId);
 panel.api.setActive();
 if (isTauri()) {
 void invoke("focus_main_window").catch((error) =>
