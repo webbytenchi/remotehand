@@ -182,6 +182,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             storage::load_settings,
             storage::save_settings,
+            storage::load_ui_contribution_layout,
+            storage::save_ui_contribution_layout,
             storage::load_connections,
             storage::save_connections,
             storage::load_recent_activities,
