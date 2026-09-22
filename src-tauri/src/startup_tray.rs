@@ -77,6 +77,8 @@ struct PluginTrayPoint {
     value: Option<f64>,
     #[serde(default)]
     tone: Option<String>,
+    #[serde(default)]
+    color: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -88,6 +90,12 @@ struct PluginTrayItem {
     tooltip: String,
     #[serde(default)]
     tone: String,
+    #[serde(default)]
+    graph_color: Option<String>,
+    #[serde(default)]
+    background_color: Option<String>,
+    #[serde(default)]
+    border_color: Option<String>,
     #[serde(default = "default_true")]
     visible: bool,
     #[serde(default)]
@@ -125,6 +133,17 @@ fn tray_color(tone: &str) -> [u8; 4] {
     }
 }
 
+fn parse_tray_hex_color(value: Option<&str>) -> Option<[u8; 4]> {
+    let value = value?;
+    if value.len() != 7 || !value.starts_with('#') {
+        return None;
+    }
+    let r = u8::from_str_radix(&value[1..3], 16).ok()?;
+    let g = u8::from_str_radix(&value[3..5], 16).ok()?;
+    let b = u8::from_str_radix(&value[5..7], 16).ok()?;
+    Some([r, g, b, 255])
+}
+
 fn set_pixel(bytes: &mut [u8], x: usize, y: usize, color: [u8; 4]) {
     const SIZE: usize = 32;
     if x >= SIZE || y >= SIZE {
@@ -137,7 +156,14 @@ fn set_pixel(bytes: &mut [u8], x: usize, y: usize, color: [u8; 4]) {
 fn plugin_tray_icon(item: &PluginTrayItem) -> Result<tray_icon::Icon, String> {
     const SIZE: usize = 32;
     let mut bytes = vec![0u8; SIZE * SIZE * 4];
-    let border = [210, 218, 228, 210];
+    if let Some(background) = parse_tray_hex_color(item.background_color.as_deref()) {
+        for y in 4..28 {
+            for x in 4..28 {
+                set_pixel(&mut bytes, x, y, background);
+            }
+        }
+    }
+    let border = parse_tray_hex_color(item.border_color.as_deref()).unwrap_or([210, 218, 228, 210]);
     for x in 3..29 {
         set_pixel(&mut bytes, x, 3, border);
         set_pixel(&mut bytes, x, 28, border);
@@ -159,7 +185,7 @@ fn plugin_tray_icon(item: &PluginTrayItem) -> Result<tray_icon::Icon, String> {
         .fold(1.0f64, f64::max);
 
     if points.is_empty() {
-        let color = tray_color(&item.tone);
+        let color = parse_tray_hex_color(item.graph_color.as_deref()).unwrap_or_else(|| tray_color(&item.tone));
         for y in 13..19 {
             for x in 13..19 {
                 set_pixel(&mut bytes, x, y, color);
@@ -176,7 +202,9 @@ fn plugin_tray_icon(item: &PluginTrayItem) -> Result<tray_icon::Icon, String> {
                 }
                 _ => 3,
             };
-            let color = tray_color(point.tone.as_deref().unwrap_or(&item.tone));
+            let color = parse_tray_hex_color(point.color.as_deref())
+                .or_else(|| parse_tray_hex_color(item.graph_color.as_deref()))
+                .unwrap_or_else(|| tray_color(point.tone.as_deref().unwrap_or(&item.tone)));
             let x0 = start_x + index * bar_width;
             for x in x0..(x0 + bar_width).min(28) {
                 for y in (27usize.saturating_sub(height))..27 {
