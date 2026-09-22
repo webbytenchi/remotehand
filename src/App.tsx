@@ -1322,37 +1322,6 @@ count: event.api.getPopouts().length,
 window: popout.window,
 };
 const targetDocument = popout.window.document;
-const popoutWindow = popout.window as RemoteHandPopoutWindow;
-let dragFocusPending = false;
-const focusPopoutForDrag = () => {
-popout.window.focus();
-if (!isTauri() || dragFocusPending) return;
-const nativeLabel = popoutWindow.__REMOTEHAND_NATIVE_WINDOW_LABEL__;
-if (!nativeLabel) return;
-dragFocusPending = true;
-void getAllWindows()
-.then(async (windows) => {
-const nativeWindow = windows.find((candidate) => candidate.label === nativeLabel);
-if (nativeWindow) {
-await nativeWindow.setFocus();
-}
-})
-.catch((error) => {
-console.error("Failed to focus popout while dragging", error);
-})
-.finally(() => {
-window.setTimeout(() => {
-dragFocusPending = false;
-}, 150);
-});
-};
-targetDocument.addEventListener("dragenter", focusPopoutForDrag, true);
-targetDocument.addEventListener("dragover", focusPopoutForDrag, true);
-popout.window.addEventListener("beforeunload", () => {
-targetDocument.removeEventListener("dragenter", focusPopoutForDrag, true);
-targetDocument.removeEventListener("dragover", focusPopoutForDrag, true);
-}, { once: true });
-
 const root = targetDocument.documentElement;
 const source = document.documentElement;
 root.dataset.theme = source.dataset.theme;
