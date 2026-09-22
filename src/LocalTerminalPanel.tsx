@@ -240,6 +240,38 @@ unlistenExit?.();
 return;
 }
 
+/*
+ * Restored Dockview panels can mount before their final layout geometry is
+ * settled. Wait for the browser to finish the restore layout, fit xterm again,
+ * and explicitly synchronize the backend PTY size. Without this, an SSH PTY
+ * can keep the provisional startup dimensions and full-screen programs such as
+ * top will address rows/columns differently from xterm.
+ */
+await new Promise<void>((resolve) => {
+host.ownerDocument.defaultView?.requestAnimationFrame(() => {
+host.ownerDocument.defaultView?.requestAnimationFrame(() => resolve());
+});
+});
+
+if (cancelled) {
+unlistenOutput?.();
+unlistenExit?.();
+return;
+}
+
+fitAddon.fit();
+await invoke("terminal_resize", {
+sessionId,
+rows: terminal.rows,
+cols: terminal.cols,
+});
+
+if (cancelled) {
+unlistenOutput?.();
+unlistenExit?.();
+return;
+}
+
 setStatus(
 ssh
 ? "SSH " + ssh.user + "@" + ssh.host + ":" + ssh.port
