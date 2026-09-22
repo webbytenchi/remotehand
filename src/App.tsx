@@ -128,32 +128,33 @@ const tabDragAssistDocuments = new WeakSet<Document>();
 function installTabDragWindowAssist(targetDocument: Document) {
 if (tabDragAssistDocuments.has(targetDocument) || !isTauri()) return;
 tabDragAssistDocuments.add(targetDocument);
-const setPopoutsTopmost = async (topmost: boolean) => {
-try {
-const windows = await getAllWindows();
-await Promise.all(
-windows
-.filter((candidate) => candidate.label.startsWith("panel-popout-"))
-.map((candidate) => candidate.setAlwaysOnTop(topmost)),
-);
-} catch (error) {
-console.error("Failed to update popout stacking during tab drag", error);
-}
+let armed = false;
+const setPopoutsTopmost = (topmost: boolean) => {
+void invoke("set_panel_popouts_topmost", { topmost }).catch((error) => {
+console.error("Failed to update native popout stacking during tab drag", error);
+});
 };
-const isRemoteHandTabDrag = (event: DragEvent) => {
+const isRemoteHandTabTarget = (event: Event) => {
 const target = event.target as { closest?: (selector: string) => Element | null } | null;
 return Boolean(target?.closest?.(".remotehand-tab-shell"));
 };
-const onDragStart = (event: DragEvent) => {
-if (!isRemoteHandTabDrag(event)) return;
-void setPopoutsTopmost(true);
+const arm = (event: PointerEvent) => {
+if (event.button !== 0 || !isRemoteHandTabTarget(event)) return;
+armed = true;
+setPopoutsTopmost(true);
 };
 const release = () => {
-void setPopoutsTopmost(false);
+if (!armed) return;
+armed = false;
+setPopoutsTopmost(false);
 };
-targetDocument.addEventListener("dragstart", onDragStart, true);
+targetDocument.addEventListener("pointerdown", arm, true);
+targetDocument.addEventListener("pointerup", release, true);
 targetDocument.addEventListener("dragend", release, true);
 targetDocument.addEventListener("drop", release, true);
+targetDocument.defaultView?.addEventListener("blur", () => {
+if (!armed) return;
+}, true);
 targetDocument.defaultView?.addEventListener("beforeunload", release, { once: true });
 }
 
