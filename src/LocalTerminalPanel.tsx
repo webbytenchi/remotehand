@@ -113,6 +113,7 @@ fitAddonRef.current = fitAddon;
 const terminal = new Terminal({
 cursorBlink: true,
 convertEol: false,
+ignoreBracketedPasteMode: !ssh && shell === "powershell",
 documentOverride: host.ownerDocument,
 fontFamily: getComputedStyle(host.ownerDocument.documentElement).getPropertyValue("--terminal-font-family").trim() || ["JetBrains Mono", "Cascadia Code", "Cascadia Mono", "Consolas", "Liberation Mono", "monospace"].join(", "),
 fontSize: Number.parseInt(getComputedStyle(host.ownerDocument.documentElement).getPropertyValue("--terminal-font-size"), 10) || 13,
