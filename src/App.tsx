@@ -1771,7 +1771,10 @@ return <div key={id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1
 </div>
 </section>
 </div>
+<div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
 <button type="button" className="settings-reset" onClick={resetContributionOrdering}>Reset interface order</button>
+<button type="button" className="settings-reset" onClick={resetLayout}>Reset workspace layout</button>
+</div>
 </div>
 ) : settingsTab === "plugins" ? (
 <div className="settings-tab-content">
