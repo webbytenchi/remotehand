@@ -1299,9 +1299,6 @@ const coreSidebarItems = [
 ]
 : [{ id: "core:terminal", label: "Terminal" }]),
 { id: "core:connections", label: "Connections" },
-{ id: "core:split-right", label: "Split right" },
-{ id: "core:split-below", label: "Split below" },
-{ id: "core:popout-active", label: "Pop out active" },
 ];
 const pluginSidebarItems = plugins.flatMap((plugin) =>
 plugin.enabled
@@ -1429,15 +1426,6 @@ aria-label="Settings"
 <button className="sidebar-action" style={{ order: 100 + contributionOrderIndex(resolvedSidebarOrder, "core:connections") }} type="button" onClick={addConnections} title="Connections">
 <span className="sidebar-icon">◈</span><span className="sidebar-label">Connections</span>
 </button>
-<button className="sidebar-action" style={{ order: 100 + contributionOrderIndex(resolvedSidebarOrder, "core:split-right") }} type="button" onClick={() => addTerminal("right")} title="Split right">
-<span className="sidebar-icon">⇥</span><span className="sidebar-label">Split right</span>
-</button>
-<button className="sidebar-action" style={{ order: 100 + contributionOrderIndex(resolvedSidebarOrder, "core:split-below") }} type="button" onClick={() => addTerminal("below")} title="Split below">
-<span className="sidebar-icon">⇣</span><span className="sidebar-label">Split below</span>
-</button>
-<button className="sidebar-action" style={{ order: 100 + contributionOrderIndex(resolvedSidebarOrder, "core:popout-active") }} type="button" onClick={popoutActive} title="Open active panel in new window">
-<span className="sidebar-icon">↗</span><span className="sidebar-label">Pop out active</span>
-</button>
 {plugins.flatMap((plugin) =>
 plugin.enabled
 ? plugin.manifest.contributes.sidebar.map((sidebar) => (
@@ -1455,17 +1443,6 @@ title={sidebar.title}
 ))
 : [],
 )}
-<div className="sidebar-divider" style={{ order: 10000 }} />
-<div className="sidebar-heading" style={{ order: 10001 }}>Layout</div>
-<button className="sidebar-action" style={{ order: 10002 }} type="button" onClick={undoLayout} title="Undo layout change">
-<span className="sidebar-icon">↶</span><span className="sidebar-label">Undo</span>
-</button>
-<button className="sidebar-action" style={{ order: 10003 }} type="button" onClick={redoLayout} title="Redo layout change">
-<span className="sidebar-icon">↷</span><span className="sidebar-label">Redo</span>
-</button>
-<button className="sidebar-action" style={{ order: 10004 }} type="button" onClick={resetLayout} title="Reset layout">
-<span className="sidebar-icon">⟳</span><span className="sidebar-label">Reset layout</span>
-</button>
 </aside>
 <section className="canvas">
 <div className="dockview-host">
