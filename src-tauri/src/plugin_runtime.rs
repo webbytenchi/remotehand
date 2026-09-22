@@ -355,7 +355,8 @@ fn start_reader(
     permissions: Vec<String>,
     app_handle: AppHandle,
 ) {
-    thread::spawn(move || loop {
+    thread::spawn(move || {
+        loop {
         let payload = match read_frame(&mut stdout) {
             Ok(payload) => payload,
             Err(error) => {
@@ -410,6 +411,18 @@ fn start_reader(
                     log::warn!("Plugin runtime {plugin_id} sent invalid event name");
                     continue;
                 }
+                if event.event == "tray.update" {
+                    if !permission_granted(&permissions, "tray.contribute") {
+                        log::warn!("Plugin runtime {plugin_id} attempted tray.update without tray.contribute");
+                        continue;
+                    }
+                    if let Some(state) = app_handle.try_state::<crate::startup_tray::StartupTrayState>() {
+                        if let Err(error) = state.sync_plugin_trays(&app_handle, &plugin_id, event.payload.clone()) {
+                            log::warn!("Plugin runtime {plugin_id} tray.update rejected: {error}");
+                            continue;
+                        }
+                    }
+                }
                 let envelope = PluginEventEnvelope {
                     plugin_id: plugin_id.clone(),
                     event: event.event,
@@ -458,6 +471,10 @@ fn start_reader(
             other => {
                 log::warn!("Plugin runtime {plugin_id} sent unexpected message type {other}");
             }
+        }
+        }
+        if let Some(state) = app_handle.try_state::<crate::startup_tray::StartupTrayState>() {
+            state.clear_plugin_trays(&plugin_id);
         }
     });
 }
@@ -645,6 +662,13 @@ impl PluginRuntimeState {
             }
         }
         fail_pending(&session.pending, "plugin runtime stopped".to_string());
+        if let Ok(slot) = self.app_handle.lock() {
+            if let Some(app_handle) = slot.as_ref() {
+                if let Some(state) = app_handle.try_state::<crate::startup_tray::StartupTrayState>() {
+                    state.clear_plugin_trays(id);
+                }
+            }
+        }
         log::info!("Plugin runtime {id} stopped");
         Ok(())
     }
