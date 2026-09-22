@@ -70,6 +70,11 @@ type AlertPayload = {
   sound?: { dataUrl?: string; durationMs?: number } | null;
 };
 
+type TrayActionPayload = {
+  itemId?: string;
+  action?: TopbarAction;
+};
+
 function parseTone(value: unknown): TopbarTone | undefined {
   return value === "accent" || value === "success" || value === "warning" || value === "danger" || value === "muted"
     ? value
@@ -307,6 +312,15 @@ export function PluginManager({
       if (event.payload.event === "topbar.update") {
         const items = parseTopbarItems(event.payload.payload);
         setTopbarItems((current) => ({ ...current, [event.payload.pluginId]: items }));
+      } else if (event.payload.event === "tray.action") {
+        const payload = event.payload.payload as TrayActionPayload;
+        if (payload.action?.type === "open-panel" && onOpenPluginPanel) {
+          onOpenPluginPanel(
+            event.payload.pluginId,
+            payload.action.panel || "",
+            payload.action.context,
+          );
+        }
       } else if (event.payload.event === "monitor.alert") {
         void playAlertSound(event.payload.payload as AlertPayload);
       }
@@ -318,7 +332,7 @@ export function PluginManager({
       cancelled = true;
       unlisten?.();
     };
-  }, [playAlertSound]);
+  }, [onOpenPluginPanel, playAlertSound]);
 
   useEffect(() => {
     const activePluginIds = new Set(plugins.filter((plugin) => plugin.enabled).map((plugin) => plugin.manifest.id));
