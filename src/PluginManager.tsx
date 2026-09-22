@@ -39,6 +39,21 @@ type TopbarAction = {
   panel?: string;
   context?: { targetId?: string; target?: string };
 };
+type TopbarMenuAction = {
+  type: "plugin-call";
+  method: string;
+  params?: unknown;
+};
+type TopbarMenuItem = {
+  id: string;
+  label: string;
+  value?: string;
+  detail?: string;
+  action?: TopbarMenuAction;
+};
+type TopbarMenu = {
+  items: TopbarMenuItem[];
+};
 type TopbarItem = {
   id: string;
   title: string;
@@ -46,6 +61,7 @@ type TopbarItem = {
   size?: { width?: number; height?: number };
   content?: TopbarContent;
   action?: TopbarAction;
+  menu?: TopbarMenu;
   target?: string;
   targetId?: string;
   currentLatencyMs?: number | null;
@@ -121,6 +137,34 @@ function parseTopbarContent(input: unknown, depth = 0): TopbarContent | undefine
   };
 }
 
+function parseTopbarMenu(input: unknown): TopbarMenu | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const rawItems = (input as Record<string, unknown>).items;
+  if (!Array.isArray(rawItems)) return undefined;
+  const items = rawItems.slice(0, 24).flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const value = entry as Record<string, unknown>;
+    if (typeof value.id !== "string" || typeof value.label !== "string") return [];
+    const rawAction = value.action && typeof value.action === "object"
+      ? value.action as Record<string, unknown>
+      : undefined;
+    const method = rawAction?.type === "plugin-call" && typeof rawAction.method === "string" && /^[a-z0-9._-]{1,128}$/.test(rawAction.method)
+      ? rawAction.method
+      : undefined;
+    const action = method
+      ? { type: "plugin-call" as const, method, params: rawAction?.params }
+      : undefined;
+    return [{
+      id: value.id.slice(0, 128),
+      label: value.label.slice(0, 80),
+      value: typeof value.value === "string" ? value.value.slice(0, 256) : undefined,
+      detail: typeof value.detail === "string" ? value.detail.slice(0, 120) : undefined,
+      action,
+    } satisfies TopbarMenuItem];
+  });
+  return items.length ? { items } : undefined;
+}
+
 function parseTopbarItems(payload: unknown): TopbarItem[] {
   if (!payload || typeof payload !== "object") return [];
   const items = (payload as TopbarPayload).items;
@@ -131,6 +175,7 @@ function parseTopbarItems(payload: unknown): TopbarItem[] {
     if (typeof value.id !== "string" || typeof value.title !== "string") return [];
     const sizeValue = value.size && typeof value.size === "object" ? value.size as Record<string, unknown> : undefined;
     const content = parseTopbarContent(value.content);
+    const menu = parseTopbarMenu(value.menu);
     const actionValue = value.action && typeof value.action === "object" ? value.action as Record<string, unknown> : undefined;
     const contextValue = actionValue?.context && typeof actionValue.context === "object" ? actionValue.context as Record<string, unknown> : undefined;
     const action = actionValue?.type === "open-panel"
@@ -164,6 +209,7 @@ function parseTopbarItems(payload: unknown): TopbarItem[] {
       } : undefined,
       content,
       action,
+      menu,
       target: typeof value.target === "string" ? value.target : undefined,
       targetId: typeof value.targetId === "string" ? value.targetId : undefined,
       currentLatencyMs: typeof value.currentLatencyMs === "number" ? value.currentLatencyMs : null,
@@ -215,6 +261,7 @@ export function PluginManager({
   const [error, setError] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<PluginInfo | null>(null);
   const [topbarItems, setTopbarItems] = useState<Record<string, TopbarItem[]>>({});
+  const [openTopbarMenuKey, setOpenTopbarMenuKey] = useState<string | null>(null);
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
 
@@ -355,6 +402,17 @@ export function PluginManager({
     });
   }, [plugins]);
 
+  useEffect(() => {
+    if (!openTopbarMenuKey) return;
+    const close = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest("[data-plugin-topbar-menu]")) return;
+      setOpenTopbarMenuKey(null);
+    };
+    window.addEventListener("pointerdown", close);
+    return () => window.removeEventListener("pointerdown", close);
+  }, [openTopbarMenuKey]);
+
   const install = async () => {
     setLoading(true);
     setError(null);
@@ -424,6 +482,12 @@ export function PluginManager({
   };
 
   const openTopbarItem = (pluginId: string, item: TopbarItem) => {
+    const key = `${pluginId}:${item.id}`;
+    if (item.menu?.items.length) {
+      setOpenTopbarMenuKey((current) => current === key ? null : key);
+      return;
+    }
+    setOpenTopbarMenuKey(null);
     if (!onOpenPluginPanel) return;
     if (item.action?.type === "open-panel") {
       onOpenPluginPanel(pluginId, item.action.panel || "", item.action.context);
@@ -433,6 +497,20 @@ export function PluginManager({
       targetId: item.targetId,
       target: item.target,
     });
+  };
+
+  const runTopbarMenuAction = async (pluginId: string, action?: TopbarMenuAction) => {
+    if (!action) return;
+    setOpenTopbarMenuKey(null);
+    try {
+      await invoke("plugin_runtime_call", {
+        id: pluginId,
+        method: action.method,
+        params: action.params ?? null,
+      });
+    } catch (cause) {
+      console.error("Plugin top-bar menu action failed", cause);
+    }
   };
 
   const renderTopbarContent = (content: TopbarContent, key: string, size: { width: number; height: number }): ReactNode => {
@@ -478,19 +556,21 @@ export function PluginManager({
       const legacySeverity = topbarSeverity(item.state);
       const genericTone = toneVars(item.content?.tone);
       const size = clampTopbarSize(item.size);
+      const itemKey = `${pluginId}:${item.id}`;
+      const menuOpen = openTopbarMenuKey === itemKey;
       return (
+        <div
+          key={itemKey}
+          data-plugin-topbar-menu
+          style={{ order: -1, position: "relative", zIndex: menuOpen ? 1001 : 10, pointerEvents: "auto", flexShrink: 0, marginLeft: 6 }}
+        >
         <button
-          key={`${pluginId}:${item.id}`}
           type="button"
           title={item.tooltip || (item.target ? `${item.title} · ${item.target}` : item.title)}
           aria-label={item.tooltip || (item.target ? `${item.title} ${item.target}` : item.title)}
           onClick={() => openTopbarItem(pluginId, item)}
           style={{
-            order: -1,
             position: "relative",
-            zIndex: 10,
-            pointerEvents: "auto",
-            flexShrink: 0,
             width: size.width,
             height: size.height,
             overflow: "hidden",
@@ -500,7 +580,6 @@ export function PluginManager({
             justifyContent: "center",
             gap: 1,
             padding: "3px 7px",
-            marginLeft: 6,
             border: `1px solid ${hasGenericContent ? (item.content?.borderColor ?? genericTone.border) : (legacySeverity === "offline" ? "var(--danger-border, #7d3b3b)" : legacySeverity === "high-latency" ? "var(--warning-border, #80622e)" : legacySeverity === "normal" ? "var(--success-text, #355f47)" : "var(--border, #39465a)")}`,
             borderRadius: 7,
             background: hasGenericContent ? (item.content?.backgroundColor ?? genericTone.surface) : (legacySeverity === "offline" ? "var(--danger-surface, #29171a)" : legacySeverity === "high-latency" ? "var(--warning-surface, #2a2417)" : legacySeverity === "normal" ? "var(--success-surface, #111a17)" : "var(--surface-raised, #1d252f)"),
@@ -525,6 +604,61 @@ export function PluginManager({
             </>
           )}
         </button>
+        {menuOpen && item.menu ? (
+          <div
+            role="menu"
+            aria-label={item.title}
+            style={{
+              position: "absolute",
+              top: "calc(100% + 6px)",
+              right: 0,
+              width: 310,
+              maxHeight: "min(420px, 70vh)",
+              overflowY: "auto",
+              padding: 6,
+              border: "1px solid var(--border, #39465a)",
+              borderRadius: 9,
+              background: "var(--surface-raised, #1d252f)",
+              boxShadow: "0 14px 36px rgb(0 0 0 / 0.42)",
+              color: "var(--text, #dce4ee)",
+              textAlign: "left",
+            }}
+          >
+            <div style={{ padding: "5px 7px 7px", fontSize: 11, fontWeight: 700, color: "var(--muted-text, #a8b4c2)" }}>{item.title}</div>
+            {item.menu.items.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                role="menuitem"
+                disabled={!entry.action}
+                title={entry.detail || entry.value || entry.label}
+                onClick={() => void runTopbarMenuAction(pluginId, entry.action)}
+                style={{
+                  width: "100%",
+                  display: "grid",
+                  gridTemplateColumns: "minmax(0, 1fr) auto",
+                  gap: 10,
+                  alignItems: "center",
+                  padding: "8px 9px",
+                  border: 0,
+                  borderRadius: 7,
+                  background: "transparent",
+                  color: "inherit",
+                  cursor: entry.action ? "pointer" : "default",
+                  textAlign: "left",
+                  font: "inherit",
+                }}
+              >
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: "block", fontSize: 11, fontWeight: 650 }}>{entry.label}</span>
+                  {entry.detail ? <span style={{ display: "block", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10, color: "var(--muted-text, #a8b4c2)" }}>{entry.detail}</span> : null}
+                </span>
+                {entry.value ? <span style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace", fontSize: 11 }}>{entry.value}</span> : null}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        </div>
       );
     }),
   );
