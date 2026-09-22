@@ -254,6 +254,11 @@ struct StorageSetParams {
     key: String,
     value: serde_json::Value,
 }
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ClipboardWriteParams {
+    text: String,
+}
 fn permission_granted(permissions: &[String], permission: &str) -> bool {
     permissions.iter().any(|value| value == permission)
 }
@@ -292,6 +297,18 @@ fn validate_plugin_request(permissions: &[String], request: &PluginRequest) -> R
         "storage.get" | "storage.set" => {
             if !permission_granted(permissions, "storage.plugin") {
                 return Err("plugin lacks storage.plugin permission".to_string());
+            }
+            Ok(())
+        }
+        "clipboard.write" => {
+            if !permission_granted(permissions, "clipboard.write") {
+                return Err("plugin lacks clipboard.write permission".to_string());
+            }
+            Ok(())
+        }
+        "network.interfaces" => {
+            if !permission_granted(permissions, "network.inspect") {
+                return Err("plugin lacks network.inspect permission".to_string());
             }
             Ok(())
         }
@@ -343,6 +360,43 @@ fn handle_plugin_request(
                 .map_err(|error| format!("invalid storage.set params: {error}"))?;
             crate::plugins::plugin_storage_set(plugin_id, &params.key, &params.value)?;
             Ok(serde_json::json!({ "stored": true }))
+        }
+        "clipboard.write" => {
+            let params: ClipboardWriteParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid clipboard.write params: {error}"))?;
+            if params.text.len() > 64 * 1024 {
+                return Err("clipboard text exceeds 64 KiB".to_string());
+            }
+            let mut clipboard = arboard::Clipboard::new()
+                .map_err(|error| format!("clipboard is unavailable: {error}"))?;
+            clipboard
+                .set_text(params.text)
+                .map_err(|error| format!("failed to write clipboard: {error}"))?;
+            Ok(serde_json::json!({ "copied": true }))
+        }
+        "network.interfaces" => {
+            let interfaces: Vec<serde_json::Value> = pnet_datalink::interfaces()
+                .into_iter()
+                .map(|interface| {
+                    let addresses: Vec<serde_json::Value> = interface.ips
+                        .iter()
+                        .map(|network| {
+                            let ip = network.ip();
+                            serde_json::json!({
+                                "address": ip.to_string(),
+                                "family": if ip.is_ipv4() { "ipv4" } else { "ipv6" },
+                            })
+                        })
+                        .collect();
+                    serde_json::json!({
+                        "name": interface.name,
+                        "index": interface.index,
+                        "macAddress": interface.mac.map(|mac| mac.to_string()),
+                        "addresses": addresses,
+                    })
+                })
+                .collect();
+            Ok(serde_json::json!({ "interfaces": interfaces }))
         }
         _ => unreachable!("validated host API method"),
     }
@@ -799,6 +853,30 @@ mod tests {
         let error = validate_plugin_request(&[], &request).unwrap_err();
         assert_eq!(error, "plugin lacks credentials.store permission");
         assert!(validate_plugin_request(&["credentials.store".to_string()], &request).is_ok());
+    }
+
+    #[test]
+    fn validates_clipboard_write_permission() {
+        let request = PluginRequest {
+            message_type: "plugin.request".to_string(),
+            request_id: 1,
+            method: "clipboard.write".to_string(),
+            params: serde_json::json!({ "text": "hello" }),
+        };
+        assert!(validate_plugin_request(&["clipboard.write".to_string()], &request).is_ok());
+        assert!(validate_plugin_request(&[], &request).is_err());
+    }
+
+    #[test]
+    fn validates_network_inspect_permission() {
+        let request = PluginRequest {
+            message_type: "plugin.request".to_string(),
+            request_id: 1,
+            method: "network.interfaces".to_string(),
+            params: serde_json::json!({}),
+        };
+        assert!(validate_plugin_request(&["network.inspect".to_string()], &request).is_ok());
+        assert!(validate_plugin_request(&[], &request).is_err());
     }
 
     #[test]
