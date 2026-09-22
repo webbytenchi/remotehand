@@ -151,6 +151,8 @@ const [error, setError] = useState<string | null>(null);
 const pluginId = params?.pluginId ?? "";
 const panelId = params?.panelId ?? "";
 const context = params?.context;
+const contextRef = useRef<PluginContext>(context);
+contextRef.current = context;
 useEffect(() => {
 let cancelled = false;
 setHtml(null);
@@ -164,7 +166,7 @@ useEffect(() => {
 const postAppearance = () => {
 iframeRef.current?.contentWindow?.postMessage({ type: "remotehand.appearance", appearance: readPluginAppearance() } satisfies PluginAppearanceMessage, "*");
 };
-const postContext = (nextContext: PluginContext = context) => {
+const postContext = (nextContext: PluginContext = contextRef.current) => {
 iframeRef.current?.contentWindow?.postMessage({ type: "remotehand.plugin.context", context: nextContext ?? {} }, "*");
 };
 const onMessage = (event: MessageEvent<PluginBridgeRequest | { type: "remotehand.plugin.ready" }>) => {
@@ -197,7 +199,7 @@ if (pluginContextHandlers.get(contextKey) === postContext) pluginContextHandlers
 }, [api, pluginId, panelId, html]);
 useEffect(() => {
 iframeRef.current?.contentWindow?.postMessage(
-{ type: "remotehand.plugin.context", context: context ?? {} },
+{ type: "remotehand.plugin.context", context: contextRef.current ?? {} },
 "*",
 );
 }, [context]);
