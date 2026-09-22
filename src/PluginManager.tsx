@@ -617,7 +617,7 @@ export function PluginManager({
         <div
           key={itemKey}
           data-plugin-topbar-menu
-          style={{ order: contributionOrderIndex(topbarOrder, itemKey), position: "relative", zIndex: menuOpen ? 1001 : 10, pointerEvents: "auto", flexShrink: 0, marginLeft: 6 }}
+          style={{ order: contributionOrderIndex(topbarOrder, itemKey, -1), position: "relative", zIndex: menuOpen ? 1001 : 10, pointerEvents: "auto", flexShrink: 0, marginLeft: 6 }}
         >
         <button
           type="button"
