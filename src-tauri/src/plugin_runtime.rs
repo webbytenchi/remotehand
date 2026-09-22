@@ -375,23 +375,38 @@ fn handle_plugin_request(
             Ok(serde_json::json!({ "copied": true }))
         }
         "network.interfaces" => {
-            let interfaces: Vec<serde_json::Value> = pnet_datalink::interfaces()
+            let mut grouped: BTreeMap<String, (Option<String>, Vec<serde_json::Value>)> =
+                BTreeMap::new();
+            for interface in getifaddrs::getifaddrs()
+                .map_err(|error| format!("failed to enumerate network interfaces: {error}"))?
+            {
+                let entry = grouped
+                    .entry(interface.name.clone())
+                    .or_insert_with(|| (None, Vec::new()));
+                if let Some(mac) = interface.address.mac_addr() {
+                    entry.0 = Some(
+                        mac.iter()
+                            .map(|byte| format!("{byte:02x}"))
+                            .collect::<Vec<_>>()
+                            .join(":"),
+                    );
+                }
+                if let Some(ip) = interface.address.ip_addr() {
+                    let value = serde_json::json!({
+                        "address": ip.to_string(),
+                        "family": if ip.is_ipv4() { "ipv4" } else { "ipv6" },
+                    });
+                    if !entry.1.contains(&value) {
+                        entry.1.push(value);
+                    }
+                }
+            }
+            let interfaces: Vec<serde_json::Value> = grouped
                 .into_iter()
-                .map(|interface| {
-                    let addresses: Vec<serde_json::Value> = interface.ips
-                        .iter()
-                        .map(|network| {
-                            let ip = network.ip();
-                            serde_json::json!({
-                                "address": ip.to_string(),
-                                "family": if ip.is_ipv4() { "ipv4" } else { "ipv6" },
-                            })
-                        })
-                        .collect();
+                .map(|(name, (mac_address, addresses))| {
                     serde_json::json!({
-                        "name": interface.name,
-                        "index": interface.index,
-                        "macAddress": interface.mac.map(|mac| mac.to_string()),
+                        "name": name,
+                        "macAddress": mac_address,
                         "addresses": addresses,
                     })
                 })
