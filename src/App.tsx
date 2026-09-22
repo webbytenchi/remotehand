@@ -709,7 +709,12 @@ sendPluginPanelContext(plugin.manifest.id, panel.id, context);
 
 const ownerWindow = existing.api.getWindow();
 if (existing.api.location.type === "popout") {
+if (isTauri()) {
+void invoke("focus_single_panel_popout")
+.catch((error) => console.error("Failed to restore plugin popout window", error));
+} else {
 ownerWindow.focus();
+}
 } else if (isTauri()) {
 const mainWindow = getCurrentWindow();
 void mainWindow
