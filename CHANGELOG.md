@@ -2,6 +2,20 @@
 
 All notable changes to RemoteHand are documented here.
 
+## `1.2.2` - 2026-09-22
+
+### Fixed
+
+- **Restored terminal geometry.** Restored terminal and SSH panels now wait for the workspace layout to settle, refit xterm, and explicitly synchronize the final rows and columns with the native PTY. This prevents corrupted redraws in full-screen terminal applications such as `top` after restarting RemoteHand with an SSH panel left open.
+
+### Verification
+
+- Windows x86_64 manual regression testing covered restarting RemoteHand with a saved SSH panel, reconnecting the restored session, running `top` through repeated refreshes, and resizing/splitting the restored terminal without the previous missing headers or duplicated rows.
+
+### Notes
+
+- The terminal backend remains the existing `portable-pty` architecture. The direct Windows ConPTY prototype was diagnostic only and is not part of this release.
+
 ## `1.2.1` - 2026-09-21
 
 ### Added
