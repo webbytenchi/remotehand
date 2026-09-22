@@ -1,10 +1,9 @@
-use std::{collections::BTreeMap, sync::{Arc, Mutex}};
+use std::{cell::RefCell, collections::{BTreeMap, BTreeSet}, sync::{Arc, Mutex}};
 
 use serde::{Deserialize, Serialize};
 
 use tauri::{
     menu::{MenuBuilder, MenuItem, MenuItemBuilder, PredefinedMenuItem},
-    image::Image,
     tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, State, Wry, Window,
 };
@@ -16,7 +15,6 @@ pub struct StartupTrayState {
     window_item: Arc<Mutex<Option<MenuItem<Wry>>>>,
     minimize_to_tray_on_close: Arc<Mutex<bool>>,
     show_in_system_tray: Arc<Mutex<bool>>,
-    plugin_trays: Arc<Mutex<BTreeMap<String, BTreeMap<String, TrayIcon>>>>,
     plugin_tray_actions: Arc<Mutex<BTreeMap<String, PluginTrayAction>>>,
 }
 
@@ -27,7 +25,6 @@ impl Default for StartupTrayState {
             window_item: Arc::new(Mutex::new(None)),
             minimize_to_tray_on_close: Arc::new(Mutex::new(false)),
             show_in_system_tray: Arc::new(Mutex::new(true)),
-            plugin_trays: Arc::new(Mutex::new(BTreeMap::new())),
             plugin_tray_actions: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
@@ -137,7 +134,7 @@ fn set_pixel(bytes: &mut [u8], x: usize, y: usize, color: [u8; 4]) {
     bytes[offset..offset + 4].copy_from_slice(&color);
 }
 
-fn plugin_tray_icon(item: &PluginTrayItem) -> Image<'static> {
+fn plugin_tray_icon(item: &PluginTrayItem) -> Result<tray_icon::Icon, String> {
     const SIZE: usize = 32;
     let mut bytes = vec![0u8; SIZE * SIZE * 4];
     let border = [210, 218, 228, 210];
@@ -170,8 +167,7 @@ fn plugin_tray_icon(item: &PluginTrayItem) -> Image<'static> {
         }
     } else {
         let bar_width = 2usize;
-        let gap = 0usize;
-        let total_width = points.len() * (bar_width + gap);
+        let total_width = points.len() * bar_width;
         let start_x = 16usize.saturating_sub(total_width / 2);
         for (index, point) in points.iter().enumerate() {
             let height = match point.value {
@@ -181,7 +177,7 @@ fn plugin_tray_icon(item: &PluginTrayItem) -> Image<'static> {
                 _ => 3,
             };
             let color = tray_color(point.tone.as_deref().unwrap_or(&item.tone));
-            let x0 = start_x + index * (bar_width + gap);
+            let x0 = start_x + index * bar_width;
             for x in x0..(x0 + bar_width).min(28) {
                 for y in (27usize.saturating_sub(height))..27 {
                     set_pixel(&mut bytes, x, y, color);
@@ -190,7 +186,86 @@ fn plugin_tray_icon(item: &PluginTrayItem) -> Image<'static> {
         }
     }
 
-    Image::new_owned(bytes, SIZE as u32, SIZE as u32)
+    tray_icon::Icon::from_rgba(bytes, SIZE as u32, SIZE as u32)
+        .map_err(|error| error.to_string())
+}
+
+fn plugin_tray_key(plugin_id: &str, item_id: &str) -> String {
+    format!("plugin-tray:{plugin_id}:{item_id}")
+}
+
+fn stable_plugin_tray_guid(key: &str) -> u128 {
+    const OFFSET: u128 = 0x6c62272e07bb014262b821756295c58d;
+    const PRIME: u128 = 0x0000000001000000000000000000013b;
+
+    let mut hash = OFFSET;
+    for byte in key.as_bytes() {
+        hash ^= *byte as u128;
+        hash = hash.wrapping_mul(PRIME);
+    }
+
+    let mut bytes = hash.to_be_bytes();
+    bytes[6] = (bytes[6] & 0x0f) | 0x50;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    u128::from_be_bytes(bytes)
+}
+
+thread_local! {
+    static PLUGIN_TRAYS: RefCell<BTreeMap<String, tray_icon::TrayIcon>> =
+        RefCell::new(BTreeMap::new());
+}
+
+fn apply_plugin_tray_update(plugin_id: &str, update: PluginTrayUpdate) -> Result<(), String> {
+    PLUGIN_TRAYS.with(|slot| {
+        let mut trays = slot.borrow_mut();
+        let prefix = format!("plugin-tray:{plugin_id}:");
+        let wanted: BTreeSet<String> = update
+            .items
+            .iter()
+            .map(|item| plugin_tray_key(plugin_id, &item.id))
+            .collect();
+
+        let stale: Vec<String> = trays
+            .keys()
+            .filter(|key| key.starts_with(&prefix) && !wanted.contains(*key))
+            .cloned()
+            .collect();
+        for key in stale {
+            if let Some(tray) = trays.remove(&key) {
+                let _ = tray.set_visible(false);
+            }
+        }
+
+        for item in update.items {
+            let key = plugin_tray_key(plugin_id, &item.id);
+            let tooltip = if item.tooltip.is_empty() {
+                item.title.clone()
+            } else {
+                item.tooltip.clone()
+            };
+            let icon = plugin_tray_icon(&item)?;
+
+            if let Some(tray) = trays.get(&key) {
+                tray.set_icon(Some(icon)).map_err(|error| error.to_string())?;
+                tray.set_tooltip(Some(&tooltip)).map_err(|error| error.to_string())?;
+                tray.set_visible(item.visible).map_err(|error| error.to_string())?;
+                continue;
+            }
+
+            let tray = tray_icon::TrayIconBuilder::with_id(key.clone())
+                .with_guid(stable_plugin_tray_guid(&key))
+                .with_icon(icon)
+                .with_tooltip(&tooltip)
+                .with_menu_on_left_click(false)
+                .with_menu_on_right_click(false)
+                .build()
+                .map_err(|error| error.to_string())?;
+            tray.set_visible(item.visible).map_err(|error| error.to_string())?;
+            trays.insert(key, tray);
+        }
+
+        Ok(())
+    })
 }
 
 impl StartupTrayState {
@@ -206,7 +281,7 @@ impl StartupTrayState {
             return Err("tray.update exceeds the 64 item limit".to_string());
         }
 
-        let mut seen = std::collections::BTreeSet::new();
+        let mut seen = BTreeSet::new();
         for item in &update.items {
             if !valid_tray_id(&item.id) || !seen.insert(item.id.clone()) {
                 return Err("tray.update contains an invalid or duplicate item id".to_string());
@@ -218,114 +293,99 @@ impl StartupTrayState {
                 return Err("tray.update series exceeds the 60 point limit".to_string());
             }
             if let Some(action) = item.action.as_ref() {
-                if action.action_type != "open-panel" || action.panel.is_empty() || action.panel.len() > 128 {
+                if action.action_type != "open-panel"
+                    || action.panel.is_empty()
+                    || action.panel.len() > 128
+                {
                     return Err("tray.update contains an unsupported action".to_string());
                 }
             }
         }
 
-        let mut trays = self
-            .plugin_trays
+        let prefix = format!("plugin-tray:{plugin_id}:");
+        let mut actions = self
+            .plugin_tray_actions
             .lock()
-            .map_err(|_| "plugin tray state lock poisoned".to_string())?;
-        let plugin_trays = trays.entry(plugin_id.to_string()).or_default();
-
-        let wanted: std::collections::BTreeSet<String> =
-            update.items.iter().map(|item| item.id.clone()).collect();
-        let stale: Vec<String> = plugin_trays
-            .keys()
-            .filter(|id| !wanted.contains(*id))
-            .cloned()
-            .collect();
-        for id in stale {
-            if let Some(tray) = plugin_trays.remove(&id) {
-                let _ = tray.set_visible(false);
-            }
-            if let Ok(mut actions) = self.plugin_tray_actions.lock() {
-                actions.remove(&format!("{plugin_id}:{id}"));
+            .map_err(|_| "plugin tray action lock poisoned".to_string())?;
+        actions.retain(|key, _| !key.starts_with(&prefix));
+        for item in &update.items {
+            if let Some(action) = item.action.clone() {
+                actions.insert(plugin_tray_key(plugin_id, &item.id), action);
             }
         }
+        drop(actions);
 
-        for item in update.items {
-            let key = format!("{plugin_id}:{}", item.id);
-            if let Ok(mut actions) = self.plugin_tray_actions.lock() {
-                if let Some(action) = item.action.clone() {
-                    actions.insert(key.clone(), action);
-                } else {
-                    actions.remove(&key);
-                }
+        let plugin_id = plugin_id.to_string();
+        app.run_on_main_thread(move || {
+            if let Err(error) = apply_plugin_tray_update(&plugin_id, update) {
+                log::warn!("Failed to apply plugin tray update for {plugin_id}: {error}");
             }
-
-            let tooltip = if item.tooltip.is_empty() {
-                item.title.clone()
-            } else {
-                item.tooltip.clone()
-            };
-            let icon = plugin_tray_icon(&item);
-            if let Some(tray) = plugin_trays.get(&item.id) {
-                tray.set_icon(Some(icon)).map_err(|error| error.to_string())?;
-                tray.set_tooltip(Some(&tooltip)).map_err(|error| error.to_string())?;
-                tray.set_visible(item.visible).map_err(|error| error.to_string())?;
-                continue;
-            }
-
-            let actions = self.plugin_tray_actions.clone();
-            let plugin_id_for_click = plugin_id.to_string();
-            let item_id_for_click = item.id.clone();
-            let tray = TrayIconBuilder::with_id(format!("plugin-tray:{plugin_id}:{}", item.id))
-                .icon(icon)
-                .tooltip(&tooltip)
-                .show_menu_on_left_click(false)
-                .on_tray_icon_event(move |tray, event| {
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    } = event
-                    {
-                        let app = tray.app_handle();
-                        show_main(&app);
-                        let action = actions
-                            .lock()
-                            .ok()
-                            .and_then(|guard| guard.get(&format!("{plugin_id_for_click}:{item_id_for_click}")).cloned());
-                        if let Some(action) = action {
-                            let envelope = serde_json::json!({
-                                "pluginId": plugin_id_for_click,
-                                "event": "tray.action",
-                                "payload": {
-                                    "itemId": item_id_for_click,
-                                    "action": action,
-                                }
-                            });
-                            let _ = app.emit("remotehand-plugin-event", envelope);
-                        }
-                    }
-                })
-                .build(app)
-                .map_err(|error| error.to_string())?;
-            tray.set_visible(item.visible).map_err(|error| error.to_string())?;
-            plugin_trays.insert(item.id, tray);
-        }
-
-        if plugin_trays.is_empty() {
-            trays.remove(plugin_id);
-        }
-        Ok(())
+        })
+        .map_err(|error| error.to_string())
     }
 
-    pub fn hide_plugin_trays(&self, plugin_id: &str) {
-        if let Ok(trays) = self.plugin_trays.lock() {
-            if let Some(plugin_trays) = trays.get(plugin_id) {
-                for tray in plugin_trays.values() {
-                    let _ = tray.set_visible(false);
-                }
-            }
-        }
+    pub fn hide_plugin_trays(&self, app: &AppHandle, plugin_id: &str) {
+        let prefix = format!("plugin-tray:{plugin_id}:");
         if let Ok(mut actions) = self.plugin_tray_actions.lock() {
-            let prefix = format!("{plugin_id}:");
             actions.retain(|key, _| !key.starts_with(&prefix));
         }
+
+        let plugin_id = plugin_id.to_string();
+        if let Err(error) = app.run_on_main_thread(move || {
+            let prefix = format!("plugin-tray:{plugin_id}:");
+            PLUGIN_TRAYS.with(|slot| {
+                for (key, tray) in slot.borrow().iter() {
+                    if key.starts_with(&prefix) {
+                        let _ = tray.set_visible(false);
+                    }
+                }
+            });
+        }) {
+            log::warn!("Failed to hide plugin trays for {plugin_id}: {error}");
+        }
+    }
+}
+
+pub fn handle_plugin_tray_event(app: &AppHandle, event: TrayIconEvent) {
+    let TrayIconEvent::Click {
+        id,
+        button: MouseButton::Left,
+        button_state: MouseButtonState::Up,
+        ..
+    } = event
+    else {
+        return;
+    };
+
+    let key = id.as_ref();
+    let Some(rest) = key.strip_prefix("plugin-tray:") else {
+        return;
+    };
+    let Some((plugin_id, item_id)) = rest.split_once(':') else {
+        return;
+    };
+
+    let action = app
+        .try_state::<StartupTrayState>()
+        .and_then(|state| {
+            state
+                .plugin_tray_actions
+                .lock()
+                .ok()
+                .and_then(|actions| actions.get(key).cloned())
+        });
+
+    show_main(app);
+    if let Some(action) = action {
+        let envelope = serde_json::json!({
+            "pluginId": plugin_id,
+            "event": "tray.action",
+            "payload": {
+                "itemId": item_id,
+                "action": action,
+            }
+        });
+        let _ = app.emit("remotehand-plugin-event", envelope);
     }
 }
 
@@ -504,4 +564,26 @@ pub fn should_minimize_at_startup() -> bool {
 
 pub fn handle_close(_window: &Window, state: &StartupTrayState) -> bool {
     state.close_to_tray() && state.show_in_system_tray.lock().map(|guard| *guard).unwrap_or(false)
+}
+
+#[cfg(test)]
+mod plugin_tray_tests {
+    use super::stable_plugin_tray_guid;
+
+    #[test]
+    fn plugin_tray_guid_is_stable_and_unique_per_item() {
+        let a = stable_plugin_tray_guid("plugin-tray:remotehand.host-monitor:google-dns");
+        let b = stable_plugin_tray_guid("plugin-tray:remotehand.host-monitor:google-dns");
+        let c = stable_plugin_tray_guid("plugin-tray:remotehand.host-monitor:router");
+        assert_eq!(a, b);
+        assert_ne!(a, c);
+    }
+
+    #[test]
+    fn plugin_tray_guid_has_uuid_v5_variant_bits() {
+        let bytes =
+            stable_plugin_tray_guid("plugin-tray:remotehand.host-monitor:google-dns").to_be_bytes();
+        assert_eq!(bytes[6] >> 4, 5);
+        assert_eq!(bytes[8] >> 6, 2);
+    }
 }
