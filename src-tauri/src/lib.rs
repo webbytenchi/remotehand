@@ -95,6 +95,18 @@ fn hide_single_panel_popout(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn focus_main_window(app: tauri::AppHandle) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "main window is not available".to_string())?;
+    if window.is_minimized().map_err(|error| error.to_string())? {
+        window.unminimize().map_err(|error| error.to_string())?;
+    }
+    window.show().map_err(|error| error.to_string())?;
+    window.set_focus().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 fn focus_single_panel_popout(app: tauri::AppHandle) -> Result<(), String> {
     let mut popouts = app
         .webview_windows()
@@ -223,6 +235,7 @@ pub fn run() {
             close_current_window,
             close_panel_popouts,
             hide_single_panel_popout,
+            focus_main_window,
             focus_single_panel_popout,
             show_pending_popout,
             startup_tray::set_startup_enabled,
