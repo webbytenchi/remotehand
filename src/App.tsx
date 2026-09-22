@@ -17,6 +17,14 @@ import { SftpPanel } from "./SftpPanel";
 import { AppModal } from "./AppModal";
 import { PluginManager } from "./PluginManager";
 import { PluginPanel, sendPluginPanelContext, type PluginPanelParams } from "./PluginPanel";
+import {
+  EMPTY_UI_CONTRIBUTION_LAYOUT,
+  contributionOrderIndex,
+  mergeRememberedOrder,
+  moveVisibleContribution,
+  resolveContributionOrder,
+  type UiContributionLayout,
+} from "./contributionLayout";
 import appIcon from "../src-tauri/icons/icon.png";
 import "./App.css";
 type Connection = {
@@ -50,6 +58,7 @@ const WORKSPACE_KEY = "remotehand.workspace";
 const THEME_KEY = "remotehand.theme";
 const SETTINGS_KEY = "remotehand.settings";
 const SIDEBAR_COLLAPSED_KEY = "remotehand.sidebarCollapsed";
+const UI_CONTRIBUTION_LAYOUT_KEY = "remotehand.uiContributionLayout";
 const DEFAULT_SETTINGS: Settings = {
 theme: "dark",
 colorScheme: "blue",
@@ -440,13 +449,16 @@ const legacyTheme = localStorage.getItem(THEME_KEY);
 return { ...DEFAULT_SETTINGS, theme: legacyTheme === "light" ? "light" : "dark" };
 });
 const [settingsOpen, setSettingsOpen] = useState(false);
-const [settingsTab, setSettingsTab] = useState<"appearance" | "startup" | "papa">("appearance");
+const [settingsTab, setSettingsTab] = useState<"appearance" | "startup" | "layout" | "papa">("appearance");
 const [papaTabUnlocked, setPapaTabUnlocked] = useState(false);
 const [papaConfettiActive, setPapaConfettiActive] = useState(false);
 const papaSequenceRef = useRef<string[]>([]);
 const papaAudioRef = useRef<HTMLAudioElement | null>(null);
 const [pluginsOpen, setPluginsOpen] = useState(false);
 const [plugins, setPlugins] = useState<PluginInfo[]>([]);
+const [topbarContributionItems, setTopbarContributionItems] = useState<Array<{ id: string; label: string }>>([]);
+const [uiContributionLayout, setUiContributionLayout] = useState<UiContributionLayout>(EMPTY_UI_CONTRIBUTION_LAYOUT);
+const [uiContributionLayoutLoaded, setUiContributionLayoutLoaded] = useState(() => !isTauri());
 const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("dark");
 const [settingsLoaded, setSettingsLoaded] = useState(() => !isTauri());
 const settingsPersistenceEnabledRef = useRef(true);
@@ -912,6 +924,48 @@ console.error("Failed to save settings", error),
 useEffect(() => {
 localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(sidebarCollapsed));
 }, [sidebarCollapsed]);
+
+useEffect(() => {
+if (!isTauri()) {
+const saved = localStorage.getItem(UI_CONTRIBUTION_LAYOUT_KEY);
+if (saved) {
+try {
+const parsed = JSON.parse(saved) as Partial<UiContributionLayout>;
+setUiContributionLayout({
+sidebarOrder: Array.isArray(parsed.sidebarOrder) ? parsed.sidebarOrder.filter((value): value is string => typeof value === "string") : [],
+topbarOrder: Array.isArray(parsed.topbarOrder) ? parsed.topbarOrder.filter((value): value is string => typeof value === "string") : [],
+});
+} catch {
+localStorage.removeItem(UI_CONTRIBUTION_LAYOUT_KEY);
+}
+}
+setUiContributionLayoutLoaded(true);
+return;
+}
+void invoke<UiContributionLayout>("load_ui_contribution_layout")
+.then((saved) => {
+setUiContributionLayout({
+sidebarOrder: Array.isArray(saved.sidebarOrder) ? saved.sidebarOrder : [],
+topbarOrder: Array.isArray(saved.topbarOrder) ? saved.topbarOrder : [],
+});
+})
+.catch((error) => {
+console.error("Failed to load UI contribution ordering; using legacy order", error);
+setUiContributionLayout(EMPTY_UI_CONTRIBUTION_LAYOUT);
+})
+.finally(() => setUiContributionLayoutLoaded(true));
+}, []);
+
+useEffect(() => {
+if (!uiContributionLayoutLoaded) return;
+if (!isTauri()) {
+localStorage.setItem(UI_CONTRIBUTION_LAYOUT_KEY, JSON.stringify(uiContributionLayout));
+return;
+}
+void invoke("save_ui_contribution_layout", { layout: uiContributionLayout }).catch((error) =>
+console.error("Failed to save UI contribution ordering", error),
+);
+}, [uiContributionLayout, uiContributionLayoutLoaded]);
 useEffect(() => {
 const api = apiRef.current;
 if (!api) return;
@@ -1235,6 +1289,67 @@ const commands = [
 const filteredCommands = commands.filter((command) =>
 command.label.toLowerCase().includes(paletteQuery.toLowerCase()),
 );
+
+const coreSidebarItems = [
+{ id: "core:home", label: "Home" },
+...(localOs === "windows"
+? [
+{ id: "core:powershell", label: "PowerShell" },
+{ id: "core:cmd", label: "Command Prompt" },
+]
+: [{ id: "core:terminal", label: "Terminal" }]),
+{ id: "core:connections", label: "Connections" },
+{ id: "core:split-right", label: "Split right" },
+{ id: "core:split-below", label: "Split below" },
+{ id: "core:popout-active", label: "Pop out active" },
+];
+const pluginSidebarItems = plugins.flatMap((plugin) =>
+plugin.enabled
+? plugin.manifest.contributes.sidebar.map((sidebar) => ({
+id: `${plugin.manifest.id}:${sidebar.id}`,
+label: sidebar.title,
+}))
+: [],
+);
+const sidebarCatalog = [...coreSidebarItems, ...pluginSidebarItems];
+const sidebarAvailableIds = sidebarCatalog.map((item) => item.id);
+const resolvedSidebarOrder = resolveContributionOrder(
+uiContributionLayout.sidebarOrder,
+sidebarAvailableIds,
+sidebarAvailableIds,
+);
+
+const coreTopbarItems = [
+{ id: "core:plugins", label: "Plugins" },
+{ id: "core:settings", label: "Settings" },
+];
+const topbarCatalog = [...topbarContributionItems, ...coreTopbarItems];
+const topbarAvailableIds = topbarCatalog.map((item) => item.id);
+const topbarFallbackIds = [...topbarContributionItems.map((item) => item.id), ...coreTopbarItems.map((item) => item.id)];
+const resolvedTopbarOrder = resolveContributionOrder(
+uiContributionLayout.topbarOrder,
+topbarAvailableIds,
+topbarFallbackIds,
+);
+
+const moveSidebarItem = (id: string, delta: -1 | 1) => {
+setUiContributionLayout((current) => {
+const remembered = mergeRememberedOrder(current.sidebarOrder, sidebarAvailableIds, sidebarAvailableIds);
+const visible = resolveContributionOrder(remembered, sidebarAvailableIds, sidebarAvailableIds);
+return { ...current, sidebarOrder: moveVisibleContribution(remembered, visible, id, delta) };
+});
+};
+const moveTopbarItem = (id: string, delta: -1 | 1) => {
+setUiContributionLayout((current) => {
+const remembered = mergeRememberedOrder(current.topbarOrder, topbarAvailableIds, topbarFallbackIds);
+const visible = resolveContributionOrder(remembered, topbarAvailableIds, topbarFallbackIds);
+return { ...current, topbarOrder: moveVisibleContribution(remembered, visible, id, delta) };
+});
+};
+const resetContributionOrdering = () => {
+setUiContributionLayout(EMPTY_UI_CONTRIBUTION_LAYOUT);
+};
+
 if (!settingsLoaded) {
 return <main className="app-shell" aria-hidden="true" />;
 }
@@ -1249,9 +1364,10 @@ return (
 </div>
 </div>
 <div className="topbar-actions">
-<button className="topbar-button icon-button" type="button" onClick={() => setPluginsOpen(true)} title="Plugins" aria-label="Plugins">🧩</button>
+<button className="topbar-button icon-button" style={{ order: contributionOrderIndex(resolvedTopbarOrder, "core:plugins") }} type="button" onClick={() => setPluginsOpen(true)} title="Plugins" aria-label="Plugins">🧩</button>
 <button
 className="topbar-button icon-button settings-button"
+style={{ order: contributionOrderIndex(resolvedTopbarOrder, "core:settings") }}
 type="button"
 onClick={() => { setSettingsTab("appearance"); setSettingsOpen(true); }}
 title="Settings"
@@ -1275,7 +1391,7 @@ aria-label="Settings"
 </span>
 </button>
 </div>
-<button className="sidebar-action" type="button" onClick={openHome} title="Home">
+<button className="sidebar-action" style={{ order: 100 + contributionOrderIndex(resolvedSidebarOrder, "core:home") }} type="button" onClick={openHome} title="Home">
 <span className="sidebar-icon" aria-hidden="true">
 <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
 <path d="M3 9.2L10 3l7 6.2" />
@@ -1286,7 +1402,7 @@ aria-label="Settings"
 </button>
 {localOs === "windows" ? (
 <>
-<button className="sidebar-action" type="button" onClick={() => addTerminal(undefined, "powershell")} title="PowerShell">
+<button className="sidebar-action" style={{ order: 100 + contributionOrderIndex(resolvedSidebarOrder, "core:powershell") }} type="button" onClick={() => addTerminal(undefined, "powershell")} title="PowerShell">
 <span className="sidebar-icon" aria-hidden="true">
 <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
 <rect x="2.5" y="3.5" width="15" height="13" rx="2" />
@@ -1295,7 +1411,7 @@ aria-label="Settings"
 </svg>
 </span><span className="sidebar-label">PowerShell</span>
 </button>
-<button className="sidebar-action" type="button" onClick={() => addTerminal(undefined, "cmd")} title="Command Prompt">
+<button className="sidebar-action" style={{ order: 100 + contributionOrderIndex(resolvedSidebarOrder, "core:cmd") }} type="button" onClick={() => addTerminal(undefined, "cmd")} title="Command Prompt">
 <span className="sidebar-icon" aria-hidden="true">
 <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
 <rect x="2.5" y="3.5" width="15" height="13" rx="2" />
@@ -1306,20 +1422,20 @@ aria-label="Settings"
 </button>
 </>
 ) : (
-<button className="sidebar-action" type="button" onClick={() => addTerminal()} title="Terminal">
+<button className="sidebar-action" style={{ order: 100 + contributionOrderIndex(resolvedSidebarOrder, "core:terminal") }} type="button" onClick={() => addTerminal()} title="Terminal">
 <span className="sidebar-icon">⌘</span><span className="sidebar-label">Terminal</span>
 </button>
 )}
-<button className="sidebar-action" type="button" onClick={addConnections} title="Connections">
+<button className="sidebar-action" style={{ order: 100 + contributionOrderIndex(resolvedSidebarOrder, "core:connections") }} type="button" onClick={addConnections} title="Connections">
 <span className="sidebar-icon">◈</span><span className="sidebar-label">Connections</span>
 </button>
-<button className="sidebar-action" type="button" onClick={() => addTerminal("right")} title="Split right">
+<button className="sidebar-action" style={{ order: 100 + contributionOrderIndex(resolvedSidebarOrder, "core:split-right") }} type="button" onClick={() => addTerminal("right")} title="Split right">
 <span className="sidebar-icon">⇥</span><span className="sidebar-label">Split right</span>
 </button>
-<button className="sidebar-action" type="button" onClick={() => addTerminal("below")} title="Split below">
+<button className="sidebar-action" style={{ order: 100 + contributionOrderIndex(resolvedSidebarOrder, "core:split-below") }} type="button" onClick={() => addTerminal("below")} title="Split below">
 <span className="sidebar-icon">⇣</span><span className="sidebar-label">Split below</span>
 </button>
-<button className="sidebar-action" type="button" onClick={popoutActive} title="Open active panel in new window">
+<button className="sidebar-action" style={{ order: 100 + contributionOrderIndex(resolvedSidebarOrder, "core:popout-active") }} type="button" onClick={popoutActive} title="Open active panel in new window">
 <span className="sidebar-icon">↗</span><span className="sidebar-label">Pop out active</span>
 </button>
 {plugins.flatMap((plugin) =>
@@ -1327,6 +1443,7 @@ plugin.enabled
 ? plugin.manifest.contributes.sidebar.map((sidebar) => (
 <button
 className="sidebar-action"
+style={{ order: 100 + contributionOrderIndex(resolvedSidebarOrder, plugin.manifest.id + ":" + sidebar.id) }}
 type="button"
 key={plugin.manifest.id + ":" + sidebar.id}
 onClick={() => openPluginPanel(plugin, sidebar.panel)}
@@ -1338,15 +1455,15 @@ title={sidebar.title}
 ))
 : [],
 )}
-<div className="sidebar-divider" />
-<div className="sidebar-heading">Layout</div>
-<button className="sidebar-action" type="button" onClick={undoLayout} title="Undo layout change">
+<div className="sidebar-divider" style={{ order: 10000 }} />
+<div className="sidebar-heading" style={{ order: 10001 }}>Layout</div>
+<button className="sidebar-action" style={{ order: 10002 }} type="button" onClick={undoLayout} title="Undo layout change">
 <span className="sidebar-icon">↶</span><span className="sidebar-label">Undo</span>
 </button>
-<button className="sidebar-action" type="button" onClick={redoLayout} title="Redo layout change">
+<button className="sidebar-action" style={{ order: 10003 }} type="button" onClick={redoLayout} title="Redo layout change">
 <span className="sidebar-icon">↷</span><span className="sidebar-label">Redo</span>
 </button>
-<button className="sidebar-action" type="button" onClick={resetLayout} title="Reset layout">
+<button className="sidebar-action" style={{ order: 10004 }} type="button" onClick={resetLayout} title="Reset layout">
 <span className="sidebar-icon">⟳</span><span className="sidebar-label">Reset layout</span>
 </button>
 </aside>
@@ -1370,6 +1487,8 @@ popoutUrl="popout.html"
 open={pluginsOpen}
 onClose={() => setPluginsOpen(false)}
 onChanged={() => void refreshPlugins()}
+topbarOrder={resolvedTopbarOrder}
+onTopbarItemsChanged={setTopbarContributionItems}
 onOpenPluginPanel={(pluginId, panelId, context) => {
 const plugin = plugins.find((item) => item.manifest.id === pluginId);
 if (plugin) openPluginPanel(plugin, panelId, context);
@@ -1386,6 +1505,7 @@ focusActions={false}
 tabs={<div className="settings-tabs" role="tablist" aria-label="Settings sections">
 <button type="button" role="tab" aria-selected={settingsTab === "appearance"} className={settingsTab === "appearance" ? "active" : ""} onClick={() => setSettingsTab("appearance")}>Appearance</button>
 <button type="button" role="tab" aria-selected={settingsTab === "startup"} className={settingsTab === "startup" ? "active" : ""} onClick={() => setSettingsTab("startup")}>Startup &amp; Tray</button>
+<button type="button" role="tab" aria-selected={settingsTab === "layout"} className={settingsTab === "layout" ? "active" : ""} onClick={() => setSettingsTab("layout")}>Interface</button>
 {papaTabUnlocked ? <span className="papa-tab-reveal"><button type="button" role="tab" aria-selected={settingsTab === "papa"} className={settingsTab === "papa" ? "active" : ""} onClick={() => { setSettingsTab("papa"); startPapaAudio(); }}>Papa</button>{papaConfettiActive ? <span className="papa-heart-confetti" aria-hidden="true">{Array.from({ length: 10 }, (_, index) => <span key={index}>♥</span>)}</span> : null}</span> : null}
 </div>}>
 {settingsTab === "appearance" ? (
@@ -1489,6 +1609,43 @@ if (isTauri()) void invoke("set_close_to_tray", { value }).catch((error) => cons
 }} />
 <span><strong>Minimize to tray when closing</strong><small>Keep RemoteHand running when the main window is closed.</small></span>
 </label>
+</div>
+) : settingsTab === "layout" ? (
+<div className="settings-tab-content">
+<div className="settings-section-heading">
+<span>RemoteHand owns the order of built-in and plugin interface contributions. Plugins only provide content.</span>
+</div>
+<div style={{ display: "grid", gap: 16 }}>
+<section>
+<strong style={{ display: "block", marginBottom: 8 }}>Sidebar</strong>
+<div style={{ display: "grid", gap: 6 }}>
+{resolvedSidebarOrder.map((id, index) => {
+const entry = sidebarCatalog.find((item) => item.id === id);
+if (!entry) return null;
+return <div key={id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: 6, alignItems: "center", padding: "7px 9px", border: "1px solid var(--border)", borderRadius: 7 }}>
+<span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.label}</span>
+<button type="button" className="settings-reset" style={{ margin: 0, padding: "4px 8px" }} disabled={index === 0} onClick={() => moveSidebarItem(id, -1)} aria-label={`Move ${entry.label} up`}>↑</button>
+<button type="button" className="settings-reset" style={{ margin: 0, padding: "4px 8px" }} disabled={index === resolvedSidebarOrder.length - 1} onClick={() => moveSidebarItem(id, 1)} aria-label={`Move ${entry.label} down`}>↓</button>
+</div>;
+})}
+</div>
+</section>
+<section>
+<strong style={{ display: "block", marginBottom: 8 }}>Top bar</strong>
+<div style={{ display: "grid", gap: 6 }}>
+{resolvedTopbarOrder.map((id, index) => {
+const entry = topbarCatalog.find((item) => item.id === id);
+if (!entry) return null;
+return <div key={id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: 6, alignItems: "center", padding: "7px 9px", border: "1px solid var(--border)", borderRadius: 7 }}>
+<span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.label}</span>
+<button type="button" className="settings-reset" style={{ margin: 0, padding: "4px 8px" }} disabled={index === 0} onClick={() => moveTopbarItem(id, -1)} aria-label={`Move ${entry.label} left`}>←</button>
+<button type="button" className="settings-reset" style={{ margin: 0, padding: "4px 8px" }} disabled={index === resolvedTopbarOrder.length - 1} onClick={() => moveTopbarItem(id, 1)} aria-label={`Move ${entry.label} right`}>→</button>
+</div>;
+})}
+</div>
+</section>
+</div>
+<button type="button" className="settings-reset" onClick={resetContributionOrdering}>Reset interface order</button>
 </div>
 ) : (
 <div className="settings-tab-content papa-settings">
