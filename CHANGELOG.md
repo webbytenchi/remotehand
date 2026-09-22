@@ -2,6 +2,32 @@
 
 All notable changes to RemoteHand are documented here.
 
+## `1.2.6` - 2026-09-23
+
+### Improved
+
+- **Shell-focused sidebar.** Removed visible Split right, Split below, Pop out active, Undo, Redo, and Reset layout controls from the sidebar while keeping their underlying commands and shortcuts available.
+- **Contextual tab controls.** Docked tabs now expose a pop-out action beside Close; popped-out tabs switch that action to dock back, with matching icon styling.
+- **Source-aware dock-back.** Popped-out tabs return to their originating Dockview group when available, preserving tab grouping instead of creating arbitrary new splits.
+- **Plugins in Settings.** Plugin management now lives under Settings → Plugins. The top-bar puzzle button was removed while the plugin runtime/controller remains continuously mounted.
+- **Interface settings cleanup.** Settings → Interface now contains both Reset interface order and Reset workspace layout.
+
+### Fixed
+
+- **Single-tab pop-out restore.** Docking back a single-tab pop-out now restores the tab/group to its original Dockview position and closes the exact native Tauri pop-out window.
+- **Multi-tab pop-out lifecycle.** Closing or docking one tab from a restored multi-tab pop-out no longer closes the entire pop-out while other tabs remain.
+- **Empty native pop-out windows.** RemoteHand now tracks exact native pop-out window labels so emptied Tauri wrappers are closed reliably.
+- **Persistent Cargo.toml normalization noise.** The repository now uses Cargo's normalized `tauri-build` declaration and enforces LF for TOML files, preventing repeated Windows-only dirty-tree churn after Cargo commands.
+
+### Verification
+
+- Frontend tests: 7 passed.
+- Production frontend build: passed.
+- `cargo check --locked`: passed.
+- Rust tests: 31 passed, 0 failed.
+- Manual Windows acceptance covered tab pop-out/dock-back positioning, restored multi-tab pop-outs, Plugins-in-Settings enable/disable behavior and contribution restoration, Interface reset controls, and clean Cargo.toml recurrence checks.
+
+
 ## `1.2.5` - 2026-09-23
 
 ### Added
