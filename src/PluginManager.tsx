@@ -21,6 +21,7 @@ type PluginInfo = {
 };
 
 type TopbarTone = "accent" | "success" | "warning" | "danger" | "muted";
+type TopbarIcon = "globe" | "ethernet" | "wifi" | "shield" | "ipv6";
 type TopbarSeriesPoint = { value?: number | null; tone?: TopbarTone; color?: string };
 type TopbarContent = {
   type: "text" | "metric" | "sparkline" | "metric-sparkline" | "status" | "progress" | "stack";
@@ -49,6 +50,7 @@ type TopbarMenuItem = {
   label: string;
   value?: string;
   detail?: string;
+  icon?: TopbarIcon;
   action?: TopbarMenuAction;
 };
 type TopbarMenu = {
@@ -62,6 +64,7 @@ type TopbarItem = {
   content?: TopbarContent;
   action?: TopbarAction;
   menu?: TopbarMenu;
+  icon?: TopbarIcon;
   target?: string;
   targetId?: string;
   currentLatencyMs?: number | null;
@@ -93,6 +96,12 @@ type TrayActionPayload = {
   itemId?: string;
   action?: TopbarAction;
 };
+
+function parseTopbarIcon(value: unknown): TopbarIcon | undefined {
+  return value === "globe" || value === "ethernet" || value === "wifi" || value === "shield" || value === "ipv6"
+    ? value
+    : undefined;
+}
 
 function parseTone(value: unknown): TopbarTone | undefined {
   return value === "accent" || value === "success" || value === "warning" || value === "danger" || value === "muted"
@@ -159,6 +168,7 @@ function parseTopbarMenu(input: unknown): TopbarMenu | undefined {
       label: value.label.slice(0, 80),
       value: typeof value.value === "string" ? value.value.slice(0, 256) : undefined,
       detail: typeof value.detail === "string" ? value.detail.slice(0, 120) : undefined,
+      icon: parseTopbarIcon(value.icon),
       action,
     } satisfies TopbarMenuItem];
   });
@@ -210,6 +220,7 @@ function parseTopbarItems(payload: unknown): TopbarItem[] {
       content,
       action,
       menu,
+      icon: parseTopbarIcon(value.icon),
       target: typeof value.target === "string" ? value.target : undefined,
       targetId: typeof value.targetId === "string" ? value.targetId : undefined,
       currentLatencyMs: typeof value.currentLatencyMs === "number" ? value.currentLatencyMs : null,
@@ -235,6 +246,34 @@ function toneVars(tone: TopbarTone | undefined) {
     case "muted": return { text: "var(--muted-text, #a8b4c2)", surface: "var(--surface-raised, #1d252f)", border: "var(--border, #39465a)" };
     default: return { text: "var(--accent, #70a7e8)", surface: "var(--accent-surface, #16263a)", border: "var(--accent-border, #3b5f8d)" };
   }
+}
+
+function renderTopbarIcon(icon: TopbarIcon | undefined, size = 17): ReactNode {
+  if (!icon) return null;
+  if (icon === "ipv6") {
+    return <span aria-hidden="true" style={{ width: size, height: size, display: "grid", placeItems: "center", border: "1.5px solid currentColor", borderRadius: "50%", fontSize: Math.max(9, size - 7), fontWeight: 800, lineHeight: 1 }}>6</span>;
+  }
+  const common = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+  if (icon === "globe") {
+    return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18"/><path d="M12 3a14 14 0 0 0 0 18"/></svg>;
+  }
+  if (icon === "wifi") {
+    return <svg {...common}><path d="M3.5 8.5a13 13 0 0 1 17 0"/><path d="M6.5 12a8.5 8.5 0 0 1 11 0"/><path d="M9.5 15.5a4 4 0 0 1 5 0"/><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/></svg>;
+  }
+  if (icon === "shield") {
+    return <svg {...common}><path d="M12 3 5 6v5c0 4.7 2.8 8 7 10 4.2-2 7-5.3 7-10V6l-7-3Z"/><path d="M9 12l2 2 4-4"/></svg>;
+  }
+  return <svg {...common}><rect x="8" y="3" width="8" height="6" rx="1"/><path d="M12 9v4"/><path d="M5 13h14"/><path d="M5 13v4M12 13v4M19 13v4"/><rect x="2" y="17" width="6" height="4" rx="1"/><rect x="9" y="17" width="6" height="4" rx="1"/><rect x="16" y="17" width="6" height="4" rx="1"/></svg>;
 }
 
 function clampTopbarSize(size?: { width?: number; height?: number }) {
@@ -575,8 +614,8 @@ export function PluginManager({
             height: size.height,
             overflow: "hidden",
             display: "flex",
-            flexDirection: "column",
-            alignItems: "stretch",
+            flexDirection: item.icon ? "row" : "column",
+            alignItems: item.icon ? "center" : "stretch",
             justifyContent: "center",
             gap: 1,
             padding: "3px 7px",
@@ -588,8 +627,11 @@ export function PluginManager({
             textAlign: "center",
           }}
         >
+          {item.icon ? <span style={{ display: "grid", placeItems: "center", flex: "0 0 auto", color: item.content?.color ?? genericTone.text }}>{renderTopbarIcon(item.icon, 17)}</span> : null}
           {hasGenericContent ? (
-            renderTopbarContent(item.content!, `${pluginId}:${item.id}:content`, size)
+            <span style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", flex: item.icon ? 1 : undefined }}>
+              {renderTopbarContent(item.content!, `${pluginId}:${item.id}:content`, size)}
+            </span>
           ) : (
             <>
               <span style={{ position: "relative", zIndex: 2, fontSize: 14, fontWeight: 700, lineHeight: 1.05 }}>
@@ -636,7 +678,7 @@ export function PluginManager({
                 style={{
                   width: "100%",
                   display: "grid",
-                  gridTemplateColumns: "minmax(0, 1fr) auto",
+                  gridTemplateColumns: entry.icon ? "20px minmax(0, 1fr) auto" : "minmax(0, 1fr) auto",
                   gap: 10,
                   alignItems: "center",
                   padding: "8px 9px",
@@ -649,6 +691,7 @@ export function PluginManager({
                   font: "inherit",
                 }}
               >
+                {entry.icon ? <span style={{ display: "grid", placeItems: "center", color: "var(--accent, #70a7e8)" }}>{renderTopbarIcon(entry.icon, 16)}</span> : null}
                 <span style={{ minWidth: 0 }}>
                   <span style={{ display: "block", fontSize: 11, fontWeight: 650 }}>{entry.label}</span>
                   {entry.detail ? <span style={{ display: "block", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10, color: "var(--muted-text, #a8b4c2)" }}>{entry.detail}</span> : null}
