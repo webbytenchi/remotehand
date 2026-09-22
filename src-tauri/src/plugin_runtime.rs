@@ -6,7 +6,10 @@ use std::{
     io::{Read, Write},
     path::{Component, Path},
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
-    sync::{mpsc, Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc, Arc, Mutex,
+    },
     thread,
     time::Duration,
 };
@@ -25,6 +28,7 @@ struct PluginSession {
     stdin: Arc<Mutex<ChildStdin>>,
     pending: Arc<Mutex<BTreeMap<u64, mpsc::Sender<Result<PluginResponse, String>>>>>,
     next_request_id: u64,
+    stopping: Arc<AtomicBool>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -423,6 +427,7 @@ fn start_reader(
     pending: Arc<Mutex<BTreeMap<u64, mpsc::Sender<Result<PluginResponse, String>>>>>,
     permissions: Vec<String>,
     app_handle: AppHandle,
+    stopping: Arc<AtomicBool>,
 ) {
     thread::spawn(move || {
         loop {
@@ -542,6 +547,19 @@ fn start_reader(
             }
         }
         }
+
+        if !stopping.load(Ordering::SeqCst) {
+            if let Some(state) = app_handle.try_state::<crate::startup_tray::StartupTrayState>() {
+                state.hide_plugin_trays(&app_handle, &plugin_id);
+            }
+            let envelope = PluginEventEnvelope {
+                plugin_id: plugin_id.clone(),
+                event: "topbar.update".to_string(),
+                payload: serde_json::json!({ "items": [] }),
+            };
+            let _ = app_handle.emit("remotehand-plugin-event", envelope);
+            log::warn!("Plugin runtime {plugin_id} exited unexpectedly; plugin UI contributions were hidden");
+        }
     });
 }
 impl PluginRuntimeState {
@@ -608,6 +626,7 @@ impl PluginRuntimeState {
 
         let stdin = Arc::new(Mutex::new(stdin));
         let pending = Arc::new(Mutex::new(BTreeMap::new()));
+        let stopping = Arc::new(AtomicBool::new(false));
         start_reader(
             plugin.manifest.id.clone(),
             stdout,
@@ -615,6 +634,7 @@ impl PluginRuntimeState {
             pending.clone(),
             plugin.manifest.permissions.clone(),
             app_handle,
+            stopping.clone(),
         );
 
         let mut sessions = self
@@ -628,6 +648,7 @@ impl PluginRuntimeState {
                 stdin,
                 pending,
                 next_request_id: 1,
+                stopping,
             },
         );
         log::info!("Plugin runtime {} started", plugin.manifest.id);
@@ -713,6 +734,7 @@ impl PluginRuntimeState {
         let Some(mut session) = sessions.remove(id) else {
             return Ok(());
         };
+        session.stopping.store(true, Ordering::SeqCst);
         match session
             .child
             .try_wait()
@@ -758,6 +780,7 @@ impl Drop for PluginRuntimeState {
     fn drop(&mut self) {
         if let Ok(sessions) = self.sessions.get_mut() {
             for (_, session) in sessions.iter_mut() {
+                session.stopping.store(true, Ordering::SeqCst);
                 let _ = session.child.kill();
                 let _ = session.child.wait();
                 fail_pending(&session.pending, "plugin runtime dropped".to_string());
