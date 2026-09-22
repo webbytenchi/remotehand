@@ -890,7 +890,7 @@ Each `tray.update` replaces that plugin's current tray contribution set. Limits 
 - `visible: false` keeps the tray handle but hides it. This lets a plugin temporarily suppress an item without losing stable shell identity.
 - The supported tray action is `open-panel` with an optional context object.
 - On Windows, RemoteHand derives a deterministic GUID from the plugin id and item id so tray identity can survive icon updates and process restarts.
-- Disabling a plugin hides its retained tray handles. Permanent removal may discard those handles during uninstall.
+- Disabling a plugin hides its retained tray handles. Unexpected runtime exit also hides stale tray/top-bar contributions. Permanent plugin removal purges retained tray handles during uninstall.
 
 ## Installation safety
 
