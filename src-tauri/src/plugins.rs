@@ -655,7 +655,7 @@ pub fn start_enabled_plugins(
 }
 
 #[tauri::command]
-pub fn plugin_remove(id: String) -> Result<(), String> {
+pub fn plugin_remove(app: tauri::AppHandle, id: String) -> Result<(), String> {
     let plugin = require_installed(&id)?;
     if plugin.enabled {
         return Err("disable the plugin before removing it".to_string());
@@ -673,6 +673,9 @@ pub fn plugin_remove(id: String) -> Result<(), String> {
     let mut state = load_state()?;
     state.enabled.remove(&id);
     save_state(&state)?;
+    if let Some(tray_state) = app.try_state::<crate::startup_tray::StartupTrayState>() {
+        tray_state.remove_plugin_trays(&app, &id);
+    }
     log::info!("Plugin {} removed", id);
     Ok(())
 }
