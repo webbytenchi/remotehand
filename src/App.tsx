@@ -1609,6 +1609,7 @@ popoutUrl="popout.html"
 <PluginManager
 open={settingsOpen && settingsTab === "plugins"}
 onClose={() => setSettingsOpen(false)}
+embedded
 embeddedHost={pluginSettingsHost}
 onChanged={() => void refreshPlugins()}
 topbarOrder={resolvedTopbarOrder}
