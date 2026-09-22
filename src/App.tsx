@@ -3,10 +3,12 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, getAllWindows } from "@tauri-apps/api/window";
 import {
+DockviewDefaultTab,
 DockviewReact,
 type DockviewApi,
 type DockviewReadyEvent,
 type IWatermarkPanelProps,
+type IDockviewPanelHeaderProps,
 type IDockviewPanelProps,
 themeDark,
 themeLight,
@@ -782,18 +784,49 @@ onSftp={openSftp}
 }),
 [recentActivities, homeMessageIndex, openRecentActivity, addConnection, updateConnection, removeConnection, connectSsh, openSftp],
 );
-const popoutActive = useCallback(async () => {
+const popoutPanel = useCallback(async (panelId?: string) => {
 const api = apiRef.current;
-const panel = api?.activePanel;
+const panel = panelId ? api?.getPanel(panelId) : api?.activePanel;
 if (!api || !panel) return;
 if (panel.api.location.type === "popout") return;
 try {
 const opened = await api.addPopoutGroup(panel);
 if (opened) poppedOutPanelRef.current = { panelId: panel.id, count: api.getPopouts().length };
 } catch (error) {
-console.error("Failed to pop out active panel", error);
+console.error("Failed to pop out panel", error);
 }
 }, []);
+const popoutActive = useCallback(async () => {
+await popoutPanel();
+}, [popoutPanel]);
+const RemoteHandTab = useCallback((props: IDockviewPanelHeaderProps) => (
+<div className="remotehand-tab-shell">
+<DockviewDefaultTab {...props} />
+{props.tabLocation === "header" && props.api.location.type !== "popout" ? (
+<button
+type="button"
+className="remotehand-tab-popout"
+title="Pop out panel"
+aria-label="Pop out panel"
+onPointerDown={(event) => {
+event.preventDefault();
+event.stopPropagation();
+}}
+onClick={(event) => {
+event.preventDefault();
+event.stopPropagation();
+void popoutPanel(props.api.id);
+}}
+>
+<svg viewBox="0 0 16 16" aria-hidden="true">
+<path d="M9.5 2.5h4v4" />
+<path d="M13.25 2.75 8 8" />
+<path d="M12.5 9.25v3.25h-9v-9h3.25" />
+</svg>
+</button>
+) : null}
+</div>
+), [popoutPanel]);
 const resetLayout = useCallback(async () => {
 const api = apiRef.current;
 if (!api) return;
@@ -1449,6 +1482,7 @@ title={sidebar.title}
 <DockviewReact
 className="remotehand-dockview"
 theme={resolvedTheme === "light" ? themeLight : themeDark}
+defaultTabRenderer={RemoteHandTab}
 components={components}
 watermarkComponent={WorkspaceWatermark}
 onReady={handleReady}
