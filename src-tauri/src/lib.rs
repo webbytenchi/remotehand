@@ -138,6 +138,18 @@ fn focus_single_panel_popout(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn set_panel_popouts_topmost(app: tauri::AppHandle, topmost: bool) -> Result<(), String> {
+    for (label, popout) in app.webview_windows() {
+        if label.starts_with("panel-popout-") {
+            popout
+                .set_always_on_top(topmost)
+                .map_err(|error| error.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn show_pending_popout(app: tauri::AppHandle) -> Result<(), String> {
     let mut popouts: Vec<_> = app
         .webview_windows()
@@ -251,6 +263,7 @@ pub fn run() {
             hide_single_panel_popout,
             focus_main_window,
             focus_single_panel_popout,
+            set_panel_popouts_topmost,
             show_pending_popout,
             startup_tray::set_startup_enabled,
             startup_tray::startup_enabled,
