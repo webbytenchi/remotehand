@@ -1360,10 +1360,28 @@ revealPopout();
 }
 });
 event.api.onDidRemovePopoutGroup(() => {
-const panelId = poppedOutPanelRef.current?.panelId;
+const previous = poppedOutPanelRef.current;
+const panelId = previous?.panelId;
+const popoutWindow = previous?.window as RemoteHandPopoutWindow | undefined;
+const nativeLabel = popoutWindow?.__REMOTEHAND_NATIVE_WINDOW_LABEL__;
 window.setTimeout(() => {
 if (panelId) {
 event.api.getPanel(panelId)?.api.setActive();
+}
+if (popoutWindow && !popoutWindow.closed) {
+const stillOwnsPanels = event.api.panels.some(
+(current) =>
+current.api.location.type === "popout" &&
+current.api.getWindow() === popoutWindow,
+);
+if (!stillOwnsPanels) {
+popoutWindow.close();
+if (isTauri() && nativeLabel) {
+void invoke("close_panel_popout", { label: nativeLabel }).catch((error) => {
+console.error("Failed to close native popout after its last tab moved", error);
+});
+}
+}
 }
 poppedOutPanelRef.current = null;
 }, 0);
