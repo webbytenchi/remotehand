@@ -662,7 +662,7 @@ impl PluginRuntimeState {
         if let Ok(slot) = self.app_handle.lock() {
             if let Some(app_handle) = slot.as_ref() {
                 if let Some(state) = app_handle.try_state::<crate::startup_tray::StartupTrayState>() {
-                    state.hide_plugin_trays(id);
+                    state.hide_plugin_trays(app_handle, id);
                 }
             }
         }
