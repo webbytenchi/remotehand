@@ -716,13 +716,8 @@ void invoke("focus_single_panel_popout")
 ownerWindow.focus();
 }
 } else if (isTauri()) {
-const mainWindow = getCurrentWindow();
-void mainWindow
-.unminimize()
-.catch(() => undefined)
-.then(() => mainWindow.show())
-.then(() => mainWindow.setFocus())
-.catch((error) => console.error("Failed to focus plugin panel window", error));
+void invoke("focus_main_window")
+.catch((error) => console.error("Failed to restore main window for plugin panel", error));
 } else {
 ownerWindow.focus();
 }
