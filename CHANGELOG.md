@@ -14,7 +14,7 @@ All notable changes to RemoteHand are documented here.
 
 ### Improved
 
-- **Plugin tray lifecycle.** Normal plugin disable hides contributed tray icons without destroying their stable shell handles, so re-enable and restart behavior remains predictable.
+- **Plugin tray lifecycle.** Normal plugin disable hides contributed tray icons without destroying their stable shell handles, so re-enable and restart behavior remains predictable. Unexpected runtime exit hides stale plugin tray/top-bar UI, while uninstall permanently purges retained tray handles.
 - **Plugin panel targeting and focus.** Tray and top-bar `open-panel` actions preserve live target context and focus the owning docked or single-popout Host Monitor panel, including restoration from minimized state.
 - **Generic contribution validation.** New tray, top-bar menu, icon, and color fields are parsed defensively with bounded item counts, text sizes, series sizes, and strict color/method formats.
 
