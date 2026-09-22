@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { AppModal } from "./AppModal";
+import { contributionOrderIndex } from "./contributionLayout";
 
 type PluginManifest = {
   id: string;
@@ -288,11 +289,15 @@ export function PluginManager({
   onClose,
   onChanged,
   onOpenPluginPanel,
+  topbarOrder = [],
+  onTopbarItemsChanged,
 }: {
   open: boolean;
   onClose: () => void;
   onChanged?: () => void;
   onOpenPluginPanel?: (pluginId: string, panelId: string, context?: { targetId?: string; target?: string }) => void;
+  topbarOrder?: string[];
+  onTopbarItemsChanged?: (items: Array<{ id: string; label: string }>) => void;
 }) {
   const [plugins, setPlugins] = useState<PluginInfo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -440,6 +445,17 @@ export function PluginManager({
       return next;
     });
   }, [plugins]);
+
+  useEffect(() => {
+    onTopbarItemsChanged?.(
+      Object.entries(topbarItems).flatMap(([pluginId, items]) =>
+        items.map((item) => ({
+          id: `${pluginId}:${item.id}`,
+          label: item.title || item.target || item.id,
+        })),
+      ),
+    );
+  }, [topbarItems, onTopbarItemsChanged]);
 
   useEffect(() => {
     if (!openTopbarMenuKey) return;
@@ -601,7 +617,7 @@ export function PluginManager({
         <div
           key={itemKey}
           data-plugin-topbar-menu
-          style={{ order: -1, position: "relative", zIndex: menuOpen ? 1001 : 10, pointerEvents: "auto", flexShrink: 0, marginLeft: 6 }}
+          style={{ order: contributionOrderIndex(topbarOrder, itemKey), position: "relative", zIndex: menuOpen ? 1001 : 10, pointerEvents: "auto", flexShrink: 0, marginLeft: 6 }}
         >
         <button
           type="button"
