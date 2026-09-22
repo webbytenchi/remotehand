@@ -11,6 +11,7 @@ const MAX_STATE_BYTES: u64 = 1024 * 1024;
 const MAX_PLUGIN_BYTES: u64 = 64 * 1024 * 1024;
 const ALLOWED_PERMISSIONS: &[&str] = &[
     "network.connect",
+    "network.inspect",
     "clipboard.read",
     "clipboard.write",
     "credentials.use",
