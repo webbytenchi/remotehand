@@ -34,7 +34,7 @@ ed25519-dalek = "=2.1.1"
 async-trait = "0.1"
 zeroize = "=1.9.0"
 arboard = { version = "3.4", default-features = false }
-pnet_datalink = "0.35"
+getifaddrs = "0.6.2"
 
 portable-pty = "0.9.0"
 
