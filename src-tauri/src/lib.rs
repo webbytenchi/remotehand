@@ -95,6 +95,26 @@ fn hide_single_panel_popout(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn focus_single_panel_popout(app: tauri::AppHandle) -> Result<(), String> {
+    let mut popouts = app
+        .webview_windows()
+        .into_iter()
+        .filter(|(label, _)| label.starts_with("panel-popout-"))
+        .map(|(_, window)| window);
+    let popout = popouts
+        .next()
+        .ok_or_else(|| "no panel popout is open".to_string())?;
+    if popouts.next().is_some() {
+        return Err("cannot identify a single panel popout".to_string());
+    }
+    if popout.is_minimized().map_err(|error| error.to_string())? {
+        popout.unminimize().map_err(|error| error.to_string())?;
+    }
+    popout.show().map_err(|error| error.to_string())?;
+    popout.set_focus().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 fn show_pending_popout(app: tauri::AppHandle) -> Result<(), String> {
     let mut popouts: Vec<_> = app
         .webview_windows()
@@ -203,6 +223,7 @@ pub fn run() {
             close_current_window,
             close_panel_popouts,
             hide_single_panel_popout,
+            focus_single_panel_popout,
             show_pending_popout,
             startup_tray::set_startup_enabled,
             startup_tray::startup_enabled,
