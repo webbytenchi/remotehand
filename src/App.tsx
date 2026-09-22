@@ -718,7 +718,9 @@ ownerWindow.focus();
 } else if (isTauri()) {
 const mainWindow = getCurrentWindow();
 void mainWindow
-.show()
+.unminimize()
+.catch(() => undefined)
+.then(() => mainWindow.show())
 .then(() => mainWindow.setFocus())
 .catch((error) => console.error("Failed to focus plugin panel window", error));
 } else {
