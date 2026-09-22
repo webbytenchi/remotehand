@@ -91,6 +91,8 @@ struct PluginTrayItem {
     tooltip: String,
     #[serde(default)]
     tone: String,
+    #[serde(default = "default_true")]
+    visible: bool,
     #[serde(default)]
     series: Vec<PluginTrayPoint>,
     #[serde(default)]
@@ -102,6 +104,10 @@ struct PluginTrayItem {
 struct PluginTrayUpdate {
     #[serde(default)]
     items: Vec<PluginTrayItem>,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn valid_tray_id(value: &str) -> bool {
@@ -259,7 +265,7 @@ impl StartupTrayState {
             if let Some(tray) = plugin_trays.get(&item.id) {
                 tray.set_icon(Some(icon)).map_err(|error| error.to_string())?;
                 tray.set_tooltip(Some(&tooltip)).map_err(|error| error.to_string())?;
-                tray.set_visible(true).map_err(|error| error.to_string())?;
+                tray.set_visible(item.visible).map_err(|error| error.to_string())?;
                 continue;
             }
 
@@ -298,6 +304,7 @@ impl StartupTrayState {
                 })
                 .build(app)
                 .map_err(|error| error.to_string())?;
+            tray.set_visible(item.visible).map_err(|error| error.to_string())?;
             plugin_trays.insert(item.id, tray);
         }
 
