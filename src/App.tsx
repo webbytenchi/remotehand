@@ -438,19 +438,26 @@ function RemoteHandTabView({
 props,
 onPopout,
 onDock,
+onMainGroup,
 }: {
 props: IDockviewPanelHeaderProps;
 onPopout: (panelId: string) => void;
 onDock: (panelId: string) => void;
+onMainGroup: (panelId: string, groupId: string) => void;
 }) {
 const [isPopout, setIsPopout] = useState(() => props.api.location.type === "popout");
 useEffect(() => {
-setIsPopout(props.api.location.type === "popout");
-const disposable = props.api.onDidLocationChange(() => {
-setIsPopout(props.api.location.type === "popout");
-});
+const syncLocation = () => {
+const nextIsPopout = props.api.location.type === "popout";
+setIsPopout(nextIsPopout);
+if (!nextIsPopout) {
+onMainGroup(props.api.id, props.api.group.id);
+}
+};
+syncLocation();
+const disposable = props.api.onDidLocationChange(syncLocation);
 return () => disposable.dispose();
-}, [props.api]);
+}, [onMainGroup, props.api]);
 const stopTabActionPointer = (event: React.PointerEvent<HTMLButtonElement>) => {
 event.preventDefault();
 event.stopPropagation();
@@ -468,8 +475,8 @@ return (
 <button
 type="button"
 className="remotehand-tab-action"
-title={isPopout ? "Dock panel back into RemoteHand" : "Pop out panel"}
-aria-label={isPopout ? "Dock panel back into RemoteHand" : "Pop out panel"}
+title={isPopout ? "Dock to main window" : "Pop out panel"}
+aria-label={isPopout ? "Dock to main window" : "Pop out panel"}
 onPointerDown={stopTabActionPointer}
 onClick={(event) => runTabAction(event, () => {
 if (isPopout) onDock(props.api.id);
@@ -556,7 +563,7 @@ const workspaceSaveTimerRef = useRef<number | null>(null);
 const workspacePersistenceEnabledRef = useRef(true);
 const poppedOutPanelRef = useRef<{ panelId: string; count: number; window?: Window } | null>(null);
 const closingPopoutPanelRef = useRef<{ panelId: string; groupId: string; hidden: boolean } | null>(null);
-const popoutReturnGroupRef = useRef<Map<string, string>>(new Map());
+const mainReturnGroupRef = useRef<Map<string, string>>(new Map());
 useEffect(() => {
 if (!isTauri()) return;
 void invoke<string>("local_os")
@@ -872,7 +879,7 @@ const sourceGroupId = panel.api.group.id;
 try {
 const opened = await api.addPopoutGroup(panel);
 if (opened) {
-popoutReturnGroupRef.current.set(panel.id, sourceGroupId);
+mainReturnGroupRef.current.set(panel.id, sourceGroupId);
 poppedOutPanelRef.current = { panelId: panel.id, count: api.getPopouts().length };
 }
 } catch (error) {
@@ -889,16 +896,7 @@ if (!api || !panel || panel.api.location.type !== "popout") return;
 try {
 const popoutWindow = panel.api.getWindow() as RemoteHandPopoutWindow;
 const nativeLabel = popoutWindow.__REMOTEHAND_NATIVE_WINDOW_LABEL__;
-const isOnlyTabInPopout = panel.api.group.panels.length === 1;
-
-if (isOnlyTabInPopout && isTauri() && nativeLabel) {
-void invoke("close_panel_popout", { label: nativeLabel }).catch((error) =>
-console.error("Failed to close native popout for dock-back", error),
-);
-return;
-}
-
-const rememberedGroupId = popoutReturnGroupRef.current.get(panelId);
+const rememberedGroupId = mainReturnGroupRef.current.get(panelId);
 const rememberedGroup = rememberedGroupId
 ? api.groups.find((group) => group.id === rememberedGroupId && group.api.location.type === "grid")
 : undefined;
@@ -907,7 +905,7 @@ panel.api.moveTo({
 group: rememberedGroup ?? fallbackGroup,
 position: rememberedGroup ? "center" : "right",
 });
-popoutReturnGroupRef.current.delete(panelId);
+mainReturnGroupRef.current.set(panelId, (rememberedGroup ?? fallbackGroup).id);
 panel.api.setActive();
 
 if (isTauri() && nativeLabel) {
@@ -939,6 +937,9 @@ const RemoteHandTab = useCallback((props: IDockviewPanelHeaderProps) => (
 props={props}
 onPopout={(panelId) => { void popoutPanel(panelId); }}
 onDock={dockPanel}
+onMainGroup={(panelId, groupId) => {
+mainReturnGroupRef.current.set(panelId, groupId);
+}}
 />
 ), [dockPanel, popoutPanel]);
 const resetLayout = useCallback(async () => {
@@ -1599,7 +1600,7 @@ components={components}
 watermarkComponent={WorkspaceWatermark}
 onReady={handleReady}
 keyboardNavigation
-dndStrategy="pointer"
+dndStrategy="auto"
 popoutUrl="popout.html"
 />
 </div>
