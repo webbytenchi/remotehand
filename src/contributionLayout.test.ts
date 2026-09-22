@@ -3,6 +3,7 @@ import {
   contributionOrderIndex,
   mergeRememberedOrder,
   moveContribution,
+  moveVisibleContribution,
   resolveContributionOrder,
 } from "./contributionLayout";
 
@@ -30,6 +31,17 @@ describe("contribution layout ordering", () => {
   it("moves one contribution without disturbing the rest", () => {
     expect(moveContribution(["a", "b", "c"], "b", -1)).toEqual(["b", "a", "c"]);
     expect(moveContribution(["a", "b", "c"], "b", 1)).toEqual(["a", "c", "b"]);
+  });
+
+  it("moves across visible neighbors while retaining hidden remembered slots", () => {
+    expect(
+      moveVisibleContribution(
+        ["a", "hidden", "b", "c"],
+        ["a", "b", "c"],
+        "b",
+        -1,
+      ),
+    ).toEqual(["b", "hidden", "a", "c"]);
   });
 
   it("provides a harmless fallback index for unknown ids", () => {
