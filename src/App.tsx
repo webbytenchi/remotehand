@@ -120,6 +120,9 @@ manifest: PluginManifestInfo;
 enabled: boolean;
 directory: string;
 };
+type RemoteHandPopoutWindow = Window & {
+__REMOTEHAND_NATIVE_WINDOW_LABEL__?: string;
+};
 const HOME_MESSAGES = [
 "Welcome back. Here is your recent activity.",
 "Good to see you again. Pick up where you left off.",
@@ -884,6 +887,17 @@ const api = apiRef.current;
 const panel = api?.getPanel(panelId);
 if (!api || !panel || panel.api.location.type !== "popout") return;
 try {
+const popoutWindow = panel.api.getWindow() as RemoteHandPopoutWindow;
+const nativeLabel = popoutWindow.__REMOTEHAND_NATIVE_WINDOW_LABEL__;
+const isOnlyTabInPopout = panel.api.group.panels.length === 1;
+
+if (isOnlyTabInPopout && isTauri() && nativeLabel) {
+void invoke("close_panel_popout", { label: nativeLabel }).catch((error) =>
+console.error("Failed to close native popout for dock-back", error),
+);
+return;
+}
+
 const rememberedGroupId = popoutReturnGroupRef.current.get(panelId);
 const rememberedGroup = rememberedGroupId
 ? api.groups.find((group) => group.id === rememberedGroupId && group.api.location.type === "grid")
@@ -895,6 +909,22 @@ position: rememberedGroup ? "center" : "right",
 });
 popoutReturnGroupRef.current.delete(panelId);
 panel.api.setActive();
+
+if (isTauri() && nativeLabel) {
+queueMicrotask(() => {
+const stillHasPanels = api.panels.some(
+(current) =>
+current.api.location.type === "popout" &&
+current.api.getWindow() === popoutWindow,
+);
+if (!stillHasPanels) {
+void invoke("close_panel_popout", { label: nativeLabel }).catch((error) =>
+console.error("Failed to close emptied native popout", error),
+);
+}
+});
+}
+
 if (isTauri()) {
 void invoke("focus_main_window").catch((error) =>
 console.error("Failed to restore main window after docking panel", error),
