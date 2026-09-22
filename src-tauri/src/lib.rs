@@ -209,6 +209,9 @@ pub fn run() {
             startup_tray::set_tray_visible,
             startup_tray::set_close_to_tray,
         ])
+        .on_tray_icon_event(|app, event| {
+            startup_tray::handle_plugin_tray_event(app, event);
+        })
         .on_page_load(move |webview, payload| {
             if webview.label() == "main" && payload.event() == PageLoadEvent::Finished {
                 load_page_loaded.store(true, Ordering::Release);
