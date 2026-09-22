@@ -879,8 +879,14 @@ const api = apiRef.current;
 const panel = api?.getPanel(panelId);
 if (!api || !panel || panel.api.location.type !== "popout") return;
 try {
-panel.api.moveTo({ position: "right" });
+const gridGroup = api.groups.find((group) => group.api.location.type === "grid") ?? api.addGroup();
+panel.api.moveTo({ group: gridGroup, position: "right" });
 panel.api.setActive();
+if (isTauri()) {
+void invoke("focus_main_window").catch((error) =>
+console.error("Failed to restore main window after docking panel", error),
+);
+}
 } catch (error) {
 console.error("Failed to dock panel back into RemoteHand", error);
 }
