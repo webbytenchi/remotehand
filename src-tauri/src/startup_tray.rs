@@ -377,7 +377,6 @@ pub fn handle_plugin_tray_event(app: &AppHandle, event: TrayIconEvent) {
                 .and_then(|actions| actions.get(key).cloned())
         });
 
-    show_main(app);
     if let Some(action) = action {
         let envelope = serde_json::json!({
             "pluginId": plugin_id,
