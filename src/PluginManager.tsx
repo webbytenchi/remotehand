@@ -287,6 +287,7 @@ function clampTopbarSize(size?: { width?: number; height?: number }) {
 export function PluginManager({
   open,
   onClose,
+  embedded = false,
   embeddedHost = null,
   onChanged,
   onOpenPluginPanel,
@@ -295,6 +296,7 @@ export function PluginManager({
 }: {
   open: boolean;
   onClose: () => void;
+  embedded?: boolean;
   embeddedHost?: HTMLElement | null;
   onChanged?: () => void;
   onOpenPluginPanel?: (pluginId: string, panelId: string, context?: { targetId?: string; target?: string }) => void;
@@ -803,7 +805,7 @@ export function PluginManager({
         ? createPortal(renderedTopbar, document.querySelector(".topbar-actions")!)
         : null}
       {open && embeddedHost ? createPortal(managerContent, embeddedHost) : null}
-      {!embeddedHost ? (
+      {!embedded ? (
         <AppModal open={open} title="Plugins" confirmLabel="Done" onConfirm={onClose} onCancel={onClose} focusActions={false}>
           {managerContent}
         </AppModal>
