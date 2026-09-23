@@ -8,6 +8,7 @@ use tauri::{
     AppHandle, Emitter, Manager, State, Wry, Window,
 };
 use tauri_plugin_autostart::ManagerExt;
+use tray_icon::TrayNotificationEvent;
 
 #[derive(Clone)]
 pub struct StartupTrayState {
@@ -589,54 +590,52 @@ impl StartupTrayState {
 }
 
 pub fn handle_plugin_tray_event(app: &AppHandle, event: TrayIconEvent) {
-    match event {
-        TrayIconEvent::NotificationClick { id } => {
-            let key = id.as_ref();
-            if !key.starts_with("plugin-tray:") { return; }
-            if let Some(state) = app.try_state::<StartupTrayState>() {
-                state.complete_plugin_notification(app, key, true);
-            }
-        }
-        TrayIconEvent::NotificationClosed { id } => {
-            let key = id.as_ref();
-            if !key.starts_with("plugin-tray:") { return; }
-            if let Some(state) = app.try_state::<StartupTrayState>() {
-                state.complete_plugin_notification(app, key, false);
-            }
-        }
-        TrayIconEvent::Click {
-            id,
-            button: MouseButton::Left,
-            button_state: MouseButtonState::Up,
-            ..
-        } => {
-            let key = id.as_ref();
-            let Some(rest) = key.strip_prefix("plugin-tray:") else { return; };
-            let Some((plugin_id, item_id)) = rest.split_once(':') else { return; };
+    let TrayIconEvent::Click {
+        id,
+        button: MouseButton::Left,
+        button_state: MouseButtonState::Up,
+        ..
+    } = event
+    else {
+        return;
+    };
 
-            let action = app
-                .try_state::<StartupTrayState>()
-                .and_then(|state| {
-                    state
-                        .plugin_tray_actions
-                        .lock()
-                        .ok()
-                        .and_then(|actions| actions.get(key).cloned())
-                });
+    let key = id.as_ref();
+    let Some(rest) = key.strip_prefix("plugin-tray:") else { return; };
+    let Some((plugin_id, item_id)) = rest.split_once(':') else { return; };
 
-            if let Some(action) = action {
-                let envelope = serde_json::json!({
-                    "pluginId": plugin_id,
-                    "event": "tray.action",
-                    "payload": {
-                        "itemId": item_id,
-                        "action": action,
-                    }
-                });
-                let _ = app.emit("remotehand-plugin-event", envelope);
+    let action = app
+        .try_state::<StartupTrayState>()
+        .and_then(|state| {
+            state
+                .plugin_tray_actions
+                .lock()
+                .ok()
+                .and_then(|actions| actions.get(key).cloned())
+        });
+
+    if let Some(action) = action {
+        let envelope = serde_json::json!({
+            "pluginId": plugin_id,
+            "event": "tray.action",
+            "payload": {
+                "itemId": item_id,
+                "action": action,
             }
-        }
-        _ => {}
+        });
+        let _ = app.emit("remotehand-plugin-event", envelope);
+    }
+}
+
+fn handle_plugin_notification_event(app: &AppHandle, event: TrayNotificationEvent) {
+    let key = event.id().as_ref();
+    if !key.starts_with("plugin-tray:") { return; }
+    if let Some(state) = app.try_state::<StartupTrayState>() {
+        state.complete_plugin_notification(
+            app,
+            key,
+            matches!(event, TrayNotificationEvent::Click { .. }),
+        );
     }
 }
 
@@ -667,6 +666,11 @@ fn update_window_item(app: &AppHandle, state: &StartupTrayState) {
 }
 
 pub fn install(app: &tauri::AppHandle<Wry>, state: &StartupTrayState) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let notification_app = app.clone();
+    TrayNotificationEvent::set_event_handler(Some(move |event| {
+        handle_plugin_notification_event(&notification_app, event);
+    }));
+
     let visible = app
         .get_webview_window("main")
         .and_then(|window| window.is_visible().ok())
