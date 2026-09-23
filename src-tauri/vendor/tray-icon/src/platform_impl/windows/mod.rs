@@ -418,14 +418,15 @@ unsafe extern "system" fn tray_proc(
             userdata.menu_on_right_click = wparam != 0;
         }
 
-        WM_USER_TRAYICON if lparam as u32 == NIN_BALLOONUSERCLICK => {
+        WM_USER_TRAYICON if lparam as u32 == NIN_BALLOONUSERCLICK as u32 => {
             TrayNotificationEvent::send(TrayNotificationEvent::Click {
                 id: userdata.id.clone(),
             });
             return 0;
         }
         WM_USER_TRAYICON
-            if matches!(lparam as u32, NIN_BALLOONHIDE | NIN_BALLOONTIMEOUT) =>
+            if lparam as u32 == NIN_BALLOONHIDE as u32
+                || lparam as u32 == NIN_BALLOONTIMEOUT as u32 =>
         {
             TrayNotificationEvent::send(TrayNotificationEvent::Closed {
                 id: userdata.id.clone(),
