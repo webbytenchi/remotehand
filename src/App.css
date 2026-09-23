@@ -953,6 +953,9 @@ padding: 24px;
 background: rgba(2, 5, 9, 0.72);
 backdrop-filter: blur(3px);
 }
+.app-modal-backdrop-elevated {
+z-index: 1100;
+}
 .app-modal {
 width: min(560px, calc(100vw - 32px));
 border: 1px solid #2c3746;
