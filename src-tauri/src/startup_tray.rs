@@ -153,6 +153,28 @@ fn set_pixel(bytes: &mut [u8], x: usize, y: usize, color: [u8; 4]) {
     bytes[offset..offset + 4].copy_from_slice(&color);
 }
 
+fn plugin_tray_bar_layout(point_count: usize) -> (usize, usize, usize) {
+    const GRAPH_LEFT: usize = 4;
+    const GRAPH_WIDTH: usize = 24;
+
+    if point_count == 0 {
+        return (0, 0, GRAPH_LEFT);
+    }
+
+    // Preserve a 1px separator while every bar can still be at least 2px wide.
+    let gap = if point_count > 1 && point_count * 2 + (point_count - 1) <= GRAPH_WIDTH {
+        1
+    } else {
+        0
+    };
+    let gaps_width = gap * point_count.saturating_sub(1);
+    let bar_width = ((GRAPH_WIDTH - gaps_width) / point_count).max(1);
+    let total_width = point_count * bar_width + gaps_width;
+    let start_x = GRAPH_LEFT + (GRAPH_WIDTH.saturating_sub(total_width) / 2);
+
+    (bar_width, gap, start_x)
+}
+
 fn plugin_tray_icon(item: &PluginTrayItem) -> Result<tray_icon::Icon, String> {
     const SIZE: usize = 32;
     let mut bytes = vec![0u8; SIZE * SIZE * 4];
@@ -192,9 +214,7 @@ fn plugin_tray_icon(item: &PluginTrayItem) -> Result<tray_icon::Icon, String> {
             }
         }
     } else {
-        let bar_width = 2usize;
-        let total_width = points.len() * bar_width;
-        let start_x = 16usize.saturating_sub(total_width / 2);
+        let (bar_width, bar_gap, start_x) = plugin_tray_bar_layout(points.len());
         for (index, point) in points.iter().enumerate() {
             let height = match point.value {
                 Some(value) if value.is_finite() && value >= 0.0 => {
@@ -205,7 +225,7 @@ fn plugin_tray_icon(item: &PluginTrayItem) -> Result<tray_icon::Icon, String> {
             let color = parse_tray_hex_color(point.color.as_deref())
                 .or_else(|| parse_tray_hex_color(item.graph_color.as_deref()))
                 .unwrap_or_else(|| tray_color(point.tone.as_deref().unwrap_or(&item.tone)));
-            let x0 = start_x + index * bar_width;
+            let x0 = start_x + index * (bar_width + bar_gap);
             for x in x0..(x0 + bar_width).min(28) {
                 for y in (27usize.saturating_sub(height))..27 {
                     set_pixel(&mut bytes, x, y, color);
@@ -625,7 +645,7 @@ pub fn handle_close(_window: &Window, state: &StartupTrayState) -> bool {
 
 #[cfg(test)]
 mod plugin_tray_tests {
-    use super::stable_plugin_tray_guid;
+    use super::{plugin_tray_bar_layout, stable_plugin_tray_guid};
 
     #[test]
     fn plugin_tray_guid_is_stable_and_unique_per_item() {
@@ -642,5 +662,20 @@ mod plugin_tray_tests {
             stable_plugin_tray_guid("plugin-tray:remotehand.host-monitor:google-dns").to_be_bytes();
         assert_eq!(bytes[6] >> 4, 5);
         assert_eq!(bytes[8] >> 6, 2);
+    }
+
+    #[test]
+    fn plugin_tray_sparse_graphs_expand_bars_with_one_pixel_gaps() {
+        assert_eq!(plugin_tray_bar_layout(1), (24, 0, 4));
+        assert_eq!(plugin_tray_bar_layout(2), (11, 1, 4));
+        assert_eq!(plugin_tray_bar_layout(3), (7, 1, 4));
+        assert_eq!(plugin_tray_bar_layout(5), (4, 1, 4));
+        assert_eq!(plugin_tray_bar_layout(8), (2, 1, 4));
+    }
+
+    #[test]
+    fn plugin_tray_dense_graphs_drop_gaps_to_keep_bars_readable() {
+        assert_eq!(plugin_tray_bar_layout(9), (2, 0, 7));
+        assert_eq!(plugin_tray_bar_layout(12), (2, 0, 4));
     }
 }
