@@ -524,7 +524,8 @@ impl StartupTrayState {
 
         if let Some(next) = next {
             let key = key.to_string();
-            if let Err(error) = app.run_on_main_thread(move || display_plugin_notification(&key, &next)) {
+            let key_for_main = key.clone();
+            if let Err(error) = app.run_on_main_thread(move || display_plugin_notification(&key_for_main, &next)) {
                 log::warn!("Failed to advance plugin notification queue for {key}: {error}");
             }
         }
@@ -534,9 +535,6 @@ impl StartupTrayState {
         let prefix = format!("plugin-tray:{plugin_id}:");
         if let Ok(mut actions) = self.plugin_tray_actions.lock() {
             actions.retain(|key, _| !key.starts_with(&prefix));
-        }
-        if let Ok(mut queues) = self.plugin_notification_queues.lock() {
-            queues.retain(|key, _| !key.starts_with(&prefix));
         }
         if let Ok(mut queues) = self.plugin_notification_queues.lock() {
             queues.retain(|key, _| !key.starts_with(&prefix));
@@ -562,6 +560,9 @@ impl StartupTrayState {
         let prefix = format!("plugin-tray:{plugin_id}:");
         if let Ok(mut actions) = self.plugin_tray_actions.lock() {
             actions.retain(|key, _| !key.starts_with(&prefix));
+        }
+        if let Ok(mut queues) = self.plugin_notification_queues.lock() {
+            queues.retain(|key, _| !key.starts_with(&prefix));
         }
 
         let plugin_id = plugin_id.to_string();
