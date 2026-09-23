@@ -52,22 +52,27 @@ RemoteHand v1.2.8 is the next public release after v1.2.3 and includes all accum
 - RemoteHand core remains plugin-agnostic: plugins own monitoring/protocol semantics while core owns generic runtime, storage, tray, notification, panel, and contribution infrastructure.
 - The vendored `tray-icon` crate remains in use for the Windows GUID/notification backports required by the current release.
 
-### Verification status
+### Verification
 
-Development and manual Windows validation performed across the accumulated v1.2.4-v1.2.8 work includes:
+Windows release-branch validation covered:
 
-- interface contribution ordering and restart persistence
-- plugin disable/re-enable lifecycle
-- per-target plugin tray identity/routing
-- main ↔ popout and popout ↔ popout drag/drop
-- multi-tab/multi-group popout lifecycle
-- generic native Windows notifications
-- notification queueing and click-through panel routing
-- adaptive tray graph rendering
-- plugin remove-confirm modal layering
-- Target Monitor v0.7.0 integration against the new generic plugin capabilities
+- Frontend lint: 17 warnings, 0 errors.
+- Frontend tests: 7 passed, 0 failed.
+- Production frontend build: passed.
+- Rust tests: 35 passed, 0 failed.
+- `cargo check --locked`: passed.
+- Interface contribution ordering and restart persistence.
+- Plugin disable/re-enable lifecycle.
+- Per-target plugin tray identity/routing.
+- Main ↔ popout and popout ↔ popout drag/drop.
+- Multi-tab/multi-group popout lifecycle.
+- Generic native Windows notifications.
+- Notification queueing and click-through panel routing.
+- Adaptive tray graph rendering.
+- Plugin remove-confirm modal layering.
+- Target Monitor v0.7.0 integration against the new generic plugin capabilities.
 
-A final v1.2.8 release validation pass is required from the release branch before merge/tag/package publication.
+The final Windows release binary still requires the standard post-merge build and smoke test before packaging/tag publication.
 
 
 ## `1.2.7` - 2026-09-23
