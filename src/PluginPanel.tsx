@@ -111,6 +111,11 @@ window.addEventListener("message", (event) => {
 const message = event.data;
 if (!message) return;
 if (message.type === "remotehand.appearance") { applyAppearance(message.appearance); return; }
+if (message.type === "remotehand.plugin.context") {
+window.__REMOTEHAND_PLUGIN_CONTEXT__ = message.context || {};
+window.dispatchEvent(new CustomEvent("remotehand-plugin-context", { detail: window.__REMOTEHAND_PLUGIN_CONTEXT__ }));
+return;
+}
 if (message.type === "remotehand.plugin.response") {
 const pendingRequest = pending.get(message.requestId);
 if (!pendingRequest) return;
