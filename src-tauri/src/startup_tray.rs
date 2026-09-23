@@ -111,6 +111,19 @@ struct PluginTrayUpdate {
     items: Vec<PluginTrayItem>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PluginTrayNotification {
+    pub item_id: String,
+    pub title: String,
+    pub body: String,
+    #[serde(default)]
+    pub tone: String,
+    #[serde(default = "default_true")]
+    pub silent: bool,
+}
+
+
 fn default_true() -> bool {
     true
 }
@@ -369,6 +382,54 @@ impl StartupTrayState {
             if let Err(error) = apply_plugin_tray_update(&plugin_id, update) {
                 log::warn!("Failed to apply plugin tray update for {plugin_id}: {error}");
             }
+        })
+        .map_err(|error| error.to_string())
+    }
+
+    pub fn show_plugin_notification(
+        &self,
+        app: &AppHandle,
+        plugin_id: &str,
+        payload: serde_json::Value,
+    ) -> Result<(), String> {
+        let notification: PluginTrayNotification = serde_json::from_value(payload)
+            .map_err(|error| format!("invalid notification.show payload: {error}"))?;
+        if !valid_tray_id(&notification.item_id) {
+            return Err("notification.show contains an invalid item id".to_string());
+        }
+        if notification.title.trim().is_empty()
+            || notification.title.chars().count() > 63
+            || notification.body.chars().count() > 255
+        {
+            return Err("notification.show contains invalid text".to_string());
+        }
+        if !matches!(notification.tone.as_str(), "" | "info" | "success" | "warning" | "danger" | "error") {
+            return Err("notification.show contains an invalid tone".to_string());
+        }
+
+        let key = plugin_tray_key(plugin_id, &notification.item_id);
+        app.run_on_main_thread(move || {
+            PLUGIN_TRAYS.with(|slot| {
+                let trays = slot.borrow();
+                let Some(tray) = trays.get(&key) else {
+                    log::warn!("Plugin notification ignored because tray item {key} does not exist");
+                    return;
+                };
+                #[cfg(target_os = "windows")]
+                if let Err(error) = tray.show_notification(
+                    &notification.title,
+                    &notification.body,
+                    &notification.tone,
+                    notification.silent,
+                ) {
+                    log::warn!("Failed to show plugin tray notification for {key}: {error}");
+                }
+                #[cfg(not(target_os = "windows"))]
+                {
+                    let _ = tray;
+                    log::debug!("Plugin tray notifications are not yet implemented on this platform");
+                }
+            });
         })
         .map_err(|error| error.to_string())
     }
