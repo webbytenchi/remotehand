@@ -599,16 +599,6 @@ pub enum TrayIconEvent {
         /// Mouse button that triggered this event.
         button: MouseButton,
     },
-    /// The user clicked a native notification balloon. **Windows Only**
-    NotificationClick {
-        /// Id of the tray icon whose notification was clicked.
-        id: TrayIconId,
-    },
-    /// A native notification balloon was dismissed or timed out. **Windows Only**
-    NotificationClosed {
-        /// Id of the tray icon whose notification was dismissed.
-        id: TrayIconId,
-    },
     /// The mouse entered the tray icon region.
     Enter {
         /// Id of the tray icon which triggered this event.
@@ -689,8 +679,6 @@ impl TrayIconEvent {
         match self {
             TrayIconEvent::Click { id, .. } => id,
             TrayIconEvent::DoubleClick { id, .. } => id,
-            TrayIconEvent::NotificationClick { id } => id,
-            TrayIconEvent::NotificationClosed { id } => id,
             TrayIconEvent::Enter { id, .. } => id,
             TrayIconEvent::Move { id, .. } => id,
             TrayIconEvent::Leave { id, .. } => id,
@@ -727,6 +715,39 @@ impl TrayIconEvent {
             handler(event);
         } else {
             let _ = TRAY_CHANNEL.0.send(event);
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum TrayNotificationEvent {
+    Click { id: TrayIconId },
+    Closed { id: TrayIconId },
+}
+
+type TrayNotificationEventHandler = Box<dyn Fn(TrayNotificationEvent) + Send + Sync + 'static>;
+static TRAY_NOTIFICATION_EVENT_HANDLER: OnceCell<Option<TrayNotificationEventHandler>> = OnceCell::new();
+
+impl TrayNotificationEvent {
+    pub fn id(&self) -> &TrayIconId {
+        match self {
+            TrayNotificationEvent::Click { id } => id,
+            TrayNotificationEvent::Closed { id } => id,
+        }
+    }
+
+    pub fn set_event_handler<F: Fn(TrayNotificationEvent) + Send + Sync + 'static>(f: Option<F>) {
+        if let Some(f) = f {
+            let _ = TRAY_NOTIFICATION_EVENT_HANDLER.set(Some(Box::new(f)));
+        } else {
+            let _ = TRAY_NOTIFICATION_EVENT_HANDLER.set(None);
+        }
+    }
+
+    #[allow(unused)]
+    pub(crate) fn send(event: TrayNotificationEvent) {
+        if let Some(Some(handler)) = TRAY_NOTIFICATION_EVENT_HANDLER.get() {
+            handler(event);
         }
     }
 }
