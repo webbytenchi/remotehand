@@ -408,7 +408,7 @@ Key rules:
 
 - Keys must be 1 to 128 characters.
 - Allowed characters: A-Z, a-z, 0-9, dot, dash, underscore.
-- One JSON file per key, capped at 1 MiB.
+- One JSON file per key, capped at 16 MiB.
 
 ### clipboard.write
 
@@ -763,6 +763,15 @@ A labelled progress bar.
 - label - string.
 - value - number 0 to 100 (clamped).
 - Default font size 12 px.
+
+badge
+
+A compact overlay badge rendered in the top-right corner of the top-bar item. It does not consume vertical stack space, so it is suitable for unread counts, warnings, or small status counters.
+
+- label - string, typically a short count such as `1` or `3`.
+- value - fallback if label is absent.
+- tone - commonly `warning`, `danger`, or `success`.
+- Default font size 9 px.
 
 sparkline
 
