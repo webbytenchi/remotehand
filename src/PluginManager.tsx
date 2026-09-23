@@ -39,7 +39,7 @@ type TopbarContent = {
 type TopbarAction = {
   type: "open-panel";
   panel?: string;
-  context?: { targetId?: string; target?: string };
+  context?: { targetId?: string; target?: string; view?: string; alertKey?: string };
 };
 type TopbarMenuAction = {
   type: "plugin-call";
@@ -299,7 +299,7 @@ export function PluginManager({
   embedded?: boolean;
   embeddedHost?: HTMLElement | null;
   onChanged?: () => void;
-  onOpenPluginPanel?: (pluginId: string, panelId: string, context?: { targetId?: string; target?: string }) => void;
+  onOpenPluginPanel?: (pluginId: string, panelId: string, context?: { targetId?: string; target?: string; view?: string; alertKey?: string }) => void;
   topbarOrder?: string[];
   onTopbarItemsChanged?: (items: Array<{ id: string; label: string }>) => void;
 }) {
@@ -421,7 +421,7 @@ export function PluginManager({
       if (event.payload.event === "topbar.update") {
         const items = parseTopbarItems(event.payload.payload);
         setTopbarItems((current) => ({ ...current, [event.payload.pluginId]: items }));
-      } else if (event.payload.event === "tray.action") {
+      } else if (event.payload.event === "tray.action" || event.payload.event === "notification.action") {
         const payload = event.payload.payload as TrayActionPayload;
         if (payload.action?.type === "open-panel" && onOpenPluginPanel) {
           onOpenPluginPanel(
