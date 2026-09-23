@@ -599,6 +599,16 @@ pub enum TrayIconEvent {
         /// Mouse button that triggered this event.
         button: MouseButton,
     },
+    /// The user clicked a native notification balloon. **Windows Only**
+    NotificationClick {
+        /// Id of the tray icon whose notification was clicked.
+        id: TrayIconId,
+    },
+    /// A native notification balloon was dismissed or timed out. **Windows Only**
+    NotificationClosed {
+        /// Id of the tray icon whose notification was dismissed.
+        id: TrayIconId,
+    },
     /// The mouse entered the tray icon region.
     Enter {
         /// Id of the tray icon which triggered this event.
@@ -679,6 +689,8 @@ impl TrayIconEvent {
         match self {
             TrayIconEvent::Click { id, .. } => id,
             TrayIconEvent::DoubleClick { id, .. } => id,
+            TrayIconEvent::NotificationClick { id } => id,
+            TrayIconEvent::NotificationClosed { id } => id,
             TrayIconEvent::Enter { id, .. } => id,
             TrayIconEvent::Move { id, .. } => id,
             TrayIconEvent::Leave { id, .. } => id,
