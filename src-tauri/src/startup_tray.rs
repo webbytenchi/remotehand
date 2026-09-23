@@ -820,7 +820,7 @@ pub fn handle_close(_window: &Window, state: &StartupTrayState) -> bool {
 
 #[cfg(test)]
 mod plugin_tray_tests {
-    use super::{plugin_tray_bar_layout, stable_plugin_tray_guid};
+    use super::{plugin_tray_bar_layout, stable_plugin_tray_guid, PluginNotificationQueue};
 
     #[test]
     fn plugin_tray_guid_is_stable_and_unique_per_item() {
