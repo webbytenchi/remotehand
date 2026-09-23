@@ -116,4 +116,4 @@ The GitHub Release must be checked after publication to confirm:
 
 ## Current reference
 
-RemoteHand v1.2.3 is the reference implementation of this release format and workflow.
+RemoteHand v1.2.8 is the current reference implementation of this release format and workflow. Its public release notes should summarize all accumulated changes since the previous public release, v1.2.3.
