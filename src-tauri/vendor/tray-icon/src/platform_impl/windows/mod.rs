@@ -36,7 +36,7 @@ use windows_sys::{
 
 use crate::{
     dpi::PhysicalPosition, icon::Icon, menu, MouseButton, MouseButtonState, Rect,
-    TrayIconAttributes, TrayIconEvent, TrayIconId, COUNTER,
+    TrayIconAttributes, TrayIconEvent, TrayIconId, TrayNotificationEvent, COUNTER,
 };
 
 pub(crate) use self::icon::WinIcon as PlatformIcon;
@@ -419,7 +419,7 @@ unsafe extern "system" fn tray_proc(
         }
 
         WM_USER_TRAYICON if lparam as u32 == NIN_BALLOONUSERCLICK => {
-            TrayIconEvent::send(TrayIconEvent::NotificationClick {
+            TrayNotificationEvent::send(TrayNotificationEvent::Click {
                 id: userdata.id.clone(),
             });
             return 0;
@@ -427,7 +427,7 @@ unsafe extern "system" fn tray_proc(
         WM_USER_TRAYICON
             if matches!(lparam as u32, NIN_BALLOONHIDE | NIN_BALLOONTIMEOUT) =>
         {
-            TrayIconEvent::send(TrayIconEvent::NotificationClosed {
+            TrayNotificationEvent::send(TrayNotificationEvent::Closed {
                 id: userdata.id.clone(),
             });
             return 0;
