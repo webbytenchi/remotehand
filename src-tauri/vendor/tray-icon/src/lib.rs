@@ -420,6 +420,11 @@ impl TrayIcon {
     pub fn set_tooltip<S: AsRef<str>>(&self, tooltip: Option<S>) -> Result<()> {
         self.tray.borrow_mut().set_tooltip(tooltip)
     }
+    #[cfg(target_os = "windows")]
+    pub fn show_notification(&self, title: &str, body: &str, tone: &str, silent: bool) -> Result<()> {
+        self.tray.borrow_mut().show_notification(title, body, tone, silent)
+    }
+
 
     /// Sets the tooltip for this tray icon.
     ///
@@ -710,6 +715,39 @@ impl TrayIconEvent {
             handler(event);
         } else {
             let _ = TRAY_CHANNEL.0.send(event);
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum TrayNotificationEvent {
+    Click { id: TrayIconId },
+    Closed { id: TrayIconId },
+}
+
+type TrayNotificationEventHandler = Box<dyn Fn(TrayNotificationEvent) + Send + Sync + 'static>;
+static TRAY_NOTIFICATION_EVENT_HANDLER: OnceCell<Option<TrayNotificationEventHandler>> = OnceCell::new();
+
+impl TrayNotificationEvent {
+    pub fn id(&self) -> &TrayIconId {
+        match self {
+            TrayNotificationEvent::Click { id } => id,
+            TrayNotificationEvent::Closed { id } => id,
+        }
+    }
+
+    pub fn set_event_handler<F: Fn(TrayNotificationEvent) + Send + Sync + 'static>(f: Option<F>) {
+        if let Some(f) = f {
+            let _ = TRAY_NOTIFICATION_EVENT_HANDLER.set(Some(Box::new(f)));
+        } else {
+            let _ = TRAY_NOTIFICATION_EVENT_HANDLER.set(None);
+        }
+    }
+
+    #[allow(unused)]
+    pub(crate) fn send(event: TrayNotificationEvent) {
+        if let Some(Some(handler)) = TRAY_NOTIFICATION_EVENT_HANDLER.get() {
+            handler(event);
         }
     }
 }

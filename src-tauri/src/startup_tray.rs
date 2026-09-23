@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::{BTreeMap, BTreeSet}, sync::{Arc, Mutex}};
+use std::{cell::RefCell, collections::{BTreeMap, BTreeSet, VecDeque}, sync::{Arc, Mutex}};
 
 use serde::{Deserialize, Serialize};
 
@@ -8,6 +8,7 @@ use tauri::{
     AppHandle, Emitter, Manager, State, Wry, Window,
 };
 use tauri_plugin_autostart::ManagerExt;
+use tray_icon::TrayNotificationEvent;
 
 #[derive(Clone)]
 pub struct StartupTrayState {
@@ -16,6 +17,7 @@ pub struct StartupTrayState {
     minimize_to_tray_on_close: Arc<Mutex<bool>>,
     show_in_system_tray: Arc<Mutex<bool>>,
     plugin_tray_actions: Arc<Mutex<BTreeMap<String, PluginTrayAction>>>,
+    plugin_notification_queues: Arc<Mutex<BTreeMap<String, PluginNotificationQueue>>>,
 }
 
 impl Default for StartupTrayState {
@@ -26,6 +28,7 @@ impl Default for StartupTrayState {
             minimize_to_tray_on_close: Arc::new(Mutex::new(false)),
             show_in_system_tray: Arc::new(Mutex::new(true)),
             plugin_tray_actions: Arc::new(Mutex::new(BTreeMap::new())),
+            plugin_notification_queues: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 }
@@ -111,6 +114,27 @@ struct PluginTrayUpdate {
     items: Vec<PluginTrayItem>,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PluginTrayNotification {
+    pub item_id: String,
+    pub title: String,
+    pub body: String,
+    #[serde(default)]
+    pub tone: String,
+    #[serde(default = "default_true")]
+    pub silent: bool,
+    #[serde(default)]
+    pub action: Option<PluginTrayAction>,
+}
+
+#[derive(Default)]
+struct PluginNotificationQueue {
+    current: Option<PluginTrayNotification>,
+    pending: VecDeque<PluginTrayNotification>,
+}
+
+
 fn default_true() -> bool {
     true
 }
@@ -153,6 +177,28 @@ fn set_pixel(bytes: &mut [u8], x: usize, y: usize, color: [u8; 4]) {
     bytes[offset..offset + 4].copy_from_slice(&color);
 }
 
+fn plugin_tray_bar_layout(point_count: usize) -> (usize, usize, usize) {
+    const GRAPH_LEFT: usize = 4;
+    const GRAPH_WIDTH: usize = 24;
+
+    if point_count == 0 {
+        return (0, 0, GRAPH_LEFT);
+    }
+
+    // Preserve a 1px separator while every bar can still be at least 2px wide.
+    let gap = if point_count > 1 && point_count * 2 + (point_count - 1) <= GRAPH_WIDTH {
+        1
+    } else {
+        0
+    };
+    let gaps_width = gap * point_count.saturating_sub(1);
+    let bar_width = ((GRAPH_WIDTH - gaps_width) / point_count).max(1);
+    let total_width = point_count * bar_width + gaps_width;
+    let start_x = GRAPH_LEFT + (GRAPH_WIDTH.saturating_sub(total_width) / 2);
+
+    (bar_width, gap, start_x)
+}
+
 fn plugin_tray_icon(item: &PluginTrayItem) -> Result<tray_icon::Icon, String> {
     const SIZE: usize = 32;
     let mut bytes = vec![0u8; SIZE * SIZE * 4];
@@ -192,9 +238,7 @@ fn plugin_tray_icon(item: &PluginTrayItem) -> Result<tray_icon::Icon, String> {
             }
         }
     } else {
-        let bar_width = 2usize;
-        let total_width = points.len() * bar_width;
-        let start_x = 16usize.saturating_sub(total_width / 2);
+        let (bar_width, bar_gap, start_x) = plugin_tray_bar_layout(points.len());
         for (index, point) in points.iter().enumerate() {
             let height = match point.value {
                 Some(value) if value.is_finite() && value >= 0.0 => {
@@ -205,7 +249,7 @@ fn plugin_tray_icon(item: &PluginTrayItem) -> Result<tray_icon::Icon, String> {
             let color = parse_tray_hex_color(point.color.as_deref())
                 .or_else(|| parse_tray_hex_color(item.graph_color.as_deref()))
                 .unwrap_or_else(|| tray_color(point.tone.as_deref().unwrap_or(&item.tone)));
-            let x0 = start_x + index * bar_width;
+            let x0 = start_x + index * (bar_width + bar_gap);
             for x in x0..(x0 + bar_width).min(28) {
                 for y in (27usize.saturating_sub(height))..27 {
                     set_pixel(&mut bytes, x, y, color);
@@ -242,6 +286,32 @@ thread_local! {
     static PLUGIN_TRAYS: RefCell<BTreeMap<String, tray_icon::TrayIcon>> =
         RefCell::new(BTreeMap::new());
 }
+
+fn display_plugin_notification(key: &str, notification: &PluginTrayNotification) {
+    PLUGIN_TRAYS.with(|slot| {
+        let trays = slot.borrow();
+        let Some(tray) = trays.get(key) else {
+            log::warn!("Plugin notification ignored because tray item {key} does not exist");
+            return;
+        };
+        #[cfg(target_os = "windows")]
+        if let Err(error) = tray.show_notification(
+            &notification.title,
+            &notification.body,
+            &notification.tone,
+            notification.silent,
+        ) {
+            log::warn!("Failed to show plugin tray notification for {key}: {error}");
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = tray;
+            let _ = notification;
+            log::debug!("Plugin tray notifications are not yet implemented on this platform");
+        }
+    });
+}
+
 
 fn apply_plugin_tray_update(plugin_id: &str, update: PluginTrayUpdate) -> Result<(), String> {
     PLUGIN_TRAYS.with(|slot| {
@@ -353,10 +423,122 @@ impl StartupTrayState {
         .map_err(|error| error.to_string())
     }
 
+    pub fn show_plugin_notification(
+        &self,
+        app: &AppHandle,
+        plugin_id: &str,
+        payload: serde_json::Value,
+    ) -> Result<(), String> {
+        let notification: PluginTrayNotification = serde_json::from_value(payload)
+            .map_err(|error| format!("invalid notification.show payload: {error}"))?;
+        if !valid_tray_id(&notification.item_id) {
+            return Err("notification.show contains an invalid item id".to_string());
+        }
+        if notification.title.trim().is_empty()
+            || notification.title.chars().count() > 63
+            || notification.body.chars().count() > 255
+        {
+            return Err("notification.show contains invalid text".to_string());
+        }
+        if !matches!(notification.tone.as_str(), "" | "info" | "success" | "warning" | "danger" | "error") {
+            return Err("notification.show contains an invalid tone".to_string());
+        }
+        if let Some(action) = notification.action.as_ref() {
+            if action.action_type != "open-panel"
+                || action.panel.is_empty()
+                || action.panel.len() > 128
+            {
+                return Err("notification.show contains an unsupported action".to_string());
+            }
+        }
+
+        let key = plugin_tray_key(plugin_id, &notification.item_id);
+        let should_display = {
+            let mut queues = self
+                .plugin_notification_queues
+                .lock()
+                .map_err(|_| "plugin notification queue lock poisoned".to_string())?;
+            let queue = queues.entry(key.clone()).or_default();
+            let depth = usize::from(queue.current.is_some()) + queue.pending.len();
+            if depth >= 32 {
+                return Err("notification.show queue exceeds the 32 item limit".to_string());
+            }
+            if queue.current.is_none() {
+                queue.current = Some(notification.clone());
+                true
+            } else {
+                queue.pending.push_back(notification);
+                false
+            }
+        };
+
+        if should_display {
+            let notification = {
+                let queues = self
+                    .plugin_notification_queues
+                    .lock()
+                    .map_err(|_| "plugin notification queue lock poisoned".to_string())?;
+                queues.get(&key).and_then(|queue| queue.current.clone())
+            };
+            if let Some(notification) = notification {
+                app.run_on_main_thread(move || display_plugin_notification(&key, &notification))
+                    .map_err(|error| error.to_string())?;
+            }
+        }
+        Ok(())
+    }
+
+    fn complete_plugin_notification(&self, app: &AppHandle, key: &str, clicked: bool) {
+        let (finished, next) = {
+            let mut queues = match self.plugin_notification_queues.lock() {
+                Ok(queues) => queues,
+                Err(_) => return,
+            };
+            let Some(queue) = queues.get_mut(key) else { return; };
+            let finished = queue.current.take();
+            let next = queue.pending.pop_front();
+            queue.current = next.clone();
+            if queue.current.is_none() && queue.pending.is_empty() {
+                queues.remove(key);
+            }
+            (finished, next)
+        };
+
+        if clicked {
+            if let Some(action) = finished.as_ref().and_then(|notification| notification.action.clone()) {
+                if let Some(rest) = key.strip_prefix("plugin-tray:") {
+                    if let Some((plugin_id, item_id)) = rest.split_once(':') {
+                        show_main(app);
+                        let envelope = serde_json::json!({
+                            "pluginId": plugin_id,
+                            "event": "notification.action",
+                            "payload": {
+                                "itemId": item_id,
+                                "action": action,
+                            }
+                        });
+                        let _ = app.emit("remotehand-plugin-event", envelope);
+                    }
+                }
+            }
+        }
+
+        if let Some(next) = next {
+            let key = key.to_string();
+            let key_for_main = key.clone();
+            if let Err(error) = app.run_on_main_thread(move || display_plugin_notification(&key_for_main, &next)) {
+                log::warn!("Failed to advance plugin notification queue for {key}: {error}");
+            }
+        }
+    }
+
     pub fn hide_plugin_trays(&self, app: &AppHandle, plugin_id: &str) {
         let prefix = format!("plugin-tray:{plugin_id}:");
         if let Ok(mut actions) = self.plugin_tray_actions.lock() {
             actions.retain(|key, _| !key.starts_with(&prefix));
+        }
+        if let Ok(mut queues) = self.plugin_notification_queues.lock() {
+            queues.retain(|key, _| !key.starts_with(&prefix));
         }
 
         let plugin_id = plugin_id.to_string();
@@ -379,6 +561,9 @@ impl StartupTrayState {
         let prefix = format!("plugin-tray:{plugin_id}:");
         if let Ok(mut actions) = self.plugin_tray_actions.lock() {
             actions.retain(|key, _| !key.starts_with(&prefix));
+        }
+        if let Ok(mut queues) = self.plugin_notification_queues.lock() {
+            queues.retain(|key, _| !key.starts_with(&prefix));
         }
 
         let plugin_id = plugin_id.to_string();
@@ -416,12 +601,8 @@ pub fn handle_plugin_tray_event(app: &AppHandle, event: TrayIconEvent) {
     };
 
     let key = id.as_ref();
-    let Some(rest) = key.strip_prefix("plugin-tray:") else {
-        return;
-    };
-    let Some((plugin_id, item_id)) = rest.split_once(':') else {
-        return;
-    };
+    let Some(rest) = key.strip_prefix("plugin-tray:") else { return; };
+    let Some((plugin_id, item_id)) = rest.split_once(':') else { return; };
 
     let action = app
         .try_state::<StartupTrayState>()
@@ -443,6 +624,15 @@ pub fn handle_plugin_tray_event(app: &AppHandle, event: TrayIconEvent) {
             }
         });
         let _ = app.emit("remotehand-plugin-event", envelope);
+    }
+}
+
+fn handle_plugin_notification_event(app: &AppHandle, event: TrayNotificationEvent) {
+    let key = event.id().as_ref().to_string();
+    if !key.starts_with("plugin-tray:") { return; }
+    let clicked = matches!(event, TrayNotificationEvent::Click { .. });
+    if let Some(state) = app.try_state::<StartupTrayState>() {
+        state.complete_plugin_notification(app, &key, clicked);
     }
 }
 
@@ -473,6 +663,11 @@ fn update_window_item(app: &AppHandle, state: &StartupTrayState) {
 }
 
 pub fn install(app: &tauri::AppHandle<Wry>, state: &StartupTrayState) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let notification_app = app.clone();
+    TrayNotificationEvent::set_event_handler(Some(move |event| {
+        handle_plugin_notification_event(&notification_app, event);
+    }));
+
     let visible = app
         .get_webview_window("main")
         .and_then(|window| window.is_visible().ok())
@@ -625,7 +820,7 @@ pub fn handle_close(_window: &Window, state: &StartupTrayState) -> bool {
 
 #[cfg(test)]
 mod plugin_tray_tests {
-    use super::stable_plugin_tray_guid;
+    use super::{plugin_tray_bar_layout, stable_plugin_tray_guid, PluginNotificationQueue};
 
     #[test]
     fn plugin_tray_guid_is_stable_and_unique_per_item() {
@@ -642,5 +837,27 @@ mod plugin_tray_tests {
             stable_plugin_tray_guid("plugin-tray:remotehand.host-monitor:google-dns").to_be_bytes();
         assert_eq!(bytes[6] >> 4, 5);
         assert_eq!(bytes[8] >> 6, 2);
+    }
+
+    #[test]
+    fn notification_queue_defaults_empty() {
+        let queue = PluginNotificationQueue::default();
+        assert!(queue.current.is_none());
+        assert!(queue.pending.is_empty());
+    }
+
+    #[test]
+    fn plugin_tray_sparse_graphs_expand_bars_with_one_pixel_gaps() {
+        assert_eq!(plugin_tray_bar_layout(1), (24, 0, 4));
+        assert_eq!(plugin_tray_bar_layout(2), (11, 1, 4));
+        assert_eq!(plugin_tray_bar_layout(3), (7, 1, 4));
+        assert_eq!(plugin_tray_bar_layout(5), (4, 1, 4));
+        assert_eq!(plugin_tray_bar_layout(8), (2, 1, 4));
+    }
+
+    #[test]
+    fn plugin_tray_dense_graphs_drop_gaps_to_keep_bars_readable() {
+        assert_eq!(plugin_tray_bar_layout(9), (2, 0, 7));
+        assert_eq!(plugin_tray_bar_layout(12), (2, 0, 4));
     }
 }

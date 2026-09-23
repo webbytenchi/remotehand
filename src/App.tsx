@@ -820,7 +820,7 @@ return;
 }
 addTerminal(undefined, activity.kind === "terminal" ? "default" : activity.kind);
 }, [addTerminal, connectSsh, openSftp]);
-const openPluginPanel = useCallback((plugin: PluginInfo, panelId: string, context?: { targetId?: string; target?: string }) => {
+const openPluginPanel = useCallback((plugin: PluginInfo, panelId: string, context?: { targetId?: string; target?: string; view?: string; alertKey?: string }) => {
 const api = apiRef.current;
 if (!api) return;
 const panel = plugin.manifest.contributes.panels.find((item) => item.id === panelId);

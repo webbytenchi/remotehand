@@ -14,9 +14,10 @@ use windows_sys::{
         Foundation::{FALSE, HWND, LPARAM, LRESULT, POINT, RECT, S_OK, TRUE, WPARAM},
         UI::{
             Shell::{
-                Shell_NotifyIconGetRect, Shell_NotifyIconW, NIF_GUID, NIF_ICON, NIF_MESSAGE,
-                NIF_STATE, NIF_TIP, NIM_ADD, NIM_DELETE, NIM_MODIFY, NIS_HIDDEN, NOTIFYICONDATAW,
-                NOTIFYICONIDENTIFIER,
+                Shell_NotifyIconGetRect, Shell_NotifyIconW, NIF_GUID, NIF_ICON, NIF_INFO, NIF_MESSAGE,
+                NIF_STATE, NIF_TIP, NIIF_ERROR, NIIF_INFO, NIIF_NOSOUND, NIIF_WARNING,
+                NIN_BALLOONHIDE, NIN_BALLOONTIMEOUT, NIN_BALLOONUSERCLICK, NIM_ADD,
+                NIM_DELETE, NIM_MODIFY, NIS_HIDDEN, NOTIFYICONDATAW, NOTIFYICONIDENTIFIER,
             },
             WindowsAndMessaging::{
                 ChangeWindowMessageFilterEx, CreateWindowExW, DefWindowProcW, DestroyWindow,
@@ -35,7 +36,7 @@ use windows_sys::{
 
 use crate::{
     dpi::PhysicalPosition, icon::Icon, menu, MouseButton, MouseButtonState, Rect,
-    TrayIconAttributes, TrayIconEvent, TrayIconId, COUNTER,
+    TrayIconAttributes, TrayIconEvent, TrayIconId, TrayNotificationEvent, COUNTER,
 };
 
 pub(crate) use self::icon::WinIcon as PlatformIcon;
@@ -260,6 +261,36 @@ impl TrayIcon {
 
         Ok(())
     }
+    pub fn show_notification(&mut self, title: &str, body: &str, tone: &str, silent: bool) -> crate::Result<()> {
+        unsafe {
+            let mut nid = NOTIFYICONDATAW {
+                uFlags: NIF_INFO,
+                hWnd: self.hwnd,
+                uID: self.internal_id,
+                cbSize: size_of::<NOTIFYICONDATAW>() as u32,
+                dwInfoFlags: match tone {
+                    "warning" => NIIF_WARNING,
+                    "danger" | "error" => NIIF_ERROR,
+                    _ => NIIF_INFO,
+                } | if silent { NIIF_NOSOUND } else { 0 },
+                ..std::mem::zeroed()
+            };
+            let title_wide = util::encode_wide(title);
+            for i in 0..title_wide.len().min(nid.szInfoTitle.len()) {
+                nid.szInfoTitle[i] = title_wide[i];
+            }
+            let body_wide = util::encode_wide(body);
+            for i in 0..body_wide.len().min(nid.szInfo.len()) {
+                nid.szInfo[i] = body_wide[i];
+            }
+            apply_guid(&mut nid, self.guid);
+            if Shell_NotifyIconW(NIM_MODIFY, &nid) == 0 {
+                return Err(crate::Error::OsError(std::io::Error::last_os_error()));
+            }
+        }
+        Ok(())
+    }
+
 
     pub fn set_show_menu_on_left_click(&mut self, enable: bool) {
         unsafe {
@@ -387,6 +418,21 @@ unsafe extern "system" fn tray_proc(
             userdata.menu_on_right_click = wparam != 0;
         }
 
+        WM_USER_TRAYICON if lparam as u32 == NIN_BALLOONUSERCLICK as u32 => {
+            TrayNotificationEvent::send(TrayNotificationEvent::Click {
+                id: userdata.id.clone(),
+            });
+            return 0;
+        }
+        WM_USER_TRAYICON
+            if lparam as u32 == NIN_BALLOONHIDE as u32
+                || lparam as u32 == NIN_BALLOONTIMEOUT as u32 =>
+        {
+            TrayNotificationEvent::send(TrayNotificationEvent::Closed {
+                id: userdata.id.clone(),
+            });
+            return 0;
+        }
         WM_USER_TRAYICON
             if matches!(
                 lparam as u32,

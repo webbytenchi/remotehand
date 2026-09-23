@@ -10,6 +10,7 @@ cancelLabel?: string;
 danger?: boolean;
 focusActions?: boolean;
 confirmOnEnter?: boolean;
+elevated?: boolean;
 onConfirm: () => void;
 onCancel: () => void;
 };
@@ -24,6 +25,7 @@ cancelLabel,
 danger = false,
 focusActions = true,
 confirmOnEnter = false,
+elevated = false,
 onConfirm,
 onCancel,
 }: AppModalProps) {
@@ -45,7 +47,7 @@ return () => window.removeEventListener("keydown", handleKeyDown);
 }, [open, onCancel, onConfirm, confirmOnEnter]);
 if (!open) return null;
 return (
-<div className="app-modal-backdrop" onMouseDown={onCancel}>
+<div className={`app-modal-backdrop${elevated ? " app-modal-backdrop-elevated" : ""}`} onMouseDown={onCancel}>
 <div
 className={`app-modal${className ? ` ${className}` : ""}`}
 role="dialog"

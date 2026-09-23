@@ -9,6 +9,7 @@ pub const PLUGIN_API_VERSION: u32 = 1;
 const MAX_PLUGIN_FILES: usize = 2048;
 const MAX_PLUGIN_COUNT: usize = 512;
 const MAX_STATE_BYTES: u64 = 1024 * 1024;
+const MAX_PLUGIN_STORAGE_ENTRY_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_PLUGIN_BYTES: u64 = 64 * 1024 * 1024;
 const ALLOWED_PERMISSIONS: &[&str] = &[
     "network.connect",
@@ -20,6 +21,7 @@ const ALLOWED_PERMISSIONS: &[&str] = &[
     "vault.unlock",
     "storage.plugin",
     "tray.contribute",
+    "notifications.show",
 ];
 const ALLOWED_CONTRIBUTION_KINDS: &[&str] = &["sidebar", "panel", "command"];
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -123,8 +125,8 @@ pub(crate) fn plugin_storage_get(
     if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
         return Err("plugin storage entry must be a regular file".to_string());
     }
-    if metadata.len() > MAX_STATE_BYTES {
-        return Err("plugin storage entry is too large".to_string());
+    if metadata.len() > MAX_PLUGIN_STORAGE_ENTRY_BYTES {
+        return Err("plugin storage entry exceeds 16 MiB".to_string());
     }
     let contents = fs::read_to_string(path).map_err(|error| error.to_string())?;
     serde_json::from_str(&contents)
@@ -143,8 +145,8 @@ pub(crate) fn plugin_storage_set(
     let root = plugin_storage_root(plugin_id)?;
     fs::create_dir_all(&root).map_err(|error| error.to_string())?;
     let contents = serde_json::to_vec_pretty(value).map_err(|error| error.to_string())?;
-    if contents.len() as u64 > MAX_STATE_BYTES {
-        return Err("plugin storage entry is too large".to_string());
+    if contents.len() as u64 > MAX_PLUGIN_STORAGE_ENTRY_BYTES {
+        return Err("plugin storage entry exceeds 16 MiB".to_string());
     }
     let path = root.join(format!("{key}.json"));
     let temporary = root.join(format!(".{key}.tmp"));
@@ -753,6 +755,7 @@ mod tests {
         assert_eq!(MAX_PLUGIN_FILES, 2048);
         assert_eq!(MAX_PLUGIN_COUNT, 512);
         assert_eq!(MAX_STATE_BYTES, 1024 * 1024);
+        assert_eq!(MAX_PLUGIN_STORAGE_ENTRY_BYTES, 16 * 1024 * 1024);
         assert_eq!(MAX_PLUGIN_BYTES, 64 * 1024 * 1024);
     }
 
