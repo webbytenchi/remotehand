@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::{BTreeMap, BTreeSet}, sync::{Arc, Mutex}};
+use std::{cell::RefCell, collections::{BTreeMap, BTreeSet, VecDeque}, sync::{Arc, Mutex}};
 
 use serde::{Deserialize, Serialize};
 
@@ -16,6 +16,7 @@ pub struct StartupTrayState {
     minimize_to_tray_on_close: Arc<Mutex<bool>>,
     show_in_system_tray: Arc<Mutex<bool>>,
     plugin_tray_actions: Arc<Mutex<BTreeMap<String, PluginTrayAction>>>,
+    plugin_notification_queues: Arc<Mutex<BTreeMap<String, PluginNotificationQueue>>>,
 }
 
 impl Default for StartupTrayState {
@@ -26,6 +27,7 @@ impl Default for StartupTrayState {
             minimize_to_tray_on_close: Arc::new(Mutex::new(false)),
             show_in_system_tray: Arc::new(Mutex::new(true)),
             plugin_tray_actions: Arc::new(Mutex::new(BTreeMap::new())),
+            plugin_notification_queues: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 }
@@ -111,7 +113,7 @@ struct PluginTrayUpdate {
     items: Vec<PluginTrayItem>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PluginTrayNotification {
     pub item_id: String,
@@ -121,6 +123,14 @@ pub struct PluginTrayNotification {
     pub tone: String,
     #[serde(default = "default_true")]
     pub silent: bool,
+    #[serde(default)]
+    pub action: Option<PluginTrayAction>,
+}
+
+#[derive(Default)]
+struct PluginNotificationQueue {
+    current: Option<PluginTrayNotification>,
+    pending: VecDeque<PluginTrayNotification>,
 }
 
 
@@ -276,6 +286,32 @@ thread_local! {
         RefCell::new(BTreeMap::new());
 }
 
+fn display_plugin_notification(key: &str, notification: &PluginTrayNotification) {
+    PLUGIN_TRAYS.with(|slot| {
+        let trays = slot.borrow();
+        let Some(tray) = trays.get(key) else {
+            log::warn!("Plugin notification ignored because tray item {key} does not exist");
+            return;
+        };
+        #[cfg(target_os = "windows")]
+        if let Err(error) = tray.show_notification(
+            &notification.title,
+            &notification.body,
+            &notification.tone,
+            notification.silent,
+        ) {
+            log::warn!("Failed to show plugin tray notification for {key}: {error}");
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = tray;
+            let _ = notification;
+            log::debug!("Plugin tray notifications are not yet implemented on this platform");
+        }
+    });
+}
+
+
 fn apply_plugin_tray_update(plugin_id: &str, update: PluginTrayUpdate) -> Result<(), String> {
     PLUGIN_TRAYS.with(|slot| {
         let mut trays = slot.borrow_mut();
@@ -406,38 +442,104 @@ impl StartupTrayState {
         if !matches!(notification.tone.as_str(), "" | "info" | "success" | "warning" | "danger" | "error") {
             return Err("notification.show contains an invalid tone".to_string());
         }
+        if let Some(action) = notification.action.as_ref() {
+            if action.action_type != "open-panel"
+                || action.panel.is_empty()
+                || action.panel.len() > 128
+            {
+                return Err("notification.show contains an unsupported action".to_string());
+            }
+        }
 
         let key = plugin_tray_key(plugin_id, &notification.item_id);
-        app.run_on_main_thread(move || {
-            PLUGIN_TRAYS.with(|slot| {
-                let trays = slot.borrow();
-                let Some(tray) = trays.get(&key) else {
-                    log::warn!("Plugin notification ignored because tray item {key} does not exist");
-                    return;
-                };
-                #[cfg(target_os = "windows")]
-                if let Err(error) = tray.show_notification(
-                    &notification.title,
-                    &notification.body,
-                    &notification.tone,
-                    notification.silent,
-                ) {
-                    log::warn!("Failed to show plugin tray notification for {key}: {error}");
+        let should_display = {
+            let mut queues = self
+                .plugin_notification_queues
+                .lock()
+                .map_err(|_| "plugin notification queue lock poisoned".to_string())?;
+            let queue = queues.entry(key.clone()).or_default();
+            let depth = usize::from(queue.current.is_some()) + queue.pending.len();
+            if depth >= 32 {
+                return Err("notification.show queue exceeds the 32 item limit".to_string());
+            }
+            if queue.current.is_none() {
+                queue.current = Some(notification.clone());
+                true
+            } else {
+                queue.pending.push_back(notification);
+                false
+            }
+        };
+
+        if should_display {
+            let notification = {
+                let queues = self
+                    .plugin_notification_queues
+                    .lock()
+                    .map_err(|_| "plugin notification queue lock poisoned".to_string())?;
+                queues.get(&key).and_then(|queue| queue.current.clone())
+            };
+            if let Some(notification) = notification {
+                app.run_on_main_thread(move || display_plugin_notification(&key, &notification))
+                    .map_err(|error| error.to_string())?;
+            }
+        }
+        Ok(())
+    }
+
+    fn complete_plugin_notification(&self, app: &AppHandle, key: &str, clicked: bool) {
+        let (finished, next) = {
+            let mut queues = match self.plugin_notification_queues.lock() {
+                Ok(queues) => queues,
+                Err(_) => return,
+            };
+            let Some(queue) = queues.get_mut(key) else { return; };
+            let finished = queue.current.take();
+            let next = queue.pending.pop_front();
+            queue.current = next.clone();
+            if queue.current.is_none() && queue.pending.is_empty() {
+                queues.remove(key);
+            }
+            (finished, next)
+        };
+
+        if clicked {
+            if let Some(action) = finished.as_ref().and_then(|notification| notification.action.clone()) {
+                if let Some(rest) = key.strip_prefix("plugin-tray:") {
+                    if let Some((plugin_id, item_id)) = rest.split_once(':') {
+                        show_main(app);
+                        let envelope = serde_json::json!({
+                            "pluginId": plugin_id,
+                            "event": "notification.action",
+                            "payload": {
+                                "itemId": item_id,
+                                "action": action,
+                            }
+                        });
+                        let _ = app.emit("remotehand-plugin-event", envelope);
+                    }
                 }
-                #[cfg(not(target_os = "windows"))]
-                {
-                    let _ = tray;
-                    log::debug!("Plugin tray notifications are not yet implemented on this platform");
-                }
-            });
-        })
-        .map_err(|error| error.to_string())
+            }
+        }
+
+        if let Some(next) = next {
+            let key = key.to_string();
+            if let Err(error) = app.run_on_main_thread(move || display_plugin_notification(&key, &next)) {
+                log::warn!("Failed to advance plugin notification queue for {key}: {error}");
+            }
+        }
     }
 
     pub fn hide_plugin_trays(&self, app: &AppHandle, plugin_id: &str) {
         let prefix = format!("plugin-tray:{plugin_id}:");
         if let Ok(mut actions) = self.plugin_tray_actions.lock() {
             actions.retain(|key, _| !key.starts_with(&prefix));
+        }
+        if let Ok(mut queues) = self.plugin_notification_queues.lock() {
+            queues.retain(|key, _| !key.starts_with(&prefix));
+        }
+        if let Ok(mut queues) = self.plugin_notification_queues.lock() {
+            queues.retain(|key, _| !key.starts_with(&prefix));
         }
 
         let plugin_id = plugin_id.to_string();
@@ -486,44 +588,54 @@ impl StartupTrayState {
 }
 
 pub fn handle_plugin_tray_event(app: &AppHandle, event: TrayIconEvent) {
-    let TrayIconEvent::Click {
-        id,
-        button: MouseButton::Left,
-        button_state: MouseButtonState::Up,
-        ..
-    } = event
-    else {
-        return;
-    };
-
-    let key = id.as_ref();
-    let Some(rest) = key.strip_prefix("plugin-tray:") else {
-        return;
-    };
-    let Some((plugin_id, item_id)) = rest.split_once(':') else {
-        return;
-    };
-
-    let action = app
-        .try_state::<StartupTrayState>()
-        .and_then(|state| {
-            state
-                .plugin_tray_actions
-                .lock()
-                .ok()
-                .and_then(|actions| actions.get(key).cloned())
-        });
-
-    if let Some(action) = action {
-        let envelope = serde_json::json!({
-            "pluginId": plugin_id,
-            "event": "tray.action",
-            "payload": {
-                "itemId": item_id,
-                "action": action,
+    match event {
+        TrayIconEvent::NotificationClick { id } => {
+            let key = id.as_ref();
+            if !key.starts_with("plugin-tray:") { return; }
+            if let Some(state) = app.try_state::<StartupTrayState>() {
+                state.complete_plugin_notification(app, key, true);
             }
-        });
-        let _ = app.emit("remotehand-plugin-event", envelope);
+        }
+        TrayIconEvent::NotificationClosed { id } => {
+            let key = id.as_ref();
+            if !key.starts_with("plugin-tray:") { return; }
+            if let Some(state) = app.try_state::<StartupTrayState>() {
+                state.complete_plugin_notification(app, key, false);
+            }
+        }
+        TrayIconEvent::Click {
+            id,
+            button: MouseButton::Left,
+            button_state: MouseButtonState::Up,
+            ..
+        } => {
+            let key = id.as_ref();
+            let Some(rest) = key.strip_prefix("plugin-tray:") else { return; };
+            let Some((plugin_id, item_id)) = rest.split_once(':') else { return; };
+
+            let action = app
+                .try_state::<StartupTrayState>()
+                .and_then(|state| {
+                    state
+                        .plugin_tray_actions
+                        .lock()
+                        .ok()
+                        .and_then(|actions| actions.get(key).cloned())
+                });
+
+            if let Some(action) = action {
+                let envelope = serde_json::json!({
+                    "pluginId": plugin_id,
+                    "event": "tray.action",
+                    "payload": {
+                        "itemId": item_id,
+                        "action": action,
+                    }
+                });
+                let _ = app.emit("remotehand-plugin-event", envelope);
+            }
+        }
+        _ => {}
     }
 }
 
@@ -723,6 +835,13 @@ mod plugin_tray_tests {
             stable_plugin_tray_guid("plugin-tray:remotehand.host-monitor:google-dns").to_be_bytes();
         assert_eq!(bytes[6] >> 4, 5);
         assert_eq!(bytes[8] >> 6, 2);
+    }
+
+    #[test]
+    fn notification_queue_defaults_empty() {
+        let queue = PluginNotificationQueue::default();
+        assert!(queue.current.is_none());
+        assert!(queue.pending.is_empty());
     }
 
     #[test]
