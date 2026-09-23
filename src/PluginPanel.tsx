@@ -6,7 +6,7 @@ export type PluginPanelParams = {
 pluginId: string;
 panelId: string;
 title: string;
-context?: { targetId?: string; target?: string };
+context?: { targetId?: string; target?: string; view?: string; alertKey?: string };
 };
 type PluginContext = PluginPanelParams["context"];
 type PluginContextHandler = (context: PluginContext) => void;
