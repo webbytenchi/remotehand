@@ -204,6 +204,7 @@ Recognized permissions:
 | clipboard.read | Read from the system clipboard. |
 | clipboard.write | Write bounded text to the system clipboard through `clipboard.write`. |
 | tray.contribute | Publish and update generic per-plugin system-tray items through `tray.update`. |
+| notifications.show | Show bounded native notifications associated with a plugin tray item through `notification.show`. |
 | credentials.use | Request a specific credential from the vault by opaque reference. |
 | credentials.store | Store a secret in the vault under the plugin namespace. |
 | vault.unlock | Request that the host unlock the vault with a passphrase. Sensitive. |
@@ -851,10 +852,38 @@ Currently recognized plugin events:
 |---|---|
 | topbar.update | Plugin Manager - updates the top-bar items for this plugin |
 | monitor.alert | Host Monitor - plays an alert sound |
+| notification.show | RemoteHand core - shows a native plugin tray notification when `notifications.show` is granted |
 
 Event names are matched exactly. A plugin that emits an unrecognized event name is not an error - the event is silently ignored.
 
 Events flow from the plugin runtime to the frontend over a single Tauri channel named remotehand-plugin-event. The panel bridge exposes those runtime events through window.remotehand.onEvent(name, listener). Core may forward event names that it does not interpret itself; UI behavior outside the documented core-handled events is the plugin's responsibility.
+
+## Native tray notifications
+
+A plugin that declares `notifications.show` may ask RemoteHand to show a native notification associated with one of its current tray items by emitting `notification.show`.
+
+~~~json
+{
+ "type": "plugin.event",
+ "event": "notification.show",
+ "payload": {
+  "itemId": "server-1",
+  "title": "Server 1 · Offline",
+  "body": "Ping is unavailable",
+  "tone": "danger",
+  "silent": true
+ }
+}
+~~~
+
+Rules:
+
+- `itemId` must refer to a tray item currently published by the same plugin.
+- Title is capped at 63 characters and body at 255 characters.
+- `tone` may be `info`, `success`, `warning`, `danger`, or `error`.
+- `silent: true` suppresses the native balloon sound so plugins can manage their own alert audio.
+- Windows uses the existing notification-area icon and native shell balloon. Other desktop platforms currently ignore this event until a native tray-notification backend is implemented.
+- Notification permission is separate from `tray.contribute`; both are required when a plugin publishes the tray item and then requests a notification from it.
 
 ## System-tray contributions
 
