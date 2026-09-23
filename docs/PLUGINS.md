@@ -882,6 +882,8 @@ Rules:
 - Title is capped at 63 characters and body at 255 characters.
 - `tone` may be `info`, `success`, `warning`, `danger`, or `error`.
 - `silent: true` suppresses the native balloon sound so plugins can manage their own alert audio.
+- An optional `action` may use the generic `open-panel` shape (`panel` + `context`). When the user clicks the native notification, RemoteHand restores itself and emits `notification.action` so the existing plugin-panel navigation path opens the requested panel/context.
+- RemoteHand queues up to 32 notifications per tray item. The next item is shown after Windows reports click, timeout, or hide for the current balloon.
 - Windows uses the existing notification-area icon and native shell balloon. Other desktop platforms currently ignore this event until a native tray-notification backend is implemented.
 - Notification permission is separate from `tray.contribute`; both are required when a plugin publishes the tray item and then requests a notification from it.
 
