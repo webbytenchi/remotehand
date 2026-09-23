@@ -2,6 +2,74 @@
 
 All notable changes to RemoteHand are documented here.
 
+## `1.2.8` - 2026-09-24
+
+RemoteHand v1.2.8 is the next public release after v1.2.3 and includes all accumulated changes from the internal v1.2.4-v1.2.7 milestones plus the final plugin notification/storage infrastructure.
+
+### Added
+
+- **Generic plugin system-tray contributions.** Plugins with `tray.contribute` can publish per-item tray icons with live bounded series data, semantic tones, custom graph/background/border colors, visibility control, tooltips, and generic panel actions.
+- **Stable Windows plugin tray identity.** Plugin tray items use deterministic GUID-backed identities so Windows can preserve shell identity across updates, restarts, disable/re-enable cycles, and tooltip changes.
+- **Generic top-bar menus, icons, colors, and badges.** Plugin top-bar contributions gained bounded dropdown menus, built-in vector icons, validated color overrides, and a generic compact `badge` primitive for unread/status counts.
+- **Host-owned interface contribution ordering.** Settings → Interface can reorder built-in and plugin sidebar/top-bar contributions, persist that order under `data/config/ui-contributions.json`, and reset it safely.
+- **Cross-window panel drag and drop.** Dockview tabs can move between the main RemoteHand window and popouts, and directly between separate popouts.
+- **Contextual tab popout controls.** Docked tabs expose Pop out beside Close; popped-out tabs expose Dock to main and return to their remembered main-window group when possible.
+- **Generic native plugin notifications.** Plugins with `notifications.show` can request bounded native notifications associated with a plugin tray item.
+- **Windows notification queueing and actions.** Per-tray-item notifications queue instead of blindly overwriting each other. Click, hide, and timeout lifecycle events advance the queue.
+- **Generic notification deep-link routing.** Notification actions can restore RemoteHand, open/focus a plugin panel, and deliver bounded panel context such as target/report identifiers without adding plugin-specific semantics to core.
+- **Larger plugin storage entries.** `storage.plugin` entries now allow up to 16 MiB per key while RemoteHand's internal state-file limit remains 1 MiB.
+- **Host network/clipboard services.** Plugin API v1 gained `network.interfaces` behind `network.inspect` and bounded `clipboard.write` behind `clipboard.write`.
+
+### Improved
+
+- **Adaptive tray graph rendering.** Sparse plugin tray histories expand graph bars while retaining readable gaps; dense histories drop gaps when necessary so bars remain visible.
+- **Plugin tray lifecycle.** Normal disable hides contributed tray icons without destroying stable shell handles; unexpected runtime exit hides stale contributions; uninstall purges retained tray handles.
+- **Plugin panel targeting and focus.** Top-bar, tray, and notification actions restore/focus the correct docked or popout panel and preserve plugin context.
+- **Plugin panel context startup.** Panel context is cached and replayed through the bridge so deep links still work when a plugin panel is opened for the first time.
+- **Shell-focused sidebar.** Visible Split right, Split below, Pop out active, Undo, Redo, and Reset layout controls were removed from the sidebar while underlying commands/shortcuts remain available.
+- **Plugins moved into Settings.** Plugin management now lives under Settings → Plugins while the runtime/controller remains continuously mounted.
+- **Interface settings cleanup.** Settings → Interface groups Reset interface order and Reset workspace layout.
+- **Cross-window drag targeting.** Hovering another RemoteHand window while dragging raises that exact window as the visible drop target.
+- **Main-window dock-back behavior.** Dock to main consistently targets the main RemoteHand workspace, preferring the panel's remembered valid group and falling back safely.
+- **Release workflow documentation.** A standard release process, artifact naming scheme, checksum workflow, and release-note format are documented in `docs/RELEASES.md`.
+
+### Fixed
+
+- **Plugin disable freeze.** Removed duplicate tray cleanup paths that could block while disabling a plugin.
+- **Tray target routing.** Clicking a plugin tray item now delivers the clicked item's context instead of falling back to a previously selected/default target.
+- **GUID tray tooltip updates.** Windows GUID-backed tray icons now update tooltip text correctly.
+- **Plugin remove-confirm layering.** The Remove plugin confirmation is elevated correctly above the Plugin Manager/Settings modal.
+- **Single-tab popout restore.** Docking back a single-tab popout restores the tab/group to its original workspace position and closes the exact native popout.
+- **Multi-tab/multi-group popout lifecycle.** Closing or docking one tab no longer closes the entire popout while other panels remain.
+- **Empty source popouts after drag.** Moving the final panel away from a popout closes the now-empty native window.
+- **Racy popout cleanup.** Legacy group-level cleanup that could close a popout and throw surviving panels back into the main window was removed.
+- **Cross-window drag reliability on Windows.** Dockview's browser drag/drop path is used consistently while Tauri native drag interception is disabled for main and dynamic popout WebViews.
+- **Cargo.toml Windows line-ending churn.** Repository normalization prevents recurring Windows-only dirty-tree changes after Cargo commands.
+
+### Compatibility
+
+- Plugin API remains **v1**. The additions above are backward-compatible API-v1 host capabilities.
+- RemoteHand core remains plugin-agnostic: plugins own monitoring/protocol semantics while core owns generic runtime, storage, tray, notification, panel, and contribution infrastructure.
+- The vendored `tray-icon` crate remains in use for the Windows GUID/notification backports required by the current release.
+
+### Verification status
+
+Development and manual Windows validation performed across the accumulated v1.2.4-v1.2.8 work includes:
+
+- interface contribution ordering and restart persistence
+- plugin disable/re-enable lifecycle
+- per-target plugin tray identity/routing
+- main ↔ popout and popout ↔ popout drag/drop
+- multi-tab/multi-group popout lifecycle
+- generic native Windows notifications
+- notification queueing and click-through panel routing
+- adaptive tray graph rendering
+- plugin remove-confirm modal layering
+- Target Monitor v0.7.0 integration against the new generic plugin capabilities
+
+A final v1.2.8 release validation pass is required from the release branch before merge/tag/package publication.
+
+
 ## `1.2.7` - 2026-09-23
 
 ### Added
