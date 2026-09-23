@@ -496,6 +496,17 @@ fn start_reader(
                             continue;
                         }
                     }
+                } else if event.event == "notification.show" {
+                    if !permission_granted(&permissions, "notifications.show") {
+                        log::warn!("Plugin runtime {plugin_id} attempted notification.show without notifications.show");
+                        continue;
+                    }
+                    if let Some(state) = app_handle.try_state::<crate::startup_tray::StartupTrayState>() {
+                        if let Err(error) = state.show_plugin_notification(&app_handle, &plugin_id, event.payload.clone()) {
+                            log::warn!("Plugin runtime {plugin_id} notification.show rejected: {error}");
+                            continue;
+                        }
+                    }
                 }
                 let envelope = PluginEventEnvelope {
                     plugin_id: plugin_id.clone(),
@@ -915,6 +926,12 @@ mod tests {
         };
         assert!(validate_plugin_request(&["network.inspect".to_string()], &request).is_ok());
         assert!(validate_plugin_request(&[], &request).is_err());
+    }
+
+    #[test]
+    fn validates_notification_permission_name() {
+        assert!(permission_granted(&["notifications.show".to_string()], "notifications.show"));
+        assert!(!permission_granted(&["tray.contribute".to_string()], "notifications.show"));
     }
 
     #[test]
