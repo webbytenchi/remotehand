@@ -15,7 +15,8 @@ use windows_sys::{
         UI::{
             Shell::{
                 Shell_NotifyIconGetRect, Shell_NotifyIconW, NIF_GUID, NIF_ICON, NIF_INFO, NIF_MESSAGE,
-                NIF_STATE, NIF_TIP, NIIF_ERROR, NIIF_INFO, NIIF_NOSOUND, NIIF_WARNING, NIM_ADD,
+                NIF_STATE, NIF_TIP, NIIF_ERROR, NIIF_INFO, NIIF_NOSOUND, NIIF_WARNING,
+                NIN_BALLOONHIDE, NIN_BALLOONTIMEOUT, NIN_BALLOONUSERCLICK, NIM_ADD,
                 NIM_DELETE, NIM_MODIFY, NIS_HIDDEN, NOTIFYICONDATAW, NOTIFYICONIDENTIFIER,
             },
             WindowsAndMessaging::{
@@ -417,6 +418,20 @@ unsafe extern "system" fn tray_proc(
             userdata.menu_on_right_click = wparam != 0;
         }
 
+        WM_USER_TRAYICON if lparam as u32 == NIN_BALLOONUSERCLICK => {
+            TrayIconEvent::send(TrayIconEvent::NotificationClick {
+                id: userdata.id.clone(),
+            });
+            return 0;
+        }
+        WM_USER_TRAYICON
+            if matches!(lparam as u32, NIN_BALLOONHIDE | NIN_BALLOONTIMEOUT) =>
+        {
+            TrayIconEvent::send(TrayIconEvent::NotificationClosed {
+                id: userdata.id.clone(),
+            });
+            return 0;
+        }
         WM_USER_TRAYICON
             if matches!(
                 lparam as u32,
