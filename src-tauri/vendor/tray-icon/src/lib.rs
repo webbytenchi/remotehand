@@ -420,6 +420,11 @@ impl TrayIcon {
     pub fn set_tooltip<S: AsRef<str>>(&self, tooltip: Option<S>) -> Result<()> {
         self.tray.borrow_mut().set_tooltip(tooltip)
     }
+    #[cfg(target_os = "windows")]
+    pub fn show_notification(&self, title: &str, body: &str, tone: &str, silent: bool) -> Result<()> {
+        self.tray.borrow_mut().show_notification(title, body, tone, silent)
+    }
+
 
     /// Sets the tooltip for this tray icon.
     ///
