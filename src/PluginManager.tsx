@@ -25,7 +25,7 @@ type TopbarTone = "accent" | "success" | "warning" | "danger" | "muted";
 type TopbarIcon = "globe" | "ethernet" | "wifi" | "shield" | "ipv6";
 type TopbarSeriesPoint = { value?: number | null; tone?: TopbarTone; color?: string };
 type TopbarContent = {
-  type: "text" | "metric" | "sparkline" | "metric-sparkline" | "status" | "progress" | "stack";
+  type: "text" | "metric" | "sparkline" | "metric-sparkline" | "status" | "progress" | "badge" | "stack";
   label?: string;
   value?: string | number | null;
   tone?: TopbarTone;
@@ -117,7 +117,7 @@ function parseHexColor(value: unknown): string | undefined {
 function parseTopbarContent(input: unknown, depth = 0): TopbarContent | undefined {
   if (!input || typeof input !== "object" || depth > 2) return undefined;
   const value = input as Record<string, unknown>;
-  if (value.type !== "text" && value.type !== "metric" && value.type !== "sparkline" && value.type !== "metric-sparkline" && value.type !== "status" && value.type !== "progress" && value.type !== "stack") return undefined;
+  if (value.type !== "text" && value.type !== "metric" && value.type !== "sparkline" && value.type !== "metric-sparkline" && value.type !== "status" && value.type !== "progress" && value.type !== "badge" && value.type !== "stack") return undefined;
   const rawSeries = Array.isArray(value.series) ? value.series : [];
   const series = rawSeries.slice(-60).flatMap((entry) => {
     if (!entry || typeof entry !== "object") return [];
@@ -592,6 +592,9 @@ export function PluginManager({
     }
     if (content.type === "status") {
       return <span key={key} style={{ position: "relative", zIndex: 2, fontSize: fontSize ?? 12, fontWeight: 700, lineHeight: 1.1, color: content.color ?? tone.text }}>{content.label || content.value || ""}</span>;
+    }
+    if (content.type === "badge") {
+      return <span key={key} style={{ position: "absolute", top: 1, right: 1, zIndex: 5, minWidth: 15, height: 15, padding: "0 4px", display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 999, border: `1px solid ${content.borderColor ?? tone.border}`, background: content.backgroundColor ?? tone.surface, color: content.color ?? tone.text, fontSize: fontSize ?? 9, fontWeight: 800, lineHeight: 1 }}>{content.label ?? content.value ?? ""}</span>;
     }
     if (content.type === "progress") {
       return <span key={key} style={{ position: "relative", zIndex: 2, display: "grid", gap: 3 }}><span style={{ fontSize: fontSize ?? 12, fontWeight: 700 }}>{content.label || ""}</span><span style={{ display: "block", height: 7, borderRadius: 999, background: "var(--border, #39465a)", overflow: "hidden" }}><span style={{ display: "block", height: "100%", width: `${Math.max(0, Math.min(100, Number(content.value) || 0))}%`, background: content.color ?? tone.text }} /></span></span>;
