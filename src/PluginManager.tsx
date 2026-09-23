@@ -810,7 +810,7 @@ export function PluginManager({
           {managerContent}
         </AppModal>
       ) : null}
-      <AppModal open={removeTarget !== null} title="Remove plugin?" confirmLabel="Remove" onConfirm={() => void confirmRemove()} onCancel={() => setRemoveTarget(null)}>
+      <AppModal open={removeTarget !== null} title="Remove plugin?" confirmLabel="Remove" elevated onConfirm={() => void confirmRemove()} onCancel={() => setRemoveTarget(null)}>
         <p>This removes the selected plugin from RemoteHand&apos;s portable plugin directory.</p>
       </AppModal>
     </>
