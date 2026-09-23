@@ -2,6 +2,36 @@
 
 All notable changes to RemoteHand are documented here.
 
+## `1.2.7` - 2026-09-23
+
+### Added
+
+- **Cross-window panel drag and drop.** Tabs can now be dragged between the main RemoteHand window and popouts, and directly between separate popout windows.
+- **Hovered-window drag targeting.** While dragging a tab, entering another RemoteHand window raises that specific window so it becomes the visible drop target; moving to a different popout or back to main raises that window instead.
+- **Dock to main window.** Popout tabs now use an explicit main-window destination rule: Dock to main always returns the panel to RemoteHand, regardless of which popout it originated from or moved through.
+
+### Improved
+
+- **HTML5 drag/drop on Windows.** RemoteHand now uses Dockview's cross-window-capable drag backend and disables Tauri's native drag/drop interception in both the main WebView and dynamically created popout WebViews.
+- **Main-group return behavior.** Dock to main prefers the panel's remembered valid main-window Dockview group and falls back to the active/default main group.
+- **Popout lifecycle tracking.** Popouts are tracked individually by Dockview popout id and exact native window identity so source windows can be closed precisely when their final panel moves away.
+
+### Fixed
+
+- **Empty source popouts after drag.** Moving the last tab from a popout to main or another popout now closes the emptied native popout instead of leaving an empty window behind.
+- **Multi-tab and multi-group popout closure.** Closing one tab or the last tab in one Dockview group no longer closes the whole popout while other panels remain.
+- **Racy group-level cleanup.** Removed legacy mutation/group cleanup that could intermittently close a popout and throw surviving panels back into RemoteHand.
+- **Cross-window drag reliability.** Main-to-popout, popout-to-main, and popout-to-popout drag operations now use the same browser drag/drop path on Windows.
+
+### Verification
+
+- Frontend tests: 7 passed.
+- Production frontend build: passed.
+- `cargo check --locked`: passed.
+- Rust tests: 31 passed, 0 failed.
+- Manual Windows acceptance covered main ↔ popout drag/drop, popout ↔ popout moves, Dock to main after cross-popout moves, exact empty-popout cleanup, multi-tab and multi-group popout behavior, restart persistence, hovered-window foreground targeting, and explicit Pop out / Dock to main controls.
+
+
 ## `1.2.6` - 2026-09-23
 
 ### Improved
