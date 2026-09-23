@@ -628,14 +628,11 @@ pub fn handle_plugin_tray_event(app: &AppHandle, event: TrayIconEvent) {
 }
 
 fn handle_plugin_notification_event(app: &AppHandle, event: TrayNotificationEvent) {
-    let key = event.id().as_ref();
+    let key = event.id().as_ref().to_string();
     if !key.starts_with("plugin-tray:") { return; }
+    let clicked = matches!(event, TrayNotificationEvent::Click { .. });
     if let Some(state) = app.try_state::<StartupTrayState>() {
-        state.complete_plugin_notification(
-            app,
-            key,
-            matches!(event, TrayNotificationEvent::Click { .. }),
-        );
+        state.complete_plugin_notification(app, &key, clicked);
     }
 }
 
