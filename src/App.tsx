@@ -1308,13 +1308,18 @@ if (mutation.kind !== "remove" || mutation.origin !== "user") return;
 const activePanel = event.api.activePanel;
 if (activePanel?.api.location.type !== "popout") return;
 const groupId = activePanel.api.group.id;
-const isLastPanel = event.api.panels.filter((panel) => panel.api.group.id === groupId).length === 1;
+const panelWindow = activePanel.api.getWindow();
+const isLastPanelInPopout = event.api.panels.filter(
+(panel) =>
+panel.api.location.type === "popout" &&
+panel.api.getWindow() === panelWindow,
+).length === 1;
 closingPopoutPanelRef.current = {
 panelId: activePanel.id,
 groupId,
-hidden: isLastPanel,
+hidden: isLastPanelInPopout,
 };
-if (isLastPanel && isTauri()) {
+if (isLastPanelInPopout && isTauri()) {
 void invoke("hide_single_panel_popout").catch((error) => {
 console.error("Failed to hide popout before its last tab closed", error);
 });
@@ -1416,6 +1421,14 @@ event.api.onDidRemoveGroup(() => {
 if (!isTauri()) return;
 const currentWindow = getCurrentWindow();
 if (!currentWindow.label.startsWith("panel-popout-")) return;
+window.setTimeout(() => {
+const popoutWindow = window;
+const stillHasPanels = event.api.panels.some(
+(panel) =>
+panel.api.location.type === "popout" &&
+panel.api.getWindow() === popoutWindow,
+);
+if (stillHasPanels) return;
 void currentWindow.close().then(async () => {
 const mainWindow = (await getAllWindows()).find((candidate) => candidate.label === "main");
 if (mainWindow) {
@@ -1424,6 +1437,7 @@ await mainWindow.setFocus();
 }).catch((error) => {
 console.error("Failed to close empty popout window or restore main-window focus", error);
 });
+}, 0);
 });
 event.api.onDidRemovePanel((panel) => {
 const sessionId = panel.id;
