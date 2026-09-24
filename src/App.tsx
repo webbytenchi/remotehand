@@ -1868,9 +1868,6 @@ return <div key={id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1
 <div style={{ display: "grid", gridTemplateColumns: "140px minmax(0, 1fr)", gap: "9px 18px" }}>
 <span className="app-modal-muted">Version</span><strong>{appVersion}</strong>
 <span className="app-modal-muted">Operating system</span><strong>{platformInfo?.os === "windows" ? "Windows" : (platformInfo?.version || localOs || "Unknown")}</strong>
-<span className="app-modal-muted">OS version</span><strong>{platformInfo?.version || "—"}</strong>
-<span className="app-modal-muted">Architecture</span><strong>{platformInfo?.architecture || "—"}</strong>
-{platformInfo?.kernel ? <><span className="app-modal-muted">{platformInfo.os === "windows" ? "Build" : "Kernel"}</span><strong>{platformInfo.kernel}</strong></> : null}
 <span className="app-modal-muted">Data model</span><strong>Portable</strong>
 <span className="app-modal-muted">Plugin API</span><strong>v1</strong>
 <span className="app-modal-muted">License</span><strong>MIT</strong>
