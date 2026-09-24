@@ -129,12 +129,6 @@ payload: unknown;
 type RemoteHandPopoutWindow = Window & {
 __REMOTEHAND_NATIVE_WINDOW_LABEL__?: string;
 };
-type PlatformInfo = {
-os: string;
-version: string;
-architecture: string;
-kernel: string;
-};
 const tabDragAssistDocuments = new WeakSet<Document>();
 
 function installTabDragWindowAssist(targetDocument: Document) {
@@ -614,7 +608,6 @@ const [paletteQuery, setPaletteQuery] = useState("");
 const [workspaceReady, setWorkspaceReady] = useState(false);
 const [localOs, setLocalOs] = useState(() => (isTauri() ? "" : "linux"));
 const [appVersion, setAppVersion] = useState(() => isTauri() ? "—" : "Development");
-const [platformInfo, setPlatformInfo] = useState<PlatformInfo | null>(null);
 const apiRef = useRef<DockviewApi | null>(null);
 const restoredRef = useRef(false);
 const layoutHistoryRef = useRef<string[]>([]);
@@ -636,12 +629,6 @@ if (!isTauri()) return;
 void getVersion()
 .then(setAppVersion)
 .catch((error) => console.error("Failed to read app version", error));
-}, []);
-useEffect(() => {
-if (!isTauri()) return;
-void invoke<PlatformInfo>("platform_info")
-.then(setPlatformInfo)
-.catch((error) => console.error("Failed to read platform details", error));
 }, []);
 const refreshPlugins = useCallback(async () => {
 if (!isTauri()) {
@@ -1864,7 +1851,7 @@ return <div key={id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1
 <strong>Application</strong>
 <div style={{ display: "grid", gridTemplateColumns: "140px minmax(0, 1fr)", gap: "9px 18px" }}>
 <span className="app-modal-muted">Version</span><strong>{appVersion}</strong>
-<span className="app-modal-muted">Operating system</span><strong>{platformInfo?.os === "windows" ? "Windows" : (platformInfo?.version || localOs || "Unknown")}</strong>
+<span className="app-modal-muted">Operating system</span><strong>{localOs === "windows" ? "Windows" : (localOs || "Unknown")}</strong>
 <span className="app-modal-muted">Data model</span><strong>Portable</strong>
 <span className="app-modal-muted">Plugin API</span><strong>v1</strong>
 <span className="app-modal-muted">License</span><strong>MIT</strong>
