@@ -16,6 +16,7 @@ pub struct Settings {
     pub start_minimized: bool,
     pub show_in_system_tray: bool,
     pub minimize_to_tray_on_close: bool,
+    pub topbar_alignment: String,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -33,6 +34,7 @@ impl Default for Settings {
             start_minimized: false,
             show_in_system_tray: true,
             minimize_to_tray_on_close: false,
+            topbar_alignment: "center".to_string(),
         }
     }
 }

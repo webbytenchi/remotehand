@@ -41,6 +41,7 @@ credentialRef?: string;
 type ThemeMode = "dark" | "light" | "system";
 type ColorScheme = "blue" | "emerald" | "violet" | "amber" | "neutral";
 type TerminalTheme = "comfort" | "classic" | "custom";
+type TopbarAlignment = "left" | "center" | "right";
 type Settings = {
 theme: ThemeMode;
 colorScheme: ColorScheme;
@@ -55,6 +56,7 @@ startWithSystem: boolean;
 startMinimized: boolean;
 showInSystemTray: boolean;
 minimizeToTrayOnClose: boolean;
+topbarAlignment: TopbarAlignment;
 };
 type WorkspaceLayout = Parameters<DockviewApi["fromJSON"]>[0];
 const WORKSPACE_KEY = "remotehand.workspace";
@@ -76,6 +78,7 @@ startWithSystem: false,
 startMinimized: false,
 showInSystemTray: true,
 minimizeToTrayOnClose: false,
+topbarAlignment: "center",
 };
 const UI_FONT_OPTIONS = ["Inter", "IBM Plex Sans", "Segoe UI", "System Default"] as const;
 const TERMINAL_FONT_OPTIONS = ["JetBrains Mono", "IBM Plex Mono", "Cascadia Mono", "Consolas", "System Monospace"] as const;
@@ -596,6 +599,37 @@ const papaAudioRef = useRef<HTMLAudioElement | null>(null);
 const [pluginSettingsHost, setPluginSettingsHost] = useState<HTMLDivElement | null>(null);
 const [plugins, setPlugins] = useState<PluginInfo[]>([]);
 const [topbarContributionItems, setTopbarContributionItems] = useState<Array<{ id: string; label: string }>>([]);
+const topbarViewportRef = useRef<HTMLDivElement | null>(null);
+const [topbarOverflowing, setTopbarOverflowing] = useState(false);
+const [topbarAtStart, setTopbarAtStart] = useState(true);
+const [topbarAtEnd, setTopbarAtEnd] = useState(true);
+const syncTopbarOverflow = useCallback(() => {
+const viewport = topbarViewportRef.current;
+if (!viewport) return;
+const maxScrollLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
+setTopbarOverflowing(maxScrollLeft > 1);
+setTopbarAtStart(viewport.scrollLeft <= 1);
+setTopbarAtEnd(viewport.scrollLeft >= maxScrollLeft - 1);
+}, []);
+const scrollTopbar = useCallback((direction: -1 | 1) => {
+const viewport = topbarViewportRef.current;
+if (!viewport) return;
+const distance = Math.max(120, Math.round(viewport.clientWidth * 0.72));
+viewport.scrollBy({ left: direction * distance, behavior: "smooth" });
+}, []);
+useEffect(() => {
+const viewport = topbarViewportRef.current;
+if (!viewport) return;
+const content = viewport.querySelector<HTMLElement>(".topbar-contributions");
+const observer = new ResizeObserver(() => syncTopbarOverflow());
+observer.observe(viewport);
+if (content) observer.observe(content);
+const frame = window.requestAnimationFrame(syncTopbarOverflow);
+return () => {
+window.cancelAnimationFrame(frame);
+observer.disconnect();
+};
+}, [syncTopbarOverflow, topbarContributionItems]);
 const [pluginSidebarVisibility, setPluginSidebarVisibility] = useState<Record<string, boolean>>({});
 const [uiContributionLayout, setUiContributionLayout] = useState<UiContributionLayout>(EMPTY_UI_CONTRIBUTION_LAYOUT);
 const [uiContributionLayoutLoaded, setUiContributionLayoutLoaded] = useState(false);
@@ -1513,12 +1547,9 @@ sidebarAvailableIds,
 sidebarAvailableIds,
 );
 
-const coreTopbarItems = [
-{ id: "core:settings", label: "Settings" },
-];
-const topbarCatalog = [...topbarContributionItems, ...coreTopbarItems];
+const topbarCatalog = [...topbarContributionItems];
 const topbarAvailableIds = topbarCatalog.map((item) => item.id);
-const topbarFallbackIds = [...topbarContributionItems.map((item) => item.id), ...coreTopbarItems.map((item) => item.id)];
+const topbarFallbackIds = topbarContributionItems.map((item) => item.id);
 const resolvedTopbarOrder = resolveContributionOrder(
 uiContributionLayout.topbarOrder,
 topbarAvailableIds,
@@ -1557,9 +1588,39 @@ return (
 </div>
 </div>
 <div className="topbar-actions">
+{topbarOverflowing ? (
+<button
+className="topbar-scroll-button"
+type="button"
+onClick={() => scrollTopbar(-1)}
+disabled={topbarAtStart}
+title="Show previous top-bar items"
+aria-label="Show previous top-bar items"
+>
+‹
+</button>
+) : null}
+<div
+className="topbar-contribution-viewport"
+ref={topbarViewportRef}
+onScroll={syncTopbarOverflow}
+>
+<div className={`topbar-contributions align-${settings.topbarAlignment}${topbarOverflowing ? " overflowing" : ""}`} />
+</div>
+{topbarOverflowing ? (
+<button
+className="topbar-scroll-button"
+type="button"
+onClick={() => scrollTopbar(1)}
+disabled={topbarAtEnd}
+title="Show next top-bar items"
+aria-label="Show next top-bar items"
+>
+›
+</button>
+) : null}
 <button
 className="topbar-button icon-button settings-button"
-style={{ order: contributionOrderIndex(resolvedTopbarOrder, "core:settings") }}
 type="button"
 onClick={() => { setSettingsTab("appearance"); setSettingsOpen(true); }}
 title="Settings"
@@ -1811,6 +1872,22 @@ return <div key={id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1
 </section>
 <section>
 <strong style={{ display: "block", marginBottom: 8 }}>Top bar</strong>
+<div className="settings-field" style={{ marginBottom: 10 }}>
+<span>Alignment</span>
+<div className="settings-segmented">
+{(["left", "center", "right"] as TopbarAlignment[]).map((alignment) => (
+<button
+key={alignment}
+type="button"
+className={settings.topbarAlignment === alignment ? "active" : ""}
+onClick={() => setSettings((current) => ({ ...current, topbarAlignment: alignment }))}
+>
+{alignment[0].toUpperCase() + alignment.slice(1)}
+</button>
+))}
+</div>
+<small style={{ color: "#718094", lineHeight: 1.4 }}>Applies when all top-bar items fit. Overflowing items use the paging strip.</small>
+</div>
 <div style={{ display: "grid", gap: 6 }}>
 {resolvedTopbarOrder.map((id, index) => {
 const entry = topbarCatalog.find((item) => item.id === id);

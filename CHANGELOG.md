@@ -2,6 +2,36 @@
 
 All notable changes to RemoteHand are documented here.
 
+## `1.2.12` - 2026-09-25
+
+### Added
+
+- **Responsive top-bar paging.** Plugin top-bar contributions now stay inside a bounded host-owned strip and expose previous/next controls only when the available width is too small to show every contribution.
+- **Configurable top-bar alignment.** Settings → Interface now lets users align plugin top-bar contributions Left, Center, or Right, with Center as the default. The preference is persisted in RemoteHand settings.
+
+### Improved
+
+- **Anchored core controls.** RemoteHand's Settings button remains fixed on the far right instead of being displaced by plugin contributions.
+- **Small-window shell behavior.** The application shell now contains overflow inside the workspace area so the top bar and sidebar remain fixed while panel content owns scrolling.
+- **Dockview containment.** Removed the old fixed minimum workspace height that could force outer-window scrollbars on smaller RemoteHand windows.
+- **Top-bar responsiveness.** When contributions overflow, the strip switches to predictable paged navigation while preserving contribution order and the fixed Settings control.
+
+### Compatibility
+
+- Plugin API remains **v1** and existing plugin top-bar contributions require no changes.
+- Existing saved settings remain compatible; missing `topbarAlignment` defaults to `center`.
+- RemoteHand core continues to own generic contribution layout and shell behavior while plugins continue to own their content and semantics.
+
+### Verification
+
+- Frontend lint completed with **17 warnings and 0 errors**.
+- Frontend tests passed with **7 tests and 0 failures**.
+- Production frontend build passed.
+- `cargo check` passed.
+- Rust tests passed with **38 tests and 0 failures**.
+- Manual Windows acceptance confirmed fixed topbar/sidebar shell behavior, workspace-only scrolling, anchored Settings, responsive contribution paging, and live Left/Center/Right alignment changes.
+- Manual acceptance confirmed Center as the default alignment and persistence through RemoteHand settings.
+
 ## `1.2.11` - 2026-09-25
 
 ### Added
