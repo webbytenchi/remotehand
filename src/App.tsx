@@ -1893,7 +1893,7 @@ return <div key={id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1
 <div className="settings-tab-content papa-settings">
 <div className="papa-message">
 <strong>I Love You Andami...</strong>
-<span>- Papa</span>
+<span>Papa</span>
 </div>
 </div>
 )}
