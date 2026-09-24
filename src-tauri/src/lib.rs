@@ -37,15 +37,26 @@ fn platform_info() -> PlatformInfo {
 
     #[cfg(target_os = "windows")]
     let (version, kernel) = {
-        let version = std::process::Command::new("cmd")
+        let raw = std::process::Command::new("cmd")
             .args(["/C", "ver"])
             .output()
             .ok()
             .and_then(|output| String::from_utf8(output.stdout).ok())
-            .map(|value| value.trim().trim_matches(['\r', '\n']).to_string())
+            .map(|value| value.trim().to_string())
+            .unwrap_or_default();
+        let version = raw
+            .split("Version ")
+            .nth(1)
+            .map(|value| value.trim_end_matches(']').trim().to_string())
             .filter(|value| !value.is_empty())
-            .unwrap_or_else(|| "Windows".to_string());
-        (version.clone(), version)
+            .unwrap_or_else(|| "Unknown".to_string());
+        let build = version
+            .split('.')
+            .skip(2)
+            .collect::<Vec<_>>()
+            .join(".");
+        let kernel = if build.is_empty() { String::new() } else { format!("Build {build}") };
+        (version, kernel)
     };
 
     #[cfg(target_os = "linux")]
