@@ -190,6 +190,32 @@ fn show_pending_popout(app: tauri::AppHandle) -> Result<(), String> {
     }
     Err("no hidden panel popout is waiting to be shown".to_string())
 }
+#[tauri::command]
+fn open_external_url(url: String) -> Result<(), String> {
+    const ALLOWED: [&str; 4] = [
+        "https://github.com/webbytenchi/remotehand",
+        "https://github.com/webbytenchi/remotehand/releases",
+        "https://github.com/webbytenchi/remotehand/tree/main/docs",
+        "https://github.com/webbytenchi/remotehand/blob/main/LICENSE",
+    ];
+    if !ALLOWED.contains(&url.as_str()) {
+        return Err("external URL is not allowed".to_string());
+    }
+
+    #[cfg(target_os = "windows")]
+    let mut command = std::process::Command::new("explorer.exe");
+    #[cfg(target_os = "linux")]
+    let mut command = std::process::Command::new("xdg-open");
+    #[cfg(target_os = "macos")]
+    let mut command = std::process::Command::new("open");
+
+    #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+    return Err("opening external URLs is not supported on this platform".to_string());
+
+    command.arg(&url).spawn().map_err(|error| format!("failed to open external URL: {error}"))?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let window_restored = Arc::new(AtomicBool::new(false));
@@ -275,6 +301,7 @@ pub fn run() {
             terminal::terminal_resize,
             terminal::terminal_close,
             local_os,
+            open_external_url,
             reveal_path,
             close_current_window,
             close_panel_popout,
