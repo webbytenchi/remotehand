@@ -596,6 +596,37 @@ const papaAudioRef = useRef<HTMLAudioElement | null>(null);
 const [pluginSettingsHost, setPluginSettingsHost] = useState<HTMLDivElement | null>(null);
 const [plugins, setPlugins] = useState<PluginInfo[]>([]);
 const [topbarContributionItems, setTopbarContributionItems] = useState<Array<{ id: string; label: string }>>([]);
+const topbarViewportRef = useRef<HTMLDivElement | null>(null);
+const [topbarOverflowing, setTopbarOverflowing] = useState(false);
+const [topbarAtStart, setTopbarAtStart] = useState(true);
+const [topbarAtEnd, setTopbarAtEnd] = useState(true);
+const syncTopbarOverflow = useCallback(() => {
+const viewport = topbarViewportRef.current;
+if (!viewport) return;
+const maxScrollLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
+setTopbarOverflowing(maxScrollLeft > 1);
+setTopbarAtStart(viewport.scrollLeft <= 1);
+setTopbarAtEnd(viewport.scrollLeft >= maxScrollLeft - 1);
+}, []);
+const scrollTopbar = useCallback((direction: -1 | 1) => {
+const viewport = topbarViewportRef.current;
+if (!viewport) return;
+const distance = Math.max(120, Math.round(viewport.clientWidth * 0.72));
+viewport.scrollBy({ left: direction * distance, behavior: "smooth" });
+}, []);
+useEffect(() => {
+const viewport = topbarViewportRef.current;
+if (!viewport) return;
+const content = viewport.querySelector<HTMLElement>(".topbar-contributions");
+const observer = new ResizeObserver(() => syncTopbarOverflow());
+observer.observe(viewport);
+if (content) observer.observe(content);
+const frame = window.requestAnimationFrame(syncTopbarOverflow);
+return () => {
+window.cancelAnimationFrame(frame);
+observer.disconnect();
+};
+}, [syncTopbarOverflow, topbarContributionItems]);
 const [pluginSidebarVisibility, setPluginSidebarVisibility] = useState<Record<string, boolean>>({});
 const [uiContributionLayout, setUiContributionLayout] = useState<UiContributionLayout>(EMPTY_UI_CONTRIBUTION_LAYOUT);
 const [uiContributionLayoutLoaded, setUiContributionLayoutLoaded] = useState(false);
@@ -1513,12 +1544,9 @@ sidebarAvailableIds,
 sidebarAvailableIds,
 );
 
-const coreTopbarItems = [
-{ id: "core:settings", label: "Settings" },
-];
-const topbarCatalog = [...topbarContributionItems, ...coreTopbarItems];
+const topbarCatalog = [...topbarContributionItems];
 const topbarAvailableIds = topbarCatalog.map((item) => item.id);
-const topbarFallbackIds = [...topbarContributionItems.map((item) => item.id), ...coreTopbarItems.map((item) => item.id)];
+const topbarFallbackIds = topbarContributionItems.map((item) => item.id);
 const resolvedTopbarOrder = resolveContributionOrder(
 uiContributionLayout.topbarOrder,
 topbarAvailableIds,
@@ -1557,9 +1585,39 @@ return (
 </div>
 </div>
 <div className="topbar-actions">
+{topbarOverflowing ? (
+<button
+className="topbar-scroll-button"
+type="button"
+onClick={() => scrollTopbar(-1)}
+disabled={topbarAtStart}
+title="Show previous top-bar items"
+aria-label="Show previous top-bar items"
+>
+‹
+</button>
+) : null}
+<div
+className="topbar-contribution-viewport"
+ref={topbarViewportRef}
+onScroll={syncTopbarOverflow}
+>
+<div className="topbar-contributions" />
+</div>
+{topbarOverflowing ? (
+<button
+className="topbar-scroll-button"
+type="button"
+onClick={() => scrollTopbar(1)}
+disabled={topbarAtEnd}
+title="Show next top-bar items"
+aria-label="Show next top-bar items"
+>
+›
+</button>
+) : null}
 <button
 className="topbar-button icon-button settings-button"
-style={{ order: contributionOrderIndex(resolvedTopbarOrder, "core:settings") }}
 type="button"
 onClick={() => { setSettingsTab("appearance"); setSettingsOpen(true); }}
 title="Settings"
