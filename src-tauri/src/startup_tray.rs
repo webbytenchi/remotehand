@@ -99,6 +99,10 @@ struct PluginTrayItem {
     background_color: Option<String>,
     #[serde(default)]
     border_color: Option<String>,
+    #[serde(default)]
+    label: String,
+    #[serde(default)]
+    text_color: Option<String>,
     #[serde(default = "default_true")]
     visible: bool,
     #[serde(default)]
@@ -177,6 +181,42 @@ fn set_pixel(bytes: &mut [u8], x: usize, y: usize, color: [u8; 4]) {
     bytes[offset..offset + 4].copy_from_slice(&color);
 }
 
+
+fn tray_glyph(ch: char) -> [u8; 5] {
+    match ch.to_ascii_uppercase() {
+        '0'=>[7,5,5,5,7],'1'=>[2,6,2,2,7],'2'=>[7,1,7,4,7],'3'=>[7,1,7,1,7],
+        '4'=>[5,5,7,1,1],'5'=>[7,4,7,1,7],'6'=>[7,4,7,5,7],'7'=>[7,1,2,2,2],
+        '8'=>[7,5,7,5,7],'9'=>[7,5,7,1,7],
+        'A'=>[2,5,7,5,5],'B'=>[6,5,6,5,6],'C'=>[7,4,4,4,7],'D'=>[6,5,5,5,6],
+        'E'=>[7,4,6,4,7],'F'=>[7,4,6,4,4],'G'=>[7,4,5,5,7],'H'=>[5,5,7,5,5],
+        'I'=>[7,2,2,2,7],'J'=>[1,1,1,5,7],'K'=>[5,5,6,5,5],'L'=>[4,4,4,4,7],
+        'M'=>[5,7,7,5,5],'N'=>[5,7,7,7,5],'O'=>[7,5,5,5,7],'P'=>[7,5,7,4,4],
+        'Q'=>[7,5,5,7,1],'R'=>[6,5,6,5,5],'S'=>[7,4,7,1,7],'T'=>[7,2,2,2,2],
+        'U'=>[5,5,5,5,7],'V'=>[5,5,5,5,2],'W'=>[5,5,7,7,5],'X'=>[5,5,2,5,5],
+        'Y'=>[5,5,2,2,2],'Z'=>[7,1,2,4,7],'-'=>[0,0,7,0,0],'+'=>[0,2,7,2,0],
+        '.'=>[0,0,0,0,2],'%'=>[5,1,2,4,5],'!'=>[2,2,2,0,2],_=>[7,1,2,0,2],
+    }
+}
+fn draw_tray_label(bytes:&mut [u8],label:&str,color:[u8;4]){
+    let chars=label.chars().take(4).collect::<Vec<_>>();
+    if chars.is_empty(){return;}
+    let scale=if chars.len()<=2{3}else{2};
+    let gw=3*scale; let gap=scale;
+    let width=chars.len()*gw+chars.len().saturating_sub(1)*gap;
+    let x0=(32usize.saturating_sub(width))/2; let y0=(32-5*scale)/2;
+    for (i,ch) in chars.into_iter().enumerate(){
+        let glyph=tray_glyph(ch);
+        for (row,bits) in glyph.into_iter().enumerate(){
+            for col in 0..3 {
+                if bits&(1<<(2-col))==0{continue;}
+                for dy in 0..scale{for dx in 0..scale{
+                    set_pixel(bytes,x0+i*(gw+gap)+col*scale+dx,y0+row*scale+dy,color);
+                }}
+            }
+        }
+    }
+}
+
 fn plugin_tray_bar_layout(point_count: usize) -> (usize, usize, usize) {
     const GRAPH_LEFT: usize = 4;
     const GRAPH_WIDTH: usize = 24;
@@ -230,7 +270,10 @@ fn plugin_tray_icon(item: &PluginTrayItem) -> Result<tray_icon::Icon, String> {
         .filter(|value| value.is_finite() && *value >= 0.0)
         .fold(1.0f64, f64::max);
 
-    if points.is_empty() {
+    if !item.label.is_empty() {
+        let color = parse_tray_hex_color(item.text_color.as_deref()).unwrap_or([255, 255, 255, 255]);
+        draw_tray_label(&mut bytes, &item.label, color);
+    } else if points.is_empty() {
         let color = parse_tray_hex_color(item.graph_color.as_deref()).unwrap_or_else(|| tray_color(&item.tone));
         for y in 13..19 {
             for x in 13..19 {
@@ -387,6 +430,11 @@ impl StartupTrayState {
             }
             if item.title.trim().is_empty() || item.title.len() > 128 || item.tooltip.len() > 256 {
                 return Err("tray.update contains invalid text".to_string());
+            }
+            if item.label.chars().count() > 4
+                || !item.label.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '+' | '.' | '%' | '!'))
+            {
+                return Err("tray.update contains invalid label".to_string());
             }
             if item.series.len() > 60 {
                 return Err("tray.update series exceeds the 60 point limit".to_string());
@@ -820,7 +868,14 @@ pub fn handle_close(_window: &Window, state: &StartupTrayState) -> bool {
 
 #[cfg(test)]
 mod plugin_tray_tests {
-    use super::{plugin_tray_bar_layout, stable_plugin_tray_guid, PluginNotificationQueue};
+    use super::{draw_tray_label, plugin_tray_bar_layout, stable_plugin_tray_guid, PluginNotificationQueue};
+
+    #[test]
+    fn plugin_tray_label_draws_pixels() {
+        let mut bytes=vec![0u8;32*32*4];
+        draw_tray_label(&mut bytes,"70",[255,255,255,255]);
+        assert!(bytes.chunks_exact(4).any(|p|p==[255,255,255,255]));
+    }
 
     #[test]
     fn plugin_tray_guid_is_stable_and_unique_per_item() {
