@@ -310,6 +310,7 @@ export function PluginManager({
   const [removeTarget, setRemoveTarget] = useState<PluginInfo | null>(null);
   const [topbarItems, setTopbarItems] = useState<Record<string, TopbarItem[]>>({});
   const [openTopbarMenuKey, setOpenTopbarMenuKey] = useState<string | null>(null);
+  const [hoveredTopbarKey, setHoveredTopbarKey] = useState<string | null>(null);
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
 
@@ -653,8 +654,11 @@ export function PluginManager({
         >
         <button
           type="button"
-          title={item.tooltip || (item.target ? `${item.title} · ${item.target}` : item.title)}
           aria-label={item.tooltip || (item.target ? `${item.title} ${item.target}` : item.title)}
+          onPointerEnter={() => setHoveredTopbarKey(itemKey)}
+          onPointerLeave={() => setHoveredTopbarKey((current) => current === itemKey ? null : current)}
+          onFocus={() => setHoveredTopbarKey(itemKey)}
+          onBlur={() => setHoveredTopbarKey((current) => current === itemKey ? null : current)}
           onClick={() => openTopbarItem(pluginId, item)}
           style={{
             position: "relative",
@@ -694,6 +698,31 @@ export function PluginManager({
             </>
           )}
         </button>
+        {hoveredTopbarKey === itemKey ? (
+          <div
+            role="tooltip"
+            style={{
+              position: "absolute",
+              top: "calc(100% + 6px)",
+              right: 0,
+              zIndex: 1002,
+              maxWidth: 360,
+              padding: "7px 9px",
+              border: "1px solid var(--border, #39465a)",
+              borderRadius: 7,
+              background: "var(--surface-raised, #1d252f)",
+              boxShadow: "0 8px 24px rgb(0 0 0 / 0.32)",
+              color: "var(--text, #dce4ee)",
+              fontSize: 11,
+              lineHeight: 1.35,
+              whiteSpace: "pre-line",
+              textAlign: "left",
+              pointerEvents: "none",
+            }}
+          >
+            {item.tooltip || (item.target ? `${item.title} · ${item.target}` : item.title)}
+          </div>
+        ) : null}
         {menuOpen && item.menu ? (
           <div
             role="menu"
