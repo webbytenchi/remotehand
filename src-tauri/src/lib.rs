@@ -259,6 +259,7 @@ pub fn run() {
             storage::load_workspace,
             storage::save_workspace,
             storage::clear_workspace,
+            plugins::plugin_install_from_zip,
             plugins::plugin_install_from_folder,
             plugins::plugin_list,
             plugins::plugin_read_panel_html,
