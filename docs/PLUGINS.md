@@ -903,6 +903,8 @@ A plugin that declares `tray.contribute` may publish runtime tray items by emitt
     "tooltip": "Server 1 · 18 ms",
     "tone": "success",
     "visible": true,
+    "label": "18",
+    "textColor": "#FFFFFF",
     "graphColor": "#70A7E8",
     "backgroundColor": "#16263A",
     "borderColor": "#3B5F8D",
@@ -926,6 +928,9 @@ Each `tray.update` replaces that plugin's current tray contribution set. Limits 
 - Item ids must be unique and use only letters, numbers, dot, dash, underscore, or colon.
 - Titles are required and capped at 128 characters; tooltips at 256.
 - Series are capped at 60 points. The current 32x32 tray renderer uses the most recent 12 points.
+- `label` is an optional compact text tile rendered instead of the graph. It is capped at 4 ASCII characters and accepts letters, digits, `-`, `+`, `.`, `%`, and `!`.
+- `textColor` optionally controls label text using `#RRGGBB`; invalid or omitted values fall back to white.
+- A non-empty `label` takes precedence over `series`, so plugins can switch the same stable tray item between a numeric/status tile and a graph without changing its id.
 - `tone` provides semantic fallback coloring; `graphColor`, `backgroundColor`, `borderColor`, and per-point `color` accept only strict `#RRGGBB`.
 - `visible: false` keeps the tray handle but hides it. This lets a plugin temporarily suppress an item without losing stable shell identity.
 - The supported tray action is `open-panel` with an optional context object.
