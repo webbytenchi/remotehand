@@ -497,7 +497,23 @@ export function PluginManager({
     };
   }, [openTopbarMenuKey]);
 
-  const install = async () => {
+  const installZip = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const installed = await invoke<PluginInfo | null>("plugin_install_from_zip");
+      if (installed) {
+        await refresh();
+        onChanged?.();
+      }
+    } catch (cause) {
+      setError(String(cause));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const installFolder = async () => {
     setLoading(true);
     setError(null);
     try {
@@ -809,7 +825,8 @@ export function PluginManager({
           <span>Plugins are disabled by default and only receive permissions declared in their manifest.</span>
         </div>
         <div className="plugin-manager-toolbar">
-          <button type="button" onClick={() => void install()} disabled={loading}>Install from folder</button>
+          <button type="button" onClick={() => void installZip()} disabled={loading}>Install ZIP</button>
+          <button type="button" onClick={() => void installFolder()} disabled={loading}>Install from folder</button>
           <button type="button" onClick={() => void refresh()} disabled={loading}>{loading ? "Refreshing…" : "Refresh"}</button>
         </div>
       </div>
@@ -819,7 +836,7 @@ export function PluginManager({
       </div>
       {error ? <div className="plugin-error">{error}</div> : null}
       {!loading && plugins.length === 0 ? (
-        <div className="plugin-empty"><strong>No plugins installed</strong><span>Choose Install from folder to validate and copy an add-on into RemoteHand&apos;s portable plugins directory.</span></div>
+        <div className="plugin-empty"><strong>No plugins installed</strong><span>Choose Install ZIP for a packaged add-on, or Install from folder for an unpacked development build.</span></div>
       ) : null}
       <div className="plugin-list">
         {plugins.map((plugin) => {
