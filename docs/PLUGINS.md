@@ -1103,3 +1103,24 @@ RemoteHand is licensed under the MIT License. Plugins are independent works and 
 
 Third-party components retain their own licenses.
 
+
+
+## ZIP packages
+
+RemoteHand can install a plugin directly from a `.zip` package. The archive root must contain `plugin.json`; do not wrap the package in an extra top-level directory.
+
+Example:
+
+```text
+remotehand-example-v1.0.0-windows-x86_64.zip
+├─ plugin.json
+├─ ui/
+│  └─ index.html
+└─ bin/
+   └─ windows-x86_64/
+      └─ remotehand-example.exe
+```
+
+ZIP installation uses the same manifest, permission, contribution, file-count, and uncompressed-size validation as folder installation. RemoteHand rejects unsafe or duplicate paths and symbolic links, extracts into temporary staging, validates the extracted package, and only then installs it into the portable plugins directory.
+
+The package limit applies to the total **uncompressed** plugin contents, not the compressed ZIP file size.
