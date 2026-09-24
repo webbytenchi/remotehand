@@ -28,6 +28,7 @@ import {
   type UiContributionLayout,
 } from "./contributionLayout";
 import appIcon from "../src-tauri/icons/icon.png";
+import aboutIcon from "../src-tauri/icons/128x128.png";
 import "./App.css";
 type Connection = {
 id: string;
@@ -127,6 +128,12 @@ payload: unknown;
 };
 type RemoteHandPopoutWindow = Window & {
 __REMOTEHAND_NATIVE_WINDOW_LABEL__?: string;
+};
+type PlatformInfo = {
+os: string;
+version: string;
+architecture: string;
+kernel: string;
 };
 const tabDragAssistDocuments = new WeakSet<Document>();
 
@@ -607,6 +614,7 @@ const [paletteQuery, setPaletteQuery] = useState("");
 const [workspaceReady, setWorkspaceReady] = useState(false);
 const [localOs, setLocalOs] = useState(() => (isTauri() ? "" : "linux"));
 const [appVersion, setAppVersion] = useState("—");
+const [platformInfo, setPlatformInfo] = useState<PlatformInfo | null>(null);
 const apiRef = useRef<DockviewApi | null>(null);
 const restoredRef = useRef(false);
 const layoutHistoryRef = useRef<string[]>([]);
@@ -631,6 +639,12 @@ return;
 void getVersion()
 .then(setAppVersion)
 .catch((error) => console.error("Failed to read app version", error));
+}, []);
+useEffect(() => {
+if (!isTauri()) return;
+void invoke<PlatformInfo>("platform_info")
+.then(setPlatformInfo)
+.catch((error) => console.error("Failed to read platform details", error));
 }, []);
 const refreshPlugins = useCallback(async () => {
 if (!isTauri()) {
@@ -1840,27 +1854,34 @@ return <div key={id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1
 </div>
 ) : settingsTab === "about" ? (
 <div className="settings-tab-content">
-<div className="settings-section-heading">
-<span>RemoteHand is an open-source, portable remote workstation manager for Windows and Linux.</span>
+<div style={{ display: "grid", gap: 22 }}>
+<section style={{ display: "grid", gridTemplateColumns: "84px minmax(0, 1fr)", gap: 18, alignItems: "center", paddingBottom: 4 }}>
+<img src={aboutIcon} alt="" aria-hidden="true" width="80" height="80" style={{ width: 80, height: 80, borderRadius: 18 }} />
+<div style={{ minWidth: 0 }}>
+<strong style={{ display: "block", fontSize: 22, lineHeight: 1.15 }}>RemoteHand</strong>
+<span className="app-modal-muted" style={{ display: "block", marginTop: 5 }}>Version {appVersion}</span>
+<span className="app-modal-muted" style={{ display: "block", marginTop: 8, lineHeight: 1.5 }}>Portable remote workstation manager for Windows and Linux.</span>
 </div>
-<div style={{ display: "grid", gap: 16 }}>
-<section style={{ display: "grid", gap: 10 }}>
+</section>
+<section style={{ display: "grid", gap: 12, paddingTop: 4 }}>
 <strong>Application</strong>
-<div style={{ display: "grid", gridTemplateColumns: "140px minmax(0, 1fr)", gap: "8px 16px" }}>
+<div style={{ display: "grid", gridTemplateColumns: "140px minmax(0, 1fr)", gap: "9px 18px" }}>
 <span className="app-modal-muted">Version</span><strong>{appVersion}</strong>
-<span className="app-modal-muted">Platform</span><strong>{localOs || "Unknown"}</strong>
+<span className="app-modal-muted">Operating system</span><strong>{platformInfo?.version || localOs || "Unknown"}</strong>
+<span className="app-modal-muted">Architecture</span><strong>{platformInfo?.architecture || "—"}</strong>
+{platformInfo?.kernel ? <><span className="app-modal-muted">Kernel / build</span><strong>{platformInfo.kernel}</strong></> : null}
 <span className="app-modal-muted">Data model</span><strong>Portable</strong>
 <span className="app-modal-muted">Plugin API</span><strong>v1</strong>
 <span className="app-modal-muted">License</span><strong>MIT</strong>
 </div>
 </section>
-<section style={{ display: "grid", gap: 8 }}>
+<section style={{ display: "grid", gap: 9, paddingTop: 2 }}>
 <strong>What RemoteHand includes</strong>
-<span className="app-modal-muted">Local terminals, SSH sessions, SFTP file management, saved connections, encrypted portable credentials, dockable workspaces, popout windows, system-tray integration, and out-of-process plugins.</span>
+<span className="app-modal-muted" style={{ lineHeight: 1.55 }}>Local terminals, SSH sessions, SFTP file management, saved connections, encrypted portable credentials, dockable workspaces, popout windows, system-tray integration, and out-of-process plugins.</span>
 </section>
-<section style={{ display: "grid", gap: 8 }}>
+<section style={{ display: "grid", gap: 9, paddingTop: 2 }}>
 <strong>Architecture</strong>
-<span className="app-modal-muted">Tauri 2 desktop shell with a React + TypeScript frontend and Rust backend. RemoteHand core owns generic infrastructure while plugins own feature-specific behavior.</span>
+<span className="app-modal-muted" style={{ lineHeight: 1.55 }}>Tauri 2 desktop shell with a React + TypeScript frontend and Rust backend. RemoteHand core owns generic infrastructure while plugins own feature-specific behavior.</span>
 </section>
 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
 <button type="button" className="settings-reset" onClick={() => void invoke("open_external_url", { url: "https://github.com/webbytenchi/remotehand" }).catch((error) => console.error("Failed to open repository", error))}>Repository</button>
