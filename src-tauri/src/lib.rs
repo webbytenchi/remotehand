@@ -21,6 +21,77 @@ fn local_os() -> &'static str {
     std::env::consts::OS
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PlatformInfo {
+    os: String,
+    version: String,
+    architecture: String,
+    kernel: String,
+}
+
+#[tauri::command]
+fn platform_info() -> PlatformInfo {
+    let os = std::env::consts::OS.to_string();
+    let architecture = std::env::consts::ARCH.to_string();
+
+    #[cfg(target_os = "windows")]
+    let (version, kernel) = {
+        let version = std::process::Command::new("cmd")
+            .args(["/C", "ver"])
+            .output()
+            .ok()
+            .and_then(|output| String::from_utf8(output.stdout).ok())
+            .map(|value| value.trim().trim_matches(['\r', '\n']).to_string())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| "Windows".to_string());
+        (version.clone(), version)
+    };
+
+    #[cfg(target_os = "linux")]
+    let (version, kernel) = {
+        let version = std::fs::read_to_string("/etc/os-release")
+            .ok()
+            .and_then(|contents| contents.lines().find_map(|line| {
+                line.strip_prefix("PRETTY_NAME=").map(|value| value.trim_matches('"').to_string())
+            }))
+            .unwrap_or_else(|| "Linux".to_string());
+        let kernel = std::process::Command::new("uname")
+            .arg("-r")
+            .output()
+            .ok()
+            .and_then(|output| String::from_utf8(output.stdout).ok())
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_default();
+        (version, kernel)
+    };
+
+    #[cfg(target_os = "macos")]
+    let (version, kernel) = {
+        let version = std::process::Command::new("sw_vers")
+            .arg("-productVersion")
+            .output()
+            .ok()
+            .and_then(|output| String::from_utf8(output.stdout).ok())
+            .map(|value| format!("macOS {}", value.trim()))
+            .unwrap_or_else(|| "macOS".to_string());
+        let kernel = std::process::Command::new("uname")
+            .arg("-r")
+            .output()
+            .ok()
+            .and_then(|output| String::from_utf8(output.stdout).ok())
+            .map(|value| value.trim().to_string())
+            .unwrap_or_default();
+        (version, kernel)
+    };
+
+    #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+    let (version, kernel) = (os.clone(), String::new());
+
+    PlatformInfo { os, version, architecture, kernel }
+}
+
 #[tauri::command]
 fn reveal_path(path: String) -> Result<(), String> {
     let path = std::path::PathBuf::from(path);
@@ -301,6 +372,7 @@ pub fn run() {
             terminal::terminal_resize,
             terminal::terminal_close,
             local_os,
+            platform_info,
             open_external_url,
             reveal_path,
             close_current_window,
