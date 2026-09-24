@@ -872,8 +872,8 @@ export function PluginManager({
 
   return (
     <>
-      {typeof document !== "undefined" && document.querySelector(".topbar-actions") && renderedTopbar.length
-        ? createPortal(renderedTopbar, document.querySelector(".topbar-actions")!)
+      {typeof document !== "undefined" && document.querySelector(".topbar-contributions") && renderedTopbar.length
+        ? createPortal(renderedTopbar, document.querySelector(".topbar-contributions")!)
         : null}
       {open && embeddedHost ? createPortal(managerContent, embeddedHost) : null}
       {!embedded ? (
