@@ -1680,7 +1680,7 @@ if (plugin) openPluginPanel(plugin, panelId, context);
 open={settingsOpen}
 title="Settings"
 className="settings-modal"
-confirmLabel="Done"
+confirmLabel={settingsTab === "papa" ? "Always" : "Done"}
 onConfirm={() => setSettingsOpen(false)}
 onCancel={() => setSettingsOpen(false)}
 focusActions={false}
@@ -1883,7 +1883,7 @@ window.setTimeout(() => setAboutCopied(false), 1800);
 ) : (
 <div className="settings-tab-content papa-settings">
 <div className="papa-message">
-<strong>I Love You Andami!</strong>
+<strong>I Love You Andami...</strong>
 <span>- Papa</span>
 </div>
 </div>
