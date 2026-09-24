@@ -4,7 +4,9 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     env, fs,
     path::{Component, Path, PathBuf},
+    time::{SystemTime, UNIX_EPOCH},
 };
+use zip::ZipArchive;
 pub const PLUGIN_API_VERSION: u32 = 1;
 const MAX_PLUGIN_FILES: usize = 2048;
 const MAX_PLUGIN_COUNT: usize = 512;
@@ -513,6 +515,133 @@ fn install_from_directory(source: &Path) -> Result<PluginInfo, String> {
     })
 }
 
+
+fn safe_archive_entry_path(name: &str) -> Result<PathBuf, String> {
+    if name.is_empty() || name.contains('\0') {
+        return Err("plugin ZIP contains an invalid path".to_string());
+    }
+    // ZIP paths conventionally use '/', but normalize backslashes too so the
+    // same archive cannot be safe on one platform and unsafe on another.
+    let normalized = name.replace('\\', "/");
+    let path = PathBuf::from(normalized);
+    if path.as_os_str().is_empty()
+        || path
+            .components()
+            .any(|component| !matches!(component, Component::Normal(_)))
+    {
+        return Err(format!("plugin ZIP contains an unsafe path: {name}"));
+    }
+    Ok(path)
+}
+
+fn install_from_zip(source: &Path) -> Result<PluginInfo, String> {
+    let metadata = fs::symlink_metadata(source).map_err(|error| error.to_string())?;
+    if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
+        return Err("selected plugin package must be a regular ZIP file".to_string());
+    }
+
+    let file = fs::File::open(source).map_err(|error| error.to_string())?;
+    let mut archive = ZipArchive::new(file)
+        .map_err(|error| format!("invalid plugin ZIP: {error}"))?;
+    if archive.len() > MAX_PLUGIN_FILES {
+        return Err(format!(
+            "plugin ZIP contains more than {MAX_PLUGIN_FILES} entries"
+        ));
+    }
+
+    let mut seen = BTreeSet::new();
+    let mut files = 0usize;
+    let mut bytes = 0u64;
+    let mut has_root_manifest = false;
+
+    for index in 0..archive.len() {
+        let entry = archive
+            .by_index(index)
+            .map_err(|error| format!("cannot read plugin ZIP entry: {error}"))?;
+        let relative = safe_archive_entry_path(entry.name())?;
+        if !seen.insert(relative.clone()) {
+            return Err(format!(
+                "plugin ZIP contains a duplicate path: {}",
+                relative.display()
+            ));
+        }
+        if entry
+            .unix_mode()
+            .is_some_and(|mode| mode & 0o170000 == 0o120000)
+        {
+            return Err("plugin ZIP may not contain symbolic links".to_string());
+        }
+        if entry.is_file() {
+            files += 1;
+            bytes = bytes.saturating_add(entry.size());
+            if files > MAX_PLUGIN_FILES {
+                return Err(format!(
+                    "plugin contains more than {MAX_PLUGIN_FILES} files"
+                ));
+            }
+            if bytes > MAX_PLUGIN_BYTES {
+                return Err(format!(
+                    "plugin exceeds the {} MiB uncompressed size limit",
+                    MAX_PLUGIN_BYTES / 1024 / 1024
+                ));
+            }
+            if relative == Path::new("plugin.json") {
+                has_root_manifest = true;
+            }
+        }
+    }
+
+    if !has_root_manifest {
+        return Err(
+            "plugin ZIP must contain plugin.json at the archive root".to_string()
+        );
+    }
+
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let staging = env::temp_dir().join(format!(
+        "remotehand-plugin-install-{}-{nonce}",
+        std::process::id()
+    ));
+    fs::create_dir(&staging).map_err(|error| error.to_string())?;
+
+    let extract_result = (|| -> Result<(), String> {
+        for index in 0..archive.len() {
+            let mut entry = archive
+                .by_index(index)
+                .map_err(|error| format!("cannot read plugin ZIP entry: {error}"))?;
+            let relative = safe_archive_entry_path(entry.name())?;
+            let destination = staging.join(&relative);
+            if entry.is_dir() {
+                fs::create_dir_all(&destination).map_err(|error| error.to_string())?;
+                continue;
+            }
+            if let Some(parent) = destination.parent() {
+                fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+            }
+            let mut output = fs::File::create(&destination)
+                .map_err(|error| error.to_string())?;
+            std::io::copy(&mut entry, &mut output)
+                .map_err(|error| error.to_string())?;
+        }
+        Ok(())
+    })();
+
+    if let Err(error) = extract_result {
+        let _ = remove_tree_safe(&staging);
+        return Err(error);
+    }
+
+    let install_result = install_from_directory(&staging);
+    let cleanup_result = remove_tree_safe(&staging);
+    match (install_result, cleanup_result) {
+        (Ok(installed), _) => Ok(installed),
+        (Err(error), _) => Err(error),
+    }
+}
+
 fn discover_plugins() -> Result<Vec<PluginInfo>, String> {
     let root = plugins_root_for_runtime()?;
     fs::create_dir_all(&root).map_err(|error| error.to_string())?;
@@ -564,6 +693,20 @@ fn require_installed(id: &str) -> Result<PluginInfo, String> {
         .into_iter()
         .find(|plugin| plugin.manifest.id == id)
         .ok_or_else(|| "plugin is not installed".to_string())
+}
+
+#[tauri::command]
+pub fn plugin_install_from_zip() -> Result<Option<PluginInfo>, String> {
+    let Some(source) = rfd::FileDialog::new()
+        .set_title("Select RemoteHand plugin ZIP")
+        .add_filter("RemoteHand plugin", &["zip"])
+        .pick_file()
+    else {
+        return Ok(None);
+    };
+    let installed = install_from_zip(&source)?;
+    log::info!("Plugin {} installed from ZIP", installed.manifest.id);
+    Ok(Some(installed))
 }
 
 #[tauri::command]
@@ -758,6 +901,22 @@ mod tests {
         assert_eq!(MAX_STATE_BYTES, 1024 * 1024);
         assert_eq!(MAX_PLUGIN_STORAGE_ENTRY_BYTES, 16 * 1024 * 1024);
         assert_eq!(MAX_PLUGIN_BYTES, 64 * 1024 * 1024);
+    }
+
+    #[test]
+    fn archive_paths_reject_traversal_and_absolute_paths() {
+        assert_eq!(
+            safe_archive_entry_path("plugin.json").unwrap(),
+            PathBuf::from("plugin.json")
+        );
+        assert_eq!(
+            safe_archive_entry_path("ui/index.html").unwrap(),
+            PathBuf::from("ui/index.html")
+        );
+        assert!(safe_archive_entry_path("../plugin.json").is_err());
+        assert!(safe_archive_entry_path("ui/../../plugin.json").is_err());
+        assert!(safe_archive_entry_path("/plugin.json").is_err());
+        assert!(safe_archive_entry_path("..\\plugin.json").is_err());
     }
 
     #[test]
