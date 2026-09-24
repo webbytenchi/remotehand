@@ -467,13 +467,33 @@ export function PluginManager({
 
   useEffect(() => {
     if (!openTopbarMenuKey) return;
-    const close = (event: PointerEvent) => {
-      const target = event.target;
-      if (target instanceof Element && target.closest("[data-plugin-topbar-menu]")) return;
+    const isInsideActiveMenu = (target: EventTarget | null) => {
+      if (!(target instanceof Element)) return false;
+      const owner = target.closest<HTMLElement>("[data-plugin-topbar-menu-key]");
+      return owner?.dataset.pluginTopbarMenuKey === openTopbarMenuKey;
+    };
+    const closeOnPointerDown = (event: PointerEvent) => {
+      if (isInsideActiveMenu(event.target)) return;
       setOpenTopbarMenuKey(null);
     };
-    window.addEventListener("pointerdown", close);
-    return () => window.removeEventListener("pointerdown", close);
+    const closeOnFocusIn = (event: FocusEvent) => {
+      if (isInsideActiveMenu(event.target)) return;
+      setOpenTopbarMenuKey(null);
+    };
+    const closeOnBlur = () => setOpenTopbarMenuKey(null);
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenTopbarMenuKey(null);
+    };
+    document.addEventListener("pointerdown", closeOnPointerDown, true);
+    document.addEventListener("focusin", closeOnFocusIn, true);
+    window.addEventListener("blur", closeOnBlur);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnPointerDown, true);
+      document.removeEventListener("focusin", closeOnFocusIn, true);
+      window.removeEventListener("blur", closeOnBlur);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
   }, [openTopbarMenuKey]);
 
   const install = async () => {
@@ -628,6 +648,7 @@ export function PluginManager({
         <div
           key={itemKey}
           data-plugin-topbar-menu
+          data-plugin-topbar-menu-key={itemKey}
           style={{ order: contributionOrderIndex(topbarOrder, itemKey, -1), position: "relative", zIndex: menuOpen ? 1001 : 10, pointerEvents: "auto", flexShrink: 0, marginLeft: 6 }}
         >
         <button

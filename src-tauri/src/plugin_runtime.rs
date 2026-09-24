@@ -263,6 +263,46 @@ struct StorageSetParams {
 struct ClipboardWriteParams {
     text: String,
 }
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FileSaveFilter {
+    name: String,
+    extensions: Vec<String>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FileSaveParams {
+    suggested_name: String,
+    content: String,
+    #[serde(default)]
+    filters: Vec<FileSaveFilter>,
+}
+fn validate_file_save_params(params:&FileSaveParams)->Result<(),String>{
+    if params.suggested_name.trim().is_empty() || params.suggested_name.len()>255 {
+        return Err("file.save suggested name is missing or too long".to_string());
+    }
+    let path=Path::new(&params.suggested_name);
+    if path.components().count()!=1 || path.is_absolute() {
+        return Err("file.save suggested name must be a file name without a path".to_string());
+    }
+    if params.content.len()>8*1024*1024 {
+        return Err("file.save content exceeds 8 MiB".to_string());
+    }
+    if params.filters.len()>8 {
+        return Err("file.save has too many file filters".to_string());
+    }
+    for filter in &params.filters {
+        if filter.name.trim().is_empty() || filter.name.len()>64 || filter.extensions.is_empty() || filter.extensions.len()>8 {
+            return Err("file.save contains an invalid file filter".to_string());
+        }
+        for extension in &filter.extensions {
+            if extension.is_empty() || extension.len()>16 || !extension.bytes().all(|b|b.is_ascii_alphanumeric()) {
+                return Err("file.save contains an invalid file extension".to_string());
+            }
+        }
+    }
+    Ok(())
+}
 fn permission_granted(permissions: &[String], permission: &str) -> bool {
     permissions.iter().any(|value| value == permission)
 }
@@ -307,6 +347,12 @@ fn validate_plugin_request(permissions: &[String], request: &PluginRequest) -> R
         "clipboard.write" => {
             if !permission_granted(permissions, "clipboard.write") {
                 return Err("plugin lacks clipboard.write permission".to_string());
+            }
+            Ok(())
+        }
+        "file.save" => {
+            if !permission_granted(permissions, "files.save") {
+                return Err("plugin lacks files.save permission".to_string());
             }
             Ok(())
         }
@@ -377,6 +423,22 @@ fn handle_plugin_request(
                 .set_text(params.text)
                 .map_err(|error| format!("failed to write clipboard: {error}"))?;
             Ok(serde_json::json!({ "copied": true }))
+        }
+        "file.save" => {
+            let params: FileSaveParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid file.save params: {error}"))?;
+            validate_file_save_params(&params)?;
+            let mut dialog = rfd::FileDialog::new().set_file_name(&params.suggested_name);
+            for filter in &params.filters {
+                let extensions=filter.extensions.iter().map(String::as_str).collect::<Vec<_>>();
+                dialog=dialog.add_filter(&filter.name,&extensions);
+            }
+            let Some(path)=dialog.save_file() else {
+                return Ok(serde_json::json!({"saved":false}));
+            };
+            fs::write(&path, params.content.as_bytes())
+                .map_err(|error| format!("failed to save file: {error}"))?;
+            Ok(serde_json::json!({"saved":true,"path":path.to_string_lossy()}))
         }
         "network.interfaces" => {
             let mut grouped: BTreeMap<String, (Option<String>, Vec<serde_json::Value>)> =
@@ -914,6 +976,22 @@ mod tests {
         };
         assert!(validate_plugin_request(&["clipboard.write".to_string()], &request).is_ok());
         assert!(validate_plugin_request(&[], &request).is_err());
+    }
+
+    #[test]
+    fn validates_file_save_permission_and_params() {
+        let request = PluginRequest {
+            message_type: "plugin.request".to_string(),
+            request_id: 1,
+            method: "file.save".to_string(),
+            params: serde_json::json!({ "suggestedName": "report.csv", "content": "a,b\n1,2", "filters": [{ "name": "CSV", "extensions": ["csv"] }] }),
+        };
+        assert!(validate_plugin_request(&["files.save".to_string()], &request).is_ok());
+        assert_eq!(validate_plugin_request(&[], &request).unwrap_err(),"plugin lacks files.save permission");
+        let params:FileSaveParams=serde_json::from_value(request.params.clone()).unwrap();
+        assert!(validate_file_save_params(&params).is_ok());
+        let invalid=FileSaveParams{suggested_name:"../report.csv".into(),content:String::new(),filters:Vec::new()};
+        assert!(validate_file_save_params(&invalid).is_err());
     }
 
     #[test]

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
 import {
 DockviewDefaultTab,
@@ -27,6 +28,7 @@ import {
   type UiContributionLayout,
 } from "./contributionLayout";
 import appIcon from "../src-tauri/icons/icon.png";
+import aboutIcon from "../src-tauri/icons/128x128.png";
 import "./App.css";
 type Connection = {
 id: string;
@@ -119,8 +121,19 @@ manifest: PluginManifestInfo;
 enabled: boolean;
 directory: string;
 };
+type PluginRuntimeEvent = {
+pluginId: string;
+event: string;
+payload: unknown;
+};
 type RemoteHandPopoutWindow = Window & {
 __REMOTEHAND_NATIVE_WINDOW_LABEL__?: string;
+};
+type PlatformInfo = {
+os: string;
+version: string;
+architecture: string;
+kernel: string;
 };
 const tabDragAssistDocuments = new WeakSet<Document>();
 
@@ -544,6 +557,20 @@ onClick={(event) => runTabAction(event, () => props.api.close())}
 );
 }
 
+function renderPluginSidebarIcon(icon: string) {
+if (icon === "monitor-pulse") {
+return (
+<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+<rect x="2.5" y="3.5" width="15" height="11" rx="2" />
+<path d="M5 9h2l1.5-3 2.2 6 1.8-4 1 1H15" />
+<path d="M7.5 17h5" />
+<path d="M10 14.5V17" />
+</svg>
+);
+}
+return <>◇</>;
+}
+
 function App() {
 useEffect(() => {
 installTabDragWindowAssist(document);
@@ -567,7 +594,7 @@ const legacyTheme = localStorage.getItem(THEME_KEY);
 return { ...DEFAULT_SETTINGS, theme: legacyTheme === "light" ? "light" : "dark" };
 });
 const [settingsOpen, setSettingsOpen] = useState(false);
-const [settingsTab, setSettingsTab] = useState<"appearance" | "startup" | "layout" | "plugins" | "papa">("appearance");
+const [settingsTab, setSettingsTab] = useState<"appearance" | "layout" | "startup" | "plugins" | "about" | "papa">("appearance");
 const [papaTabUnlocked, setPapaTabUnlocked] = useState(false);
 const [papaConfettiActive, setPapaConfettiActive] = useState(false);
 const papaSequenceRef = useRef<string[]>([]);
@@ -575,6 +602,7 @@ const papaAudioRef = useRef<HTMLAudioElement | null>(null);
 const [pluginSettingsHost, setPluginSettingsHost] = useState<HTMLDivElement | null>(null);
 const [plugins, setPlugins] = useState<PluginInfo[]>([]);
 const [topbarContributionItems, setTopbarContributionItems] = useState<Array<{ id: string; label: string }>>([]);
+const [pluginSidebarVisibility, setPluginSidebarVisibility] = useState<Record<string, boolean>>({});
 const [uiContributionLayout, setUiContributionLayout] = useState<UiContributionLayout>(EMPTY_UI_CONTRIBUTION_LAYOUT);
 const [uiContributionLayoutLoaded, setUiContributionLayoutLoaded] = useState(false);
 const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("dark");
@@ -585,6 +613,8 @@ const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getI
 const [paletteQuery, setPaletteQuery] = useState("");
 const [workspaceReady, setWorkspaceReady] = useState(false);
 const [localOs, setLocalOs] = useState(() => (isTauri() ? "" : "linux"));
+const [appVersion, setAppVersion] = useState(() => isTauri() ? "—" : "Development");
+const [platformInfo, setPlatformInfo] = useState<PlatformInfo | null>(null);
 const apiRef = useRef<DockviewApi | null>(null);
 const restoredRef = useRef(false);
 const layoutHistoryRef = useRef<string[]>([]);
@@ -600,6 +630,18 @@ if (!isTauri()) return;
 void invoke<string>("local_os")
 .then(setLocalOs)
 .catch((error) => console.error("Failed to detect local OS", error));
+}, []);
+useEffect(() => {
+if (!isTauri()) return;
+void getVersion()
+.then(setAppVersion)
+.catch((error) => console.error("Failed to read app version", error));
+}, []);
+useEffect(() => {
+if (!isTauri()) return;
+void invoke<PlatformInfo>("platform_info")
+.then(setPlatformInfo)
+.catch((error) => console.error("Failed to read platform details", error));
 }, []);
 const refreshPlugins = useCallback(async () => {
 if (!isTauri()) {
@@ -637,6 +679,35 @@ console.error("Failed to load plugins", error);
 useEffect(() => {
 void refreshPlugins();
 }, [refreshPlugins]);
+useEffect(() => {
+if (!isTauri()) return;
+let cancelled = false;
+let unlisten: (() => void) | undefined;
+void listen<PluginRuntimeEvent>("remotehand-plugin-event", (event) => {
+if (event.payload.event !== "sidebar.update") return;
+const payload = event.payload.payload;
+if (!payload || typeof payload !== "object") return;
+const items = (payload as { items?: unknown }).items;
+if (!Array.isArray(items)) return;
+setPluginSidebarVisibility((current) => {
+const next = { ...current };
+for (const entry of items) {
+if (!entry || typeof entry !== "object") continue;
+const value = entry as { id?: unknown; visible?: unknown };
+if (typeof value.id !== "string" || !/^[a-z0-9._-]{1,128}$/.test(value.id) || typeof value.visible !== "boolean") continue;
+next[`${event.payload.pluginId}:${value.id}`] = value.visible;
+}
+return next;
+});
+}).then((dispose) => {
+if (cancelled) dispose();
+else unlisten = dispose;
+});
+return () => {
+cancelled = true;
+unlisten?.();
+};
+}, []);
 const persistWorkspaceSnapshot = useCallback((snapshot: string, immediate = false) => {
 const save = () => {
 if (!workspacePersistenceEnabledRef.current) return;
@@ -1189,13 +1260,13 @@ audio.currentTime = 0;
 papaAudioRef.current = null;
 }, []);
 useEffect(() => {
-if (!settingsOpen || settingsTab !== "startup" || papaTabUnlocked) {
+if (!settingsOpen || settingsTab !== "about" || papaTabUnlocked) {
 papaSequenceRef.current = [];
 return;
 }
 const sequence = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "b", "a"];
 const onKeyDown = (event: KeyboardEvent) => {
-if (!settingsOpen || settingsTab !== "startup") return;
+if (!settingsOpen || settingsTab !== "about") return;
 const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
 const expected = sequence[papaSequenceRef.current.length];
 if (key === expected) {
@@ -1211,7 +1282,7 @@ papaSequenceRef.current = key === sequence[0] ? [key] : [];
 };
 window.addEventListener("keydown", onKeyDown, true);
 return () => window.removeEventListener("keydown", onKeyDown, true);
-}, [settingsOpen, settingsTab, papaTabUnlocked]);
+}, [settingsOpen, settingsTab, papaTabUnlocked, startPapaAudio]);
 useEffect(() => {
 if (!papaConfettiActive) return;
 const timer = window.setTimeout(() => setPapaConfettiActive(false), 1400);
@@ -1439,7 +1510,9 @@ const coreSidebarItems = [
 ];
 const pluginSidebarItems = plugins.flatMap((plugin) =>
 plugin.enabled
-? plugin.manifest.contributes.sidebar.map((sidebar) => ({
+? plugin.manifest.contributes.sidebar
+.filter((sidebar) => pluginSidebarVisibility[`${plugin.manifest.id}:${sidebar.id}`] !== false)
+.map((sidebar) => ({
 id: `${plugin.manifest.id}:${sidebar.id}`,
 label: sidebar.title,
 }))
@@ -1563,7 +1636,9 @@ aria-label="Settings"
 </button>
 {plugins.flatMap((plugin) =>
 plugin.enabled
-? plugin.manifest.contributes.sidebar.map((sidebar) => (
+? plugin.manifest.contributes.sidebar
+.filter((sidebar) => pluginSidebarVisibility[plugin.manifest.id + ":" + sidebar.id] !== false)
+.map((sidebar) => (
 <button
 className="sidebar-action"
 style={{ order: 100 + contributionOrderIndex(resolvedSidebarOrder, plugin.manifest.id + ":" + sidebar.id) }}
@@ -1572,7 +1647,7 @@ key={plugin.manifest.id + ":" + sidebar.id}
 onClick={() => openPluginPanel(plugin, sidebar.panel)}
 title={sidebar.title}
 >
-<span className="sidebar-icon" aria-hidden="true">◇</span>
+<span className="sidebar-icon" aria-hidden="true">{renderPluginSidebarIcon(sidebar.icon)}</span>
 <span className="sidebar-label">{sidebar.title}</span>
 </button>
 ))
@@ -1619,9 +1694,10 @@ onCancel={() => setSettingsOpen(false)}
 focusActions={false}
 tabs={<div className="settings-tabs" role="tablist" aria-label="Settings sections">
 <button type="button" role="tab" aria-selected={settingsTab === "appearance"} className={settingsTab === "appearance" ? "active" : ""} onClick={() => setSettingsTab("appearance")}>Appearance</button>
-<button type="button" role="tab" aria-selected={settingsTab === "startup"} className={settingsTab === "startup" ? "active" : ""} onClick={() => setSettingsTab("startup")}>Startup &amp; Tray</button>
 <button type="button" role="tab" aria-selected={settingsTab === "layout"} className={settingsTab === "layout" ? "active" : ""} onClick={() => setSettingsTab("layout")}>Interface</button>
+<button type="button" role="tab" aria-selected={settingsTab === "startup"} className={settingsTab === "startup" ? "active" : ""} onClick={() => setSettingsTab("startup")}>Startup &amp; Tray</button>
 <button type="button" role="tab" aria-selected={settingsTab === "plugins"} className={settingsTab === "plugins" ? "active" : ""} onClick={() => setSettingsTab("plugins")}>Plugins</button>
+<button type="button" role="tab" aria-selected={settingsTab === "about"} className={settingsTab === "about" ? "active" : ""} onClick={() => setSettingsTab("about")}>About</button>
 {papaTabUnlocked ? <span className="papa-tab-reveal"><button type="button" role="tab" aria-selected={settingsTab === "papa"} className={settingsTab === "papa" ? "active" : ""} onClick={() => { setSettingsTab("papa"); startPapaAudio(); }}>Papa</button>{papaConfettiActive ? <span className="papa-heart-confetti" aria-hidden="true">{Array.from({ length: 10 }, (_, index) => <span key={index}>♥</span>)}</span> : null}</span> : null}
 </div>}>
 {settingsTab === "appearance" ? (
@@ -1773,11 +1849,48 @@ return <div key={id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1
 </div>
 <div ref={setPluginSettingsHost} />
 </div>
+) : settingsTab === "about" ? (
+<div className="settings-tab-content">
+<div style={{ display: "grid", gap: 22 }}>
+<section style={{ display: "grid", gridTemplateColumns: "84px minmax(0, 1fr)", gap: 18, alignItems: "center", paddingBottom: 4 }}>
+<img src={aboutIcon} alt="" aria-hidden="true" width="80" height="80" style={{ width: 80, height: 80, borderRadius: 18 }} />
+<div style={{ minWidth: 0 }}>
+<strong style={{ display: "block", fontSize: 22, lineHeight: 1.15 }}>RemoteHand</strong>
+<span className="app-modal-muted" style={{ display: "block", marginTop: 5 }}>Version {appVersion}</span>
+<span className="app-modal-muted" style={{ display: "block", marginTop: 8, lineHeight: 1.5 }}>Portable remote workstation manager for Windows and Linux.</span>
+</div>
+</section>
+<section style={{ display: "grid", gap: 12, paddingTop: 4 }}>
+<strong>Application</strong>
+<div style={{ display: "grid", gridTemplateColumns: "140px minmax(0, 1fr)", gap: "9px 18px" }}>
+<span className="app-modal-muted">Version</span><strong>{appVersion}</strong>
+<span className="app-modal-muted">Operating system</span><strong>{platformInfo?.os === "windows" ? "Windows" : (platformInfo?.version || localOs || "Unknown")}</strong>
+<span className="app-modal-muted">Data model</span><strong>Portable</strong>
+<span className="app-modal-muted">Plugin API</span><strong>v1</strong>
+<span className="app-modal-muted">License</span><strong>MIT</strong>
+</div>
+</section>
+<section style={{ display: "grid", gap: 9, paddingTop: 2 }}>
+<strong>What RemoteHand includes</strong>
+<span className="app-modal-muted" style={{ lineHeight: 1.55 }}>Local terminals, SSH sessions, SFTP file management, saved connections, encrypted portable credentials, dockable workspaces, popout windows, system-tray integration, and out-of-process plugins.</span>
+</section>
+<section style={{ display: "grid", gap: 9, paddingTop: 2 }}>
+<strong>Architecture</strong>
+<span className="app-modal-muted" style={{ lineHeight: 1.55 }}>Tauri 2 desktop shell with a React + TypeScript frontend and Rust backend. RemoteHand core owns generic infrastructure while plugins own feature-specific behavior.</span>
+</section>
+<div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+<button type="button" className="settings-reset" onClick={() => void invoke("open_external_url", { url: "https://github.com/webbytenchi/remotehand" }).catch((error) => console.error("Failed to open repository", error))}>Repository</button>
+<button type="button" className="settings-reset" onClick={() => void invoke("open_external_url", { url: "https://github.com/webbytenchi/remotehand/releases" }).catch((error) => console.error("Failed to open releases", error))}>Releases</button>
+<button type="button" className="settings-reset" onClick={() => void invoke("open_external_url", { url: "https://github.com/webbytenchi/remotehand/tree/main/docs" }).catch((error) => console.error("Failed to open documentation", error))}>Documentation</button>
+<button type="button" className="settings-reset" onClick={() => void invoke("open_external_url", { url: "https://github.com/webbytenchi/remotehand/blob/main/LICENSE" }).catch((error) => console.error("Failed to open license", error))}>MIT License</button>
+</div>
+</div>
+</div>
 ) : (
 <div className="settings-tab-content papa-settings">
 <div className="papa-message">
-<strong>I Love You Andami!</strong>
-<span>- Papa</span>
+<strong>I Love You Andami...</strong>
+<span>Papa</span>
 </div>
 </div>
 )}
