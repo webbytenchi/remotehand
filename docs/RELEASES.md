@@ -116,4 +116,4 @@ The GitHub Release must be checked after publication to confirm:
 
 ## Current reference
 
-RemoteHand v1.2.8 is the current reference implementation of this release format and workflow. Its public release notes should summarize all accumulated changes since the previous public release, v1.2.3.
+RemoteHand v1.2.12 follows this release format and workflow. Continue using the same sequence for future releases: branch validation, docs/version prep, merge and branch cleanup, exact-main release build, smoke test, packaging/checksums, annotated tag, then GitHub Release publication.
