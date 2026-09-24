@@ -2,6 +2,23 @@
 
 All notable changes to RemoteHand are documented here.
 
+## `1.2.10` - 2026-09-24
+
+### Improved
+
+- **Stable plugin top-bar tooltips.** Plugin top-bar hover details now use a RemoteHand-rendered tooltip instead of the browser-native `title` popup, so live plugin updates no longer dismiss and recreate the tooltip while the pointer remains over the contribution.
+- **Readable multiline details.** Plugin-provided tooltip line breaks are preserved without wrapping individual lines, while the tooltip remains bounded to the application window.
+
+### Fixed
+
+- **Live-update hover flicker.** Rapidly updating top-bar contributions such as monitoring sparklines no longer make their hover tooltip flicker on each refresh.
+
+### Verification
+
+- Production frontend build passed on Windows.
+- Manual Windows acceptance confirmed the tooltip remains continuously visible while Target Monitor live graph updates arrive.
+- Manual acceptance confirmed multiline exposed-field details remain unwrapped and readable.
+
 ## `1.2.8` - 2026-09-24
 
 RemoteHand v1.2.8 is the next public release after v1.2.3 and includes all accumulated changes from the internal v1.2.4-v1.2.7 milestones plus the final plugin notification/storage infrastructure.
