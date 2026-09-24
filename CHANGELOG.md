@@ -2,6 +2,32 @@
 
 All notable changes to RemoteHand are documented here.
 
+## `1.2.11` - 2026-09-25
+
+### Added
+
+- **Native plugin ZIP installation.** Settings → Plugins can install a plugin directly from a `.zip` package while preserving the existing folder-install workflow for development.
+- **Safe ZIP staging and validation.** ZIP packages are checked for unsafe paths, duplicate entries, symbolic links, excessive entry/file counts, and the existing 64 MiB uncompressed plugin-size limit before installation. The archive must place `plugin.json` at its root.
+- **Compact plugin tray labels.** Generic plugin tray items can publish an optional four-character `label` with `textColor`, allowing numeric/status tiles such as CPU or memory percentages without plugin-specific rendering in core.
+
+### Improved
+
+- **Plugin package workflow.** ZIP installation reuses the existing manifest validation and atomic plugin-directory installation path after extraction into temporary staging.
+- **Tray presentation flexibility.** A label takes precedence over graph series for the same stable tray item, while existing graph, background, border, tooltip, visibility, and action behavior remains compatible.
+
+### Compatibility
+
+- Plugin API remains **v1**. ZIP installation and tray labels are backward-compatible host capabilities.
+- Existing folder packages and installed plugins require no migration.
+- RemoteHand core remains plugin-agnostic; plugins decide when to publish labels versus live graph series.
+
+### Verification
+
+- Production frontend build and Rust tests passed on the development branch before v1.2.11 packaging.
+- Native ZIP installation was manually validated with the packaged System Monitor plugin.
+- Compact tray-label rendering was manually validated on Windows with a live numeric tile.
+- Final Windows v1.2.11 package will receive a fresh post-merge smoke test before tagging or GitHub Release publication.
+
 ## `1.2.10` - 2026-09-24
 
 ### Improved
