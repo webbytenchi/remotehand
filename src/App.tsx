@@ -41,6 +41,7 @@ credentialRef?: string;
 type ThemeMode = "dark" | "light" | "system";
 type ColorScheme = "blue" | "emerald" | "violet" | "amber" | "neutral";
 type TerminalTheme = "comfort" | "classic" | "custom";
+type TopbarAlignment = "left" | "center" | "right";
 type Settings = {
 theme: ThemeMode;
 colorScheme: ColorScheme;
@@ -55,6 +56,7 @@ startWithSystem: boolean;
 startMinimized: boolean;
 showInSystemTray: boolean;
 minimizeToTrayOnClose: boolean;
+topbarAlignment: TopbarAlignment;
 };
 type WorkspaceLayout = Parameters<DockviewApi["fromJSON"]>[0];
 const WORKSPACE_KEY = "remotehand.workspace";
@@ -76,6 +78,7 @@ startWithSystem: false,
 startMinimized: false,
 showInSystemTray: true,
 minimizeToTrayOnClose: false,
+topbarAlignment: "center",
 };
 const UI_FONT_OPTIONS = ["Inter", "IBM Plex Sans", "Segoe UI", "System Default"] as const;
 const TERMINAL_FONT_OPTIONS = ["JetBrains Mono", "IBM Plex Mono", "Cascadia Mono", "Consolas", "System Monospace"] as const;
@@ -1602,7 +1605,7 @@ className="topbar-contribution-viewport"
 ref={topbarViewportRef}
 onScroll={syncTopbarOverflow}
 >
-<div className="topbar-contributions" />
+<div className={`topbar-contributions align-${settings.topbarAlignment}${topbarOverflowing ? " overflowing" : ""}`} />
 </div>
 {topbarOverflowing ? (
 <button
@@ -1869,6 +1872,22 @@ return <div key={id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1
 </section>
 <section>
 <strong style={{ display: "block", marginBottom: 8 }}>Top bar</strong>
+<div className="settings-field" style={{ marginBottom: 10 }}>
+<span>Alignment</span>
+<div className="settings-segmented">
+{(["left", "center", "right"] as TopbarAlignment[]).map((alignment) => (
+<button
+key={alignment}
+type="button"
+className={settings.topbarAlignment === alignment ? "active" : ""}
+onClick={() => setSettings((current) => ({ ...current, topbarAlignment: alignment }))}
+>
+{alignment[0].toUpperCase() + alignment.slice(1)}
+</button>
+))}
+</div>
+<small style={{ color: "#718094", lineHeight: 1.4 }}>Applies when all top-bar items fit. Overflowing items use the paging strip.</small>
+</div>
 <div style={{ display: "grid", gap: 6 }}>
 {resolvedTopbarOrder.map((id, index) => {
 const entry = topbarCatalog.find((item) => item.id === id);
