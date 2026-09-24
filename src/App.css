@@ -559,9 +559,21 @@ grid-column: 2;
 }
 .topbar-contributions {
   width: max-content;
-  min-width: 0;
+  min-width: 100%;
   display: flex;
   align-items: center;
+}
+.topbar-contributions.align-left {
+  justify-content: flex-start;
+}
+.topbar-contributions.align-center {
+  justify-content: center;
+}
+.topbar-contributions.align-right {
+  justify-content: flex-end;
+}
+.topbar-contributions.overflowing {
+  justify-content: flex-start;
 }
 .topbar-scroll-button {
   width: 28px;
