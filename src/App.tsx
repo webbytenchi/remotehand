@@ -587,7 +587,7 @@ const legacyTheme = localStorage.getItem(THEME_KEY);
 return { ...DEFAULT_SETTINGS, theme: legacyTheme === "light" ? "light" : "dark" };
 });
 const [settingsOpen, setSettingsOpen] = useState(false);
-const [settingsTab, setSettingsTab] = useState<"appearance" | "layout" | "startup" | "plugins" | "about">("appearance");
+const [settingsTab, setSettingsTab] = useState<"appearance" | "layout" | "startup" | "plugins" | "about" | "papa">("appearance");
 const [papaTabUnlocked, setPapaTabUnlocked] = useState(false);
 const [papaConfettiActive, setPapaConfettiActive] = useState(false);
 const papaSequenceRef = useRef<string[]>([]);
@@ -1240,8 +1240,8 @@ audio.currentTime = 0;
 void audio.play().catch((error) => console.error("Failed to start audio", error));
 }, []);
 useEffect(() => {
-if (!settingsOpen || settingsTab !== "about" || !papaTabUnlocked) stopPapaAudio();
-}, [settingsOpen, settingsTab, papaTabUnlocked, stopPapaAudio]);
+if (!settingsOpen || settingsTab !== "papa") stopPapaAudio();
+}, [settingsOpen, settingsTab, stopPapaAudio]);
 useEffect(() => () => {
 const audio = papaAudioRef.current;
 if (!audio) return;
@@ -1264,6 +1264,7 @@ papaSequenceRef.current.push(key);
 if (papaSequenceRef.current.length === sequence.length) {
 setPapaTabUnlocked(true);
 setPapaConfettiActive(true);
+setSettingsTab("papa");
 startPapaAudio();
 papaSequenceRef.current = [];
 }
@@ -1689,6 +1690,7 @@ tabs={<div className="settings-tabs" role="tablist" aria-label="Settings section
 <button type="button" role="tab" aria-selected={settingsTab === "startup"} className={settingsTab === "startup" ? "active" : ""} onClick={() => setSettingsTab("startup")}>Startup &amp; Tray</button>
 <button type="button" role="tab" aria-selected={settingsTab === "plugins"} className={settingsTab === "plugins" ? "active" : ""} onClick={() => setSettingsTab("plugins")}>Plugins</button>
 <button type="button" role="tab" aria-selected={settingsTab === "about"} className={settingsTab === "about" ? "active" : ""} onClick={() => setSettingsTab("about")}>About</button>
+{papaTabUnlocked ? <span className="papa-tab-reveal"><button type="button" role="tab" aria-selected={settingsTab === "papa"} className={settingsTab === "papa" ? "active" : ""} onClick={() => { setSettingsTab("papa"); startPapaAudio(); }}>Papa</button>{papaConfettiActive ? <span className="papa-heart-confetti" aria-hidden="true">{Array.from({ length: 10 }, (_, index) => <span key={index}>♥</span>)}</span> : null}</span> : null}
 </div>}>
 {settingsTab === "appearance" ? (
 <div className="appearance-settings settings-tab-content">
@@ -1839,23 +1841,33 @@ return <div key={id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1
 </div>
 <div ref={setPluginSettingsHost} />
 </div>
-) : (
+) : settingsTab === "about" ? (
 <div className="settings-tab-content">
 <div className="settings-section-heading">
 <span>RemoteHand is an open-source, portable remote workstation manager for Windows and Linux.</span>
 </div>
-<div style={{ display: "grid", gap: 12 }}>
-<div className="settings-field">
-<span>Version</span>
-<strong>{appVersion}</strong>
+<div style={{ display: "grid", gap: 16 }}>
+<section style={{ display: "grid", gap: 10 }}>
+<strong>Application</strong>
+<div style={{ display: "grid", gridTemplateColumns: "140px minmax(0, 1fr)", gap: "8px 16px" }}>
+<span className="app-modal-muted">Version</span><strong>{appVersion}</strong>
+<span className="app-modal-muted">Platform</span><strong>{localOs || "Unknown"}</strong>
+<span className="app-modal-muted">Data model</span><strong>Portable</strong>
+<span className="app-modal-muted">Plugin API</span><strong>v1</strong>
+<span className="app-modal-muted">License</span><strong>MIT</strong>
 </div>
-<div className="settings-field">
-<span>Platform</span>
-<strong>{localOs || "Unknown"}</strong>
-</div>
+</section>
+<section style={{ display: "grid", gap: 8 }}>
+<strong>What RemoteHand includes</strong>
+<span className="app-modal-muted">Local terminals, SSH sessions, SFTP file management, saved connections, encrypted portable credentials, dockable workspaces, popout windows, system-tray integration, and out-of-process plugins.</span>
+</section>
+<section style={{ display: "grid", gap: 8 }}>
+<strong>Architecture</strong>
+<span className="app-modal-muted">Tauri 2 desktop shell with a React + TypeScript frontend and Rust backend. RemoteHand core owns generic infrastructure while plugins own feature-specific behavior.</span>
+</section>
 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
 <button type="button" className="settings-reset" onClick={() => {
-const text = `RemoteHand ${appVersion}\nPlatform: ${localOs || "Unknown"}`;
+const text = `RemoteHand ${appVersion}\nPlatform: ${localOs || "Unknown"}\nData model: Portable\nPlugin API: v1\nLicense: MIT`;
 void navigator.clipboard.writeText(text).then(() => {
 setAboutCopied(true);
 window.setTimeout(() => setAboutCopied(false), 1800);
@@ -1863,9 +1875,16 @@ window.setTimeout(() => setAboutCopied(false), 1800);
 }}>{aboutCopied ? "Copied" : "Copy version info"}</button>
 <a className="settings-reset" href="https://github.com/webbytenchi/remotehand" target="_blank" rel="noreferrer">Repository</a>
 <a className="settings-reset" href="https://github.com/webbytenchi/remotehand/releases" target="_blank" rel="noreferrer">Releases</a>
+<a className="settings-reset" href="https://github.com/webbytenchi/remotehand/tree/main/docs" target="_blank" rel="noreferrer">Documentation</a>
 <a className="settings-reset" href="https://github.com/webbytenchi/remotehand/blob/main/LICENSE" target="_blank" rel="noreferrer">MIT License</a>
 </div>
-{papaTabUnlocked ? <div className="papa-settings"><div className="papa-message"><strong>I Love You Andami!</strong><span>- Papa</span></div>{papaConfettiActive ? <span className="papa-heart-confetti" aria-hidden="true">{Array.from({ length: 10 }, (_, index) => <span key={index}>♥</span>)}</span> : null}</div> : null}
+</div>
+</div>
+) : (
+<div className="settings-tab-content papa-settings">
+<div className="papa-message">
+<strong>I Love You Andami!</strong>
+<span>- Papa</span>
 </div>
 </div>
 )}
