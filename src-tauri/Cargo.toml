@@ -1,6 +1,6 @@
 [package]
 name = "remotehand"
-version = "1.2.8"
+version = "1.2.9"
 description = "Portable remote workstation manager"
 authors = ["RemoteHand contributors"]
 license = "MIT"
