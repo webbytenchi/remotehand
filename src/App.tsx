@@ -613,7 +613,7 @@ const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getI
 const [paletteQuery, setPaletteQuery] = useState("");
 const [workspaceReady, setWorkspaceReady] = useState(false);
 const [localOs, setLocalOs] = useState(() => (isTauri() ? "" : "linux"));
-const [appVersion, setAppVersion] = useState("—");
+const [appVersion, setAppVersion] = useState(() => isTauri() ? "—" : "Development");
 const [platformInfo, setPlatformInfo] = useState<PlatformInfo | null>(null);
 const apiRef = useRef<DockviewApi | null>(null);
 const restoredRef = useRef(false);
@@ -632,10 +632,7 @@ void invoke<string>("local_os")
 .catch((error) => console.error("Failed to detect local OS", error));
 }, []);
 useEffect(() => {
-if (!isTauri()) {
-setAppVersion("Development");
-return;
-}
+if (!isTauri()) return;
 void getVersion()
 .then(setAppVersion)
 .catch((error) => console.error("Failed to read app version", error));
