@@ -706,7 +706,8 @@ export function PluginManager({
               top: "calc(100% + 6px)",
               right: 0,
               zIndex: 1002,
-              maxWidth: 360,
+              width: "max-content",
+              maxWidth: "calc(100vw - 24px)",
               padding: "7px 9px",
               border: "1px solid var(--border, #39465a)",
               borderRadius: 7,
@@ -715,7 +716,7 @@ export function PluginManager({
               color: "var(--text, #dce4ee)",
               fontSize: 11,
               lineHeight: 1.35,
-              whiteSpace: "pre-line",
+              whiteSpace: "pre",
               textAlign: "left",
               pointerEvents: "none",
             }}
