@@ -663,19 +663,16 @@ let cancelled = false;
 let unlisten: (() => void) | undefined;
 void listen<PluginRuntimeEvent>("remotehand-plugin-event", (event) => {
 if (event.payload.event !== "sidebar.update") return;
-const plugin = plugins.find((item) => item.manifest.id === event.payload.pluginId && item.enabled);
-if (!plugin) return;
 const payload = event.payload.payload;
 if (!payload || typeof payload !== "object") return;
 const items = (payload as { items?: unknown }).items;
 if (!Array.isArray(items)) return;
-const declared = new Set(plugin.manifest.contributes.sidebar.map((item) => item.id));
 setPluginSidebarVisibility((current) => {
 const next = { ...current };
 for (const entry of items) {
 if (!entry || typeof entry !== "object") continue;
 const value = entry as { id?: unknown; visible?: unknown };
-if (typeof value.id !== "string" || typeof value.visible !== "boolean" || !declared.has(value.id)) continue;
+if (typeof value.id !== "string" || !/^[a-z0-9._-]{1,128}$/.test(value.id) || typeof value.visible !== "boolean") continue;
 next[`${event.payload.pluginId}:${value.id}`] = value.visible;
 }
 return next;
@@ -688,7 +685,7 @@ return () => {
 cancelled = true;
 unlisten?.();
 };
-}, [plugins]);
+}, []);
 const persistWorkspaceSnapshot = useCallback((snapshot: string, immediate = false) => {
 const save = () => {
 if (!workspacePersistenceEnabledRef.current) return;
