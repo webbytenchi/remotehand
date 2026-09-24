@@ -607,7 +607,6 @@ const [paletteQuery, setPaletteQuery] = useState("");
 const [workspaceReady, setWorkspaceReady] = useState(false);
 const [localOs, setLocalOs] = useState(() => (isTauri() ? "" : "linux"));
 const [appVersion, setAppVersion] = useState("—");
-const [aboutCopied, setAboutCopied] = useState(false);
 const apiRef = useRef<DockviewApi | null>(null);
 const restoredRef = useRef(false);
 const layoutHistoryRef = useRef<string[]>([]);
@@ -1864,17 +1863,10 @@ return <div key={id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1
 <span className="app-modal-muted">Tauri 2 desktop shell with a React + TypeScript frontend and Rust backend. RemoteHand core owns generic infrastructure while plugins own feature-specific behavior.</span>
 </section>
 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-<button type="button" className="settings-reset" onClick={() => {
-const text = `RemoteHand ${appVersion}\nPlatform: ${localOs || "Unknown"}\nData model: Portable\nPlugin API: v1\nLicense: MIT`;
-void navigator.clipboard.writeText(text).then(() => {
-setAboutCopied(true);
-window.setTimeout(() => setAboutCopied(false), 1800);
-}).catch((error) => console.error("Failed to copy version info", error));
-}}>{aboutCopied ? "Copied" : "Copy version info"}</button>
-<a className="settings-reset" href="https://github.com/webbytenchi/remotehand" target="_blank" rel="noreferrer">Repository</a>
-<a className="settings-reset" href="https://github.com/webbytenchi/remotehand/releases" target="_blank" rel="noreferrer">Releases</a>
-<a className="settings-reset" href="https://github.com/webbytenchi/remotehand/tree/main/docs" target="_blank" rel="noreferrer">Documentation</a>
-<a className="settings-reset" href="https://github.com/webbytenchi/remotehand/blob/main/LICENSE" target="_blank" rel="noreferrer">MIT License</a>
+<button type="button" className="settings-reset" onClick={() => void invoke("open_external_url", { url: "https://github.com/webbytenchi/remotehand" }).catch((error) => console.error("Failed to open repository", error))}>Repository</button>
+<button type="button" className="settings-reset" onClick={() => void invoke("open_external_url", { url: "https://github.com/webbytenchi/remotehand/releases" }).catch((error) => console.error("Failed to open releases", error))}>Releases</button>
+<button type="button" className="settings-reset" onClick={() => void invoke("open_external_url", { url: "https://github.com/webbytenchi/remotehand/tree/main/docs" }).catch((error) => console.error("Failed to open documentation", error))}>Documentation</button>
+<button type="button" className="settings-reset" onClick={() => void invoke("open_external_url", { url: "https://github.com/webbytenchi/remotehand/blob/main/LICENSE" }).catch((error) => console.error("Failed to open license", error))}>MIT License</button>
 </div>
 </div>
 </div>
