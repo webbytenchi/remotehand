@@ -167,13 +167,13 @@ Settings are stored portably under `data/config/settings.json`.
 
 ## Plugins
 
-RemoteHand supports out-of-process executable plugins that extend the app without modifying core. Plugins can contribute panels, sidebar buttons, commands, and live top-bar widgets. Plugin API v1 has shipped and remains the current plugin API in v1.2.8.
+RemoteHand supports out-of-process executable plugins that extend the app without modifying core. Plugins can contribute panels, sidebar buttons, commands, and live top-bar widgets. Plugin API v1 has shipped and remains the current plugin API in v1.2.10.
 
 The plugin system is built on a simple rule: core owns infrastructure, plugins own functionality. RemoteHand core provides lifecycle, permissions, storage, IPC, and generic UI surfaces. Plugins provide protocol-specific behavior - for example, VNC, RDP, or host monitoring - that core does not need to know about.
 
 Plugin API v1 is documented in docs/PLUGINS.md. It covers package layout, the manifest, IPC, plugin-scoped storage, network/clipboard host services, panel hosting, top-bar contributions, system-tray contributions, native notifications, and generic panel-context routing.
 
-RemoteHand v1.2.8 expands the generic plugin host with stable Windows tray identities, adaptive tray graphs, host-owned interface contribution ordering, 16 MiB per-entry plugin storage, top-bar badges, queued native Windows notifications, and notification actions that can restore/focus a plugin panel with context. These are generic API-v1 capabilities; plugin-specific monitoring or protocol semantics remain outside RemoteHand core.
+RemoteHand v1.2.10 includes the generic plugin host improvements introduced across the v1.2.x line with stable Windows tray identities, adaptive tray graphs, host-owned interface contribution ordering, 16 MiB per-entry plugin storage, top-bar badges, queued native Windows notifications, and notification actions that can restore/focus a plugin panel with context. These are generic API-v1 capabilities; plugin-specific monitoring or protocol semantics remain outside RemoteHand core.
 
 Plugins are disabled by default after install. Only install plugins you trust - a plugin is a native executable with the host process privileges. See SECURITY.md for the plugin threat model.
 
@@ -214,7 +214,7 @@ RemoteHand is configured as portable-only. Tauri bundling/installers are disable
 
 ## V1 Status
 
-**Status: V1 feature baseline complete. RemoteHand v1.2.8 includes everything from the last public v1.2.3 release plus generic plugin tray contributions, host-owned interface ordering, refined multi-window/popout drag-and-drop, contextual tab popout controls, larger plugin-scoped storage, top-bar badges, queued native Windows plugin notifications, and generic notification deep-link routing. RemoteHand Target Monitor v0.7.0 is validated on Windows x86_64 against these plugin API v1 capabilities.**
+**Status: V1 feature baseline complete. RemoteHand v1.2.10 carries the mature v1.2.x plugin/runtime foundation and adds stable host-rendered plugin top-bar tooltips for live-updating contributions. RemoteHand Target Monitor v0.7.2 is validated on Windows x86_64 against these plugin API v1 capabilities.**
 
 The current V1 has been exercised on the Windows Tauri build for the primary workspace, terminal, connection, Home, persistence, credential-vault, and SFTP workflows. Remaining work belongs to post-V1 expansion and hardening rather than the original bootstrap phase.
 
