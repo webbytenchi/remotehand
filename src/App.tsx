@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
 import {
 DockviewDefaultTab,
@@ -586,7 +587,7 @@ const legacyTheme = localStorage.getItem(THEME_KEY);
 return { ...DEFAULT_SETTINGS, theme: legacyTheme === "light" ? "light" : "dark" };
 });
 const [settingsOpen, setSettingsOpen] = useState(false);
-const [settingsTab, setSettingsTab] = useState<"appearance" | "startup" | "layout" | "plugins" | "papa">("appearance");
+const [settingsTab, setSettingsTab] = useState<"appearance" | "layout" | "startup" | "plugins" | "about">("appearance");
 const [papaTabUnlocked, setPapaTabUnlocked] = useState(false);
 const [papaConfettiActive, setPapaConfettiActive] = useState(false);
 const papaSequenceRef = useRef<string[]>([]);
@@ -605,6 +606,8 @@ const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getI
 const [paletteQuery, setPaletteQuery] = useState("");
 const [workspaceReady, setWorkspaceReady] = useState(false);
 const [localOs, setLocalOs] = useState(() => (isTauri() ? "" : "linux"));
+const [appVersion, setAppVersion] = useState("—");
+const [aboutCopied, setAboutCopied] = useState(false);
 const apiRef = useRef<DockviewApi | null>(null);
 const restoredRef = useRef(false);
 const layoutHistoryRef = useRef<string[]>([]);
@@ -620,6 +623,15 @@ if (!isTauri()) return;
 void invoke<string>("local_os")
 .then(setLocalOs)
 .catch((error) => console.error("Failed to detect local OS", error));
+}, []);
+useEffect(() => {
+if (!isTauri()) {
+setAppVersion("Development");
+return;
+}
+void getVersion()
+.then(setAppVersion)
+.catch((error) => console.error("Failed to read app version", error));
 }, []);
 const refreshPlugins = useCallback(async () => {
 if (!isTauri()) {
@@ -1228,8 +1240,8 @@ audio.currentTime = 0;
 void audio.play().catch((error) => console.error("Failed to start audio", error));
 }, []);
 useEffect(() => {
-if (!settingsOpen || settingsTab !== "papa") stopPapaAudio();
-}, [settingsOpen, settingsTab, stopPapaAudio]);
+if (!settingsOpen || settingsTab !== "about" || !papaTabUnlocked) stopPapaAudio();
+}, [settingsOpen, settingsTab, papaTabUnlocked, stopPapaAudio]);
 useEffect(() => () => {
 const audio = papaAudioRef.current;
 if (!audio) return;
@@ -1238,13 +1250,13 @@ audio.currentTime = 0;
 papaAudioRef.current = null;
 }, []);
 useEffect(() => {
-if (!settingsOpen || settingsTab !== "startup" || papaTabUnlocked) {
+if (!settingsOpen || settingsTab !== "about" || papaTabUnlocked) {
 papaSequenceRef.current = [];
 return;
 }
 const sequence = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "b", "a"];
 const onKeyDown = (event: KeyboardEvent) => {
-if (!settingsOpen || settingsTab !== "startup") return;
+if (!settingsOpen || settingsTab !== "about") return;
 const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
 const expected = sequence[papaSequenceRef.current.length];
 if (key === expected) {
@@ -1252,6 +1264,7 @@ papaSequenceRef.current.push(key);
 if (papaSequenceRef.current.length === sequence.length) {
 setPapaTabUnlocked(true);
 setPapaConfettiActive(true);
+startPapaAudio();
 papaSequenceRef.current = [];
 }
 return;
@@ -1260,7 +1273,7 @@ papaSequenceRef.current = key === sequence[0] ? [key] : [];
 };
 window.addEventListener("keydown", onKeyDown, true);
 return () => window.removeEventListener("keydown", onKeyDown, true);
-}, [settingsOpen, settingsTab, papaTabUnlocked]);
+}, [settingsOpen, settingsTab, papaTabUnlocked, startPapaAudio]);
 useEffect(() => {
 if (!papaConfettiActive) return;
 const timer = window.setTimeout(() => setPapaConfettiActive(false), 1400);
@@ -1666,16 +1679,16 @@ if (plugin) openPluginPanel(plugin, panelId, context);
 open={settingsOpen}
 title="Settings"
 className="settings-modal"
-confirmLabel={settingsTab === "papa" ? "Always" : "Done"}
+confirmLabel="Done"
 onConfirm={() => setSettingsOpen(false)}
 onCancel={() => setSettingsOpen(false)}
 focusActions={false}
 tabs={<div className="settings-tabs" role="tablist" aria-label="Settings sections">
 <button type="button" role="tab" aria-selected={settingsTab === "appearance"} className={settingsTab === "appearance" ? "active" : ""} onClick={() => setSettingsTab("appearance")}>Appearance</button>
-<button type="button" role="tab" aria-selected={settingsTab === "startup"} className={settingsTab === "startup" ? "active" : ""} onClick={() => setSettingsTab("startup")}>Startup &amp; Tray</button>
 <button type="button" role="tab" aria-selected={settingsTab === "layout"} className={settingsTab === "layout" ? "active" : ""} onClick={() => setSettingsTab("layout")}>Interface</button>
+<button type="button" role="tab" aria-selected={settingsTab === "startup"} className={settingsTab === "startup" ? "active" : ""} onClick={() => setSettingsTab("startup")}>Startup &amp; Tray</button>
 <button type="button" role="tab" aria-selected={settingsTab === "plugins"} className={settingsTab === "plugins" ? "active" : ""} onClick={() => setSettingsTab("plugins")}>Plugins</button>
-{papaTabUnlocked ? <span className="papa-tab-reveal"><button type="button" role="tab" aria-selected={settingsTab === "papa"} className={settingsTab === "papa" ? "active" : ""} onClick={() => { setSettingsTab("papa"); startPapaAudio(); }}>Papa</button>{papaConfettiActive ? <span className="papa-heart-confetti" aria-hidden="true">{Array.from({ length: 10 }, (_, index) => <span key={index}>♥</span>)}</span> : null}</span> : null}
+<button type="button" role="tab" aria-selected={settingsTab === "about"} className={settingsTab === "about" ? "active" : ""} onClick={() => setSettingsTab("about")}>About</button>
 </div>}>
 {settingsTab === "appearance" ? (
 <div className="appearance-settings settings-tab-content">
@@ -1827,10 +1840,32 @@ return <div key={id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1
 <div ref={setPluginSettingsHost} />
 </div>
 ) : (
-<div className="settings-tab-content papa-settings">
-<div className="papa-message">
-<strong>I Love You Andami!</strong>
-<span>- Papa</span>
+<div className="settings-tab-content">
+<div className="settings-section-heading">
+<span>RemoteHand is an open-source, portable remote workstation manager for Windows and Linux.</span>
+</div>
+<div style={{ display: "grid", gap: 12 }}>
+<div className="settings-field">
+<span>Version</span>
+<strong>{appVersion}</strong>
+</div>
+<div className="settings-field">
+<span>Platform</span>
+<strong>{localOs || "Unknown"}</strong>
+</div>
+<div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+<button type="button" className="settings-reset" onClick={() => {
+const text = `RemoteHand ${appVersion}\nPlatform: ${localOs || "Unknown"}`;
+void navigator.clipboard.writeText(text).then(() => {
+setAboutCopied(true);
+window.setTimeout(() => setAboutCopied(false), 1800);
+}).catch((error) => console.error("Failed to copy version info", error));
+}}>{aboutCopied ? "Copied" : "Copy version info"}</button>
+<a className="settings-reset" href="https://github.com/webbytenchi/remotehand" target="_blank" rel="noreferrer">Repository</a>
+<a className="settings-reset" href="https://github.com/webbytenchi/remotehand/releases" target="_blank" rel="noreferrer">Releases</a>
+<a className="settings-reset" href="https://github.com/webbytenchi/remotehand/blob/main/LICENSE" target="_blank" rel="noreferrer">MIT License</a>
+</div>
+{papaTabUnlocked ? <div className="papa-settings"><div className="papa-message"><strong>I Love You Andami!</strong><span>- Papa</span></div>{papaConfettiActive ? <span className="papa-heart-confetti" aria-hidden="true">{Array.from({ length: 10 }, (_, index) => <span key={index}>♥</span>)}</span> : null}</div> : null}
 </div>
 </div>
 )}
