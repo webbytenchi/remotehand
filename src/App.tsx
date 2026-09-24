@@ -119,6 +119,11 @@ manifest: PluginManifestInfo;
 enabled: boolean;
 directory: string;
 };
+type PluginRuntimeEvent = {
+pluginId: string;
+event: string;
+payload: unknown;
+};
 type RemoteHandPopoutWindow = Window & {
 __REMOTEHAND_NATIVE_WINDOW_LABEL__?: string;
 };
@@ -544,6 +549,20 @@ onClick={(event) => runTabAction(event, () => props.api.close())}
 );
 }
 
+function renderPluginSidebarIcon(icon: string) {
+if (icon === "monitor-pulse") {
+return (
+<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+<rect x="2.5" y="3.5" width="15" height="11" rx="2" />
+<path d="M5 9h2l1.5-3 2.2 6 1.8-4 1 1H15" />
+<path d="M7.5 17h5" />
+<path d="M10 14.5V17" />
+</svg>
+);
+}
+return <>◇</>;
+}
+
 function App() {
 useEffect(() => {
 installTabDragWindowAssist(document);
@@ -575,6 +594,7 @@ const papaAudioRef = useRef<HTMLAudioElement | null>(null);
 const [pluginSettingsHost, setPluginSettingsHost] = useState<HTMLDivElement | null>(null);
 const [plugins, setPlugins] = useState<PluginInfo[]>([]);
 const [topbarContributionItems, setTopbarContributionItems] = useState<Array<{ id: string; label: string }>>([]);
+const [pluginSidebarVisibility, setPluginSidebarVisibility] = useState<Record<string, boolean>>({});
 const [uiContributionLayout, setUiContributionLayout] = useState<UiContributionLayout>(EMPTY_UI_CONTRIBUTION_LAYOUT);
 const [uiContributionLayoutLoaded, setUiContributionLayoutLoaded] = useState(false);
 const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("dark");
@@ -637,6 +657,38 @@ console.error("Failed to load plugins", error);
 useEffect(() => {
 void refreshPlugins();
 }, [refreshPlugins]);
+useEffect(() => {
+if (!isTauri()) return;
+let cancelled = false;
+let unlisten: (() => void) | undefined;
+void listen<PluginRuntimeEvent>("remotehand-plugin-event", (event) => {
+if (event.payload.event !== "sidebar.update") return;
+const plugin = plugins.find((item) => item.manifest.id === event.payload.pluginId && item.enabled);
+if (!plugin) return;
+const payload = event.payload.payload;
+if (!payload || typeof payload !== "object") return;
+const items = (payload as { items?: unknown }).items;
+if (!Array.isArray(items)) return;
+const declared = new Set(plugin.manifest.contributes.sidebar.map((item) => item.id));
+setPluginSidebarVisibility((current) => {
+const next = { ...current };
+for (const entry of items) {
+if (!entry || typeof entry !== "object") continue;
+const value = entry as { id?: unknown; visible?: unknown };
+if (typeof value.id !== "string" || typeof value.visible !== "boolean" || !declared.has(value.id)) continue;
+next[`${event.payload.pluginId}:${value.id}`] = value.visible;
+}
+return next;
+});
+}).then((dispose) => {
+if (cancelled) dispose();
+else unlisten = dispose;
+});
+return () => {
+cancelled = true;
+unlisten?.();
+};
+}, [plugins]);
 const persistWorkspaceSnapshot = useCallback((snapshot: string, immediate = false) => {
 const save = () => {
 if (!workspacePersistenceEnabledRef.current) return;
@@ -1439,7 +1491,9 @@ const coreSidebarItems = [
 ];
 const pluginSidebarItems = plugins.flatMap((plugin) =>
 plugin.enabled
-? plugin.manifest.contributes.sidebar.map((sidebar) => ({
+? plugin.manifest.contributes.sidebar
+.filter((sidebar) => pluginSidebarVisibility[`${plugin.manifest.id}:${sidebar.id}`] !== false)
+.map((sidebar) => ({
 id: `${plugin.manifest.id}:${sidebar.id}`,
 label: sidebar.title,
 }))
@@ -1563,7 +1617,9 @@ aria-label="Settings"
 </button>
 {plugins.flatMap((plugin) =>
 plugin.enabled
-? plugin.manifest.contributes.sidebar.map((sidebar) => (
+? plugin.manifest.contributes.sidebar
+.filter((sidebar) => pluginSidebarVisibility[plugin.manifest.id + ":" + sidebar.id] !== false)
+.map((sidebar) => (
 <button
 className="sidebar-action"
 style={{ order: 100 + contributionOrderIndex(resolvedSidebarOrder, plugin.manifest.id + ":" + sidebar.id) }}
@@ -1572,7 +1628,7 @@ key={plugin.manifest.id + ":" + sidebar.id}
 onClick={() => openPluginPanel(plugin, sidebar.panel)}
 title={sidebar.title}
 >
-<span className="sidebar-icon" aria-hidden="true">◇</span>
+<span className="sidebar-icon" aria-hidden="true">{renderPluginSidebarIcon(sidebar.icon)}</span>
 <span className="sidebar-label">{sidebar.title}</span>
 </button>
 ))
