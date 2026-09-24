@@ -1264,8 +1264,6 @@ papaSequenceRef.current.push(key);
 if (papaSequenceRef.current.length === sequence.length) {
 setPapaTabUnlocked(true);
 setPapaConfettiActive(true);
-setSettingsTab("papa");
-startPapaAudio();
 papaSequenceRef.current = [];
 }
 return;
