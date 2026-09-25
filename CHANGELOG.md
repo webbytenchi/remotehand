@@ -2,6 +2,31 @@
 
 All notable changes to RemoteHand are documented here.
 
+## `1.2.13` - 2026-09-25
+
+### Fixed
+
+- **Plugin top-bar overlays after responsive paging.** Restored RemoteHand-rendered hover tooltips and interactive plugin top-bar menus after the v1.2.12 responsive contribution strip began clipping overlays that were positioned inside it.
+- **Network Identity top-bar menu.** Clicking the Network Identity contribution once again opens its interactive menu while preserving the v1.2.12 bounded top-bar paging and alignment behavior.
+
+### Implementation
+
+- Top-bar tooltip and menu overlays now render through a document-level portal with fixed positioning anchored to the contributing button, so they are not clipped by the horizontally scrollable top-bar viewport.
+
+### Compatibility
+
+- Plugin API remains **v1**. Existing plugin top-bar contributions require no changes.
+- The v1.2.12 fixed shell, workspace-only scrolling, anchored Settings control, paging, and Left/Center/Right alignment behavior remain intact.
+
+### Verification
+
+- Frontend lint completed with **17 warnings and 0 errors**.
+- Frontend tests passed with **7 tests and 0 failures**.
+- Production frontend build passed.
+- `cargo check` passed.
+- Rust tests passed with **38 tests and 0 failures**.
+- Manual Windows acceptance confirmed plugin top-bar hover tooltips are visible again and the Network Identity top-bar menu opens and remains interactive.
+
 ## `1.2.12` - 2026-09-25
 
 ### Added
