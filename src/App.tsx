@@ -666,6 +666,39 @@ const workspacePersistenceEnabledRef = useRef(true);
 const poppedOutPanelRef = useRef<{ panelId: string; count: number; window?: Window } | null>(null);
 const popoutWindowsRef = useRef<Map<string, RemoteHandPopoutWindow>>(new Map());
 const mainReturnGroupRef = useRef<Map<string, string>>(new Map());
+const lastFocusedElementRef = useRef<HTMLElement | null>(null);
+useEffect(() => {
+const rememberFocusedElement = (event: FocusEvent) => {
+const target = event.target;
+if (!(target instanceof HTMLElement)) return;
+if (target === document.body || target === document.documentElement) return;
+lastFocusedElementRef.current = target;
+};
+document.addEventListener("focusin", rememberFocusedElement, true);
+return () => document.removeEventListener("focusin", rememberFocusedElement, true);
+}, []);
+useEffect(() => {
+if (!isTauri()) return;
+let cancelled = false;
+let unlisten: (() => void) | undefined;
+void listen("remotehand-global-shortcut-restored", () => {
+const target = lastFocusedElementRef.current;
+if (!target?.isConnected) return;
+window.requestAnimationFrame(() => {
+window.requestAnimationFrame(() => {
+if (cancelled || !target.isConnected) return;
+target.focus({ preventScroll: true });
+});
+});
+}).then((dispose) => {
+if (cancelled) dispose();
+else unlisten = dispose;
+});
+return () => {
+cancelled = true;
+unlisten?.();
+};
+}, []);
 useEffect(() => {
 if (!isTauri()) return;
 void invoke<string>("local_os")

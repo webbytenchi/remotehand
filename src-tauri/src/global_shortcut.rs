@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 #[derive(Clone, Default)]
@@ -18,7 +18,10 @@ fn focus_main_window(app: &AppHandle) -> Result<(), String> {
     }
 
     window.show().map_err(|error| error.to_string())?;
-    window.set_focus().map_err(|error| error.to_string())
+    window.set_focus().map_err(|error| error.to_string())?;
+    window
+        .emit("remotehand-global-shortcut-restored", ())
+        .map_err(|error| error.to_string())
 }
 
 fn register(app: &AppHandle, shortcut: &str) -> Result<(), String> {

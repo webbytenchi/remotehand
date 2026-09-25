@@ -17,6 +17,7 @@ All notable changes to RemoteHand are documented here.
 - **Unapplied draft behavior.** Captured shortcut changes are discarded when Settings closes unless the user explicitly clicks Apply.
 - **Startup persistence.** The saved shortcut and enabled state are loaded from `data/config/settings.json` and registered when RemoteHand starts.
 - **Single-instance integration.** Triggering the shortcut restores/focuses the existing main window and never launches another RemoteHand instance.
+- **Focus resume after summon.** When the global shortcut restores RemoteHand, the last focused in-app control is focused again when it is still available, so terminal users can continue typing without an extra click.
 
 ### Compatibility
 
