@@ -91,11 +91,3 @@ pub fn set_global_shortcut(
 ) -> Result<(), String> {
     configure(&app, &state, enabled, &shortcut)
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn default_shortcut_matches_product_default() {
-        assert_eq!("Ctrl+Shift+Space", "Ctrl+Shift+Space");
-    }
-}
