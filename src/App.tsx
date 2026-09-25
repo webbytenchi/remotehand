@@ -57,6 +57,8 @@ startMinimized: boolean;
 showInSystemTray: boolean;
 minimizeToTrayOnClose: boolean;
 topbarAlignment: TopbarAlignment;
+globalShortcutEnabled: boolean;
+globalShortcut: string;
 };
 type WorkspaceLayout = Parameters<DockviewApi["fromJSON"]>[0];
 const WORKSPACE_KEY = "remotehand.workspace";
@@ -79,6 +81,8 @@ startMinimized: false,
 showInSystemTray: true,
 minimizeToTrayOnClose: false,
 topbarAlignment: "center",
+globalShortcutEnabled: true,
+globalShortcut: "Ctrl+Shift+Space",
 };
 const UI_FONT_OPTIONS = ["Inter", "IBM Plex Sans", "Segoe UI", "System Default"] as const;
 const TERMINAL_FONT_OPTIONS = ["JetBrains Mono", "IBM Plex Mono", "Cascadia Mono", "Consolas", "System Monospace"] as const;
@@ -590,6 +594,9 @@ return DEFAULT_SETTINGS;
 const legacyTheme = localStorage.getItem(THEME_KEY);
 return { ...DEFAULT_SETTINGS, theme: legacyTheme === "light" ? "light" : "dark" };
 });
+const [globalShortcutDraft, setGlobalShortcutDraft] = useState(() => settings.globalShortcut);
+const [globalShortcutError, setGlobalShortcutError] = useState("");
+const [globalShortcutApplying, setGlobalShortcutApplying] = useState(false);
 const [settingsOpen, setSettingsOpen] = useState(false);
 const [settingsTab, setSettingsTab] = useState<"appearance" | "layout" | "startup" | "plugins" | "about" | "papa">("appearance");
 const [papaTabUnlocked, setPapaTabUnlocked] = useState(false);
@@ -1135,7 +1142,9 @@ startWithSystem = await invoke<boolean>("startup_enabled");
 } catch (error) {
 console.error("Failed to load startup preference", error);
 }
-setSettings({ ...DEFAULT_SETTINGS, ...saved, startWithSystem });
+const nextSettings = { ...DEFAULT_SETTINGS, ...saved, startWithSystem };
+setSettings(nextSettings);
+setGlobalShortcutDraft(nextSettings.globalShortcut);
 setSettingsLoaded(true);
 })
 .catch((error) => {
@@ -1192,6 +1201,31 @@ void invoke("save_settings", { settings }).catch((error) =>
 console.error("Failed to save settings", error),
 );
 }, [settings, settingsLoaded]);
+const applyGlobalShortcut = useCallback(async (enabled: boolean, shortcut: string) => {
+const trimmedShortcut = shortcut.trim();
+if (enabled && !trimmedShortcut) {
+setGlobalShortcutError("Enter a shortcut before enabling the global shortcut.");
+return;
+}
+setGlobalShortcutApplying(true);
+setGlobalShortcutError("");
+try {
+if (isTauri()) {
+await invoke("set_global_shortcut", { enabled, shortcut: trimmedShortcut });
+}
+setSettings((current) => ({
+...current,
+globalShortcutEnabled: enabled,
+globalShortcut: trimmedShortcut || current.globalShortcut,
+}));
+if (trimmedShortcut) setGlobalShortcutDraft(trimmedShortcut);
+} catch (error) {
+setGlobalShortcutError(String(error));
+} finally {
+setGlobalShortcutApplying(false);
+}
+}, []);
+
 useEffect(() => {
 localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(sidebarCollapsed));
 }, [sidebarCollapsed]);
@@ -1849,6 +1883,46 @@ if (isTauri()) void invoke("set_close_to_tray", { value }).catch((error) => cons
 }} />
 <span><strong>Minimize to tray when closing</strong><small>Keep RemoteHand running when the main window is closed.</small></span>
 </label>
+<div className="settings-section-heading" style={{ marginTop: 8 }}>
+<strong>Global shortcut</strong>
+<span>Bring the existing RemoteHand window to the foreground from anywhere.</span>
+</div>
+<label className="settings-toggle">
+<input
+type="checkbox"
+checked={settings.globalShortcutEnabled}
+disabled={globalShortcutApplying}
+onChange={(event) => void applyGlobalShortcut(event.target.checked, globalShortcutDraft)}
+/>
+<span><strong>Enable global shortcut</strong><small>Show, restore, and focus RemoteHand without launching another instance.</small></span>
+</label>
+<div className="settings-field">
+<label htmlFor="global-shortcut">Shortcut</label>
+<div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+<input
+id="global-shortcut"
+type="text"
+value={globalShortcutDraft}
+disabled={globalShortcutApplying}
+onChange={(event) => {
+setGlobalShortcutDraft(event.target.value);
+setGlobalShortcutError("");
+}}
+placeholder="Ctrl+Shift+Space"
+style={{ flex: "1 1 auto", minWidth: 0 }}
+/>
+<button
+type="button"
+className="settings-reset"
+disabled={globalShortcutApplying || (settings.globalShortcutEnabled && !globalShortcutDraft.trim())}
+onClick={() => void applyGlobalShortcut(settings.globalShortcutEnabled, globalShortcutDraft)}
+>
+{globalShortcutApplying ? "Applying…" : "Apply"}
+</button>
+</div>
+<small style={{ color: "#718094", lineHeight: 1.4 }}>Default: Ctrl + Shift + Space. Separate modifiers and the key with +.</small>
+{globalShortcutError ? <small style={{ color: "var(--danger, #e25b5b)", lineHeight: 1.4 }}>{globalShortcutError}</small> : null}
+</div>
 </div>
 ) : settingsTab === "layout" ? (
 <div className="settings-tab-content">
