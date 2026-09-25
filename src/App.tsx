@@ -595,6 +595,7 @@ const legacyTheme = localStorage.getItem(THEME_KEY);
 return { ...DEFAULT_SETTINGS, theme: legacyTheme === "light" ? "light" : "dark" };
 });
 const [globalShortcutDraft, setGlobalShortcutDraft] = useState(() => settings.globalShortcut);
+const [globalShortcutCapturing, setGlobalShortcutCapturing] = useState(false);
 const [globalShortcutError, setGlobalShortcutError] = useState("");
 const [globalShortcutApplying, setGlobalShortcutApplying] = useState(false);
 const [settingsOpen, setSettingsOpen] = useState(false);
@@ -1201,6 +1202,44 @@ void invoke("save_settings", { settings }).catch((error) =>
 console.error("Failed to save settings", error),
 );
 }, [settings, settingsLoaded]);
+const shortcutFromKeyboardEvent = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+if (event.key === "Escape") {
+event.preventDefault();
+setGlobalShortcutCapturing(false);
+setGlobalShortcutDraft(settings.globalShortcut);
+setGlobalShortcutError("");
+return;
+}
+if (["Control", "Shift", "Alt", "Meta"].includes(event.key)) {
+event.preventDefault();
+return;
+}
+event.preventDefault();
+const parts: string[] = [];
+if (event.ctrlKey) parts.push("Ctrl");
+if (event.shiftKey) parts.push("Shift");
+if (event.altKey) parts.push("Alt");
+if (event.metaKey) parts.push("Meta");
+
+let key = event.key;
+if (key === " ") key = "Space";
+else if (key.length === 1) key = key.toUpperCase();
+else if (key === "ArrowUp") key = "Up";
+else if (key === "ArrowDown") key = "Down";
+else if (key === "ArrowLeft") key = "Left";
+else if (key === "ArrowRight") key = "Right";
+
+if (parts.length === 0) {
+setGlobalShortcutError("Use at least one modifier key, such as Ctrl or Shift.");
+return;
+}
+
+parts.push(key);
+setGlobalShortcutDraft(parts.join("+"));
+setGlobalShortcutCapturing(false);
+setGlobalShortcutError("");
+}, [settings.globalShortcut]);
+
 const applyGlobalShortcut = useCallback(async (enabled: boolean, shortcut: string) => {
 const trimmedShortcut = shortcut.trim();
 if (enabled && !trimmedShortcut) {
@@ -1902,14 +1941,17 @@ onChange={(event) => void applyGlobalShortcut(event.target.checked, globalShortc
 <input
 id="global-shortcut"
 type="text"
-value={globalShortcutDraft}
+readOnly
+value={globalShortcutCapturing ? "" : globalShortcutDraft}
 disabled={globalShortcutApplying}
-onChange={(event) => {
-setGlobalShortcutDraft(event.target.value);
+onFocus={() => {
+setGlobalShortcutCapturing(true);
 setGlobalShortcutError("");
 }}
-placeholder="Ctrl+Shift+Space"
-style={{ flex: "1 1 auto", minWidth: 0 }}
+onBlur={() => setGlobalShortcutCapturing(false)}
+onKeyDown={shortcutFromKeyboardEvent}
+placeholder={globalShortcutCapturing ? "Press shortcut…" : "Ctrl+Shift+Space"}
+aria-label="Global shortcut"
 />
 <button
 type="button"
@@ -1920,7 +1962,7 @@ onClick={() => void applyGlobalShortcut(settings.globalShortcutEnabled, globalSh
 {globalShortcutApplying ? "Applying…" : "Apply"}
 </button>
 </div>
-<small style={{ color: "#718094", lineHeight: 1.4 }}>Default: Ctrl + Shift + Space. Separate modifiers and the key with +.</small>
+<small style={{ color: "#718094", lineHeight: 1.4 }}>Click the field, then press the shortcut you want. Press Esc to cancel. Default: Ctrl + Shift + Space.</small>
 {globalShortcutError ? <small style={{ color: "var(--danger, #e25b5b)", lineHeight: 1.4 }}>{globalShortcutError}</small> : null}
 </div>
 </div>
