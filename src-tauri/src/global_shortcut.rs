@@ -17,9 +17,15 @@ fn toggle_main_window(app: &AppHandle) -> Result<(), String> {
     let focused = window.is_focused().map_err(|error| error.to_string())?;
 
     if visible && focused {
-        window.hide().map_err(|error| error.to_string())?;
         if let Some(tray_state) = app.try_state::<crate::startup_tray::StartupTrayState>() {
+            if tray_state.show_in_tray() {
+                window.hide().map_err(|error| error.to_string())?;
+            } else {
+                window.minimize().map_err(|error| error.to_string())?;
+            }
             tray_state.sync_window_menu(app);
+        } else {
+            window.minimize().map_err(|error| error.to_string())?;
         }
         return Ok(());
     }
