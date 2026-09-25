@@ -2,6 +2,31 @@
 
 All notable changes to RemoteHand are documented here.
 
+## `1.2.15` - 2026-09-26
+
+### Improved
+
+- **Global shortcut toggle.** Pressing the configured global shortcut while RemoteHand is already focused now tucks the main window away; pressing it again restores and focuses the existing window.
+- **Tray-aware shortcut behavior.** When the system tray icon is enabled, the focused main window hides to the tray. When the tray icon is disabled, the shortcut minimizes RemoteHand to the taskbar instead of hiding it completely.
+- **Foreground-safe behavior.** If RemoteHand is visible but another application has focus, the shortcut brings RemoteHand forward rather than hiding it.
+- **Focus resume preserved.** Restoring RemoteHand through the shortcut continues to return keyboard focus to the last focused in-app control when that control is still available.
+- **Settings wording.** Startup & Tray now describes the global shortcut as a show/focus/tuck-away control and explains its tray-versus-taskbar behavior.
+
+### Compatibility
+
+- The default shortcut remains **Ctrl + Shift + Space**.
+- Existing saved shortcut settings remain compatible and require no migration.
+- Plugin API remains **v1**.
+
+### Verification
+
+- Frontend lint completed with **17 warnings and 0 errors**.
+- Frontend tests passed with **7 tests and 0 failures**.
+- Production frontend build passed.
+- `cargo check` passed.
+- Rust tests passed with **38 tests and 0 failures**.
+- Manual Windows acceptance confirmed toggle behavior with the tray icon enabled and disabled, foreground-safe summon behavior, and immediate terminal typing after restore.
+
 ## `1.2.14` - 2026-09-25
 
 ### Added
