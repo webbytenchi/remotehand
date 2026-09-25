@@ -1,3 +1,4 @@
+mod global_shortcut;
 mod logging;
 mod plugin_runtime;
 mod plugins;
@@ -225,10 +226,12 @@ pub fn run() {
     let setup_window_restored = window_restored.clone();
     let setup_page_loaded = page_loaded.clone();
     let startup_tray_state = startup_tray::StartupTrayState::default();
+    let global_shortcut_state = global_shortcut::GlobalShortcutState::default();
     let start_hidden = startup_tray::should_minimize_at_startup();
     let popout_counter = Arc::new(AtomicU64::new(0));
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 if let Ok(true) = window.is_minimized() {
@@ -246,6 +249,7 @@ pub fn run() {
         .manage(sftp_native::PersistentSftpState::default())
         .manage(vault::VaultState::default())
         .manage(startup_tray_state.clone())
+        .manage(global_shortcut_state.clone())
         .plugin(tauri_plugin_autostart::Builder::new().args(["--autostart"]).build())
         .invoke_handler(tauri::generate_handler![
             storage::load_settings,
@@ -317,6 +321,7 @@ pub fn run() {
             startup_tray::startup_enabled,
             startup_tray::set_tray_visible,
             startup_tray::set_close_to_tray,
+            global_shortcut::set_global_shortcut,
         ])
         .on_tray_icon_event(|app, event| {
             startup_tray::handle_plugin_tray_event(app, event);
@@ -389,6 +394,14 @@ pub fn run() {
             startup_tray_state.set_show_in_tray(app.handle(), saved.show_in_system_tray).map_err(std::io::Error::other)?;
             app.handle()
                 .plugin(logging::builder().map_err(std::io::Error::other)?.build())?;
+            if let Err(error) = global_shortcut::configure(
+                app.handle(),
+                &global_shortcut_state,
+                saved.global_shortcut_enabled,
+                &saved.global_shortcut,
+            ) {
+                log::warn!("Failed to register global RemoteHand shortcut: {error}");
+            }
             if let Some(runtime) = app.try_state::<plugin_runtime::PluginRuntimeState>() {
                 runtime
                     .set_app_handle(app.handle().clone())
