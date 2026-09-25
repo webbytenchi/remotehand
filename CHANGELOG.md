@@ -2,6 +2,36 @@
 
 All notable changes to RemoteHand are documented here.
 
+## `1.2.14` - 2026-09-25
+
+### Added
+
+- **Global show shortcut.** RemoteHand can register a system-wide shortcut that shows, restores, and focuses the existing main window even when another application has focus.
+- **Default shortcut.** New and existing settings default to **Ctrl + Shift + Space**.
+- **Shortcut capture UX.** Settings → Startup & Tray lets users click the shortcut field and press the desired key combination instead of typing shortcut syntax manually.
+- **Enable/disable control.** The global shortcut can be disabled without removing the saved binding.
+
+### Improved
+
+- **Safe live re-registration.** Applying a new shortcut registers the replacement before releasing the current working shortcut so a rejected/conflicting binding does not silently destroy the previous registration.
+- **Unapplied draft behavior.** Captured shortcut changes are discarded when Settings closes unless the user explicitly clicks Apply.
+- **Startup persistence.** The saved shortcut and enabled state are loaded from `data/config/settings.json` and registered when RemoteHand starts.
+- **Single-instance integration.** Triggering the shortcut restores/focuses the existing main window and never launches another RemoteHand instance.
+
+### Compatibility
+
+- Existing settings remain compatible; missing global-shortcut fields default to enabled with **Ctrl + Shift + Space**.
+- Plugin API remains **v1**. The shortcut is RemoteHand core infrastructure and requires no plugin changes.
+
+### Verification
+
+- Frontend lint completed with **17 warnings and 0 errors**.
+- Frontend tests passed with **7 tests and 0 failures**.
+- Production frontend build passed.
+- `cargo check` passed.
+- Rust tests passed with **38 tests and 0 failures**.
+- Manual Windows acceptance confirmed default shortcut restore/focus, enable/disable behavior, captured custom shortcut replacement, unapplied-draft discard, and persistence across a full application restart.
+
 ## `1.2.13` - 2026-09-25
 
 ### Fixed

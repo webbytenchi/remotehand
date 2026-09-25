@@ -1,6 +1,6 @@
 [package]
 name = "remotehand"
-version = "1.2.13"
+version = "1.2.14"
 description = "Portable remote workstation manager"
 authors = ["RemoteHand contributors"]
 license = "MIT"
@@ -24,6 +24,7 @@ tray-icon = { version = "0.24.2", default-features = false }
 tauri-plugin-autostart = "2.5.1"
 tauri-plugin-log = "2"
 tauri-plugin-single-instance = "=2.4.5"
+tauri-plugin-global-shortcut = "2.3.2"
 age = "=0.11.1"
 rfd = "0.15"
 russh = { version = "=0.62.2", default-features = false, features = ["ring"] }

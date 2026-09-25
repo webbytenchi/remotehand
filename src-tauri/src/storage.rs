@@ -17,6 +17,8 @@ pub struct Settings {
     pub show_in_system_tray: bool,
     pub minimize_to_tray_on_close: bool,
     pub topbar_alignment: String,
+    pub global_shortcut_enabled: bool,
+    pub global_shortcut: String,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -35,6 +37,8 @@ impl Default for Settings {
             show_in_system_tray: true,
             minimize_to_tray_on_close: false,
             topbar_alignment: "center".to_string(),
+            global_shortcut_enabled: true,
+            global_shortcut: "Ctrl+Shift+Space".to_string(),
         }
     }
 }
