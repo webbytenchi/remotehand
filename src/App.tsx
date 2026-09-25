@@ -600,6 +600,12 @@ const [globalShortcutError, setGlobalShortcutError] = useState("");
 const [globalShortcutApplying, setGlobalShortcutApplying] = useState(false);
 const [settingsOpen, setSettingsOpen] = useState(false);
 const [settingsTab, setSettingsTab] = useState<"appearance" | "layout" | "startup" | "plugins" | "about" | "papa">("appearance");
+useEffect(() => {
+if (settingsOpen) return;
+setGlobalShortcutDraft(settings.globalShortcut);
+setGlobalShortcutCapturing(false);
+setGlobalShortcutError("");
+}, [settingsOpen, settings.globalShortcut]);
 const [papaTabUnlocked, setPapaTabUnlocked] = useState(false);
 const [papaConfettiActive, setPapaConfettiActive] = useState(false);
 const papaSequenceRef = useRef<string[]>([]);
