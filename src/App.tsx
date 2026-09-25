@@ -1972,7 +1972,7 @@ checked={settings.globalShortcutEnabled}
 disabled={globalShortcutApplying}
 onChange={(event) => void applyGlobalShortcut(event.target.checked, globalShortcutDraft)}
 />
-<span><strong>Enable global shortcut</strong><small>Show, restore, and focus RemoteHand without launching another instance.</small></span>
+<span><strong>Enable Global RemoteHand Shortcut</strong><small>Press the shortcut anywhere to show and focus RemoteHand. Press it again while RemoteHand is focused to hide it to the tray.</small></span>
 </label>
 <div className="settings-field">
 <label htmlFor="global-shortcut">Shortcut</label>
