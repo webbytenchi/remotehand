@@ -311,6 +311,7 @@ export function PluginManager({
   const [topbarItems, setTopbarItems] = useState<Record<string, TopbarItem[]>>({});
   const [openTopbarMenuKey, setOpenTopbarMenuKey] = useState<string | null>(null);
   const [hoveredTopbarKey, setHoveredTopbarKey] = useState<string | null>(null);
+  const [topbarOverlayAnchor, setTopbarOverlayAnchor] = useState<{ key: string; right: number; bottom: number } | null>(null);
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
 
@@ -671,11 +672,23 @@ export function PluginManager({
         <button
           type="button"
           aria-label={item.tooltip || (item.target ? `${item.title} ${item.target}` : item.title)}
-          onPointerEnter={() => setHoveredTopbarKey(itemKey)}
+          onPointerEnter={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            setTopbarOverlayAnchor({ key: itemKey, right: rect.right, bottom: rect.bottom });
+            setHoveredTopbarKey(itemKey);
+          }}
           onPointerLeave={() => setHoveredTopbarKey((current) => current === itemKey ? null : current)}
-          onFocus={() => setHoveredTopbarKey(itemKey)}
+          onFocus={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            setTopbarOverlayAnchor({ key: itemKey, right: rect.right, bottom: rect.bottom });
+            setHoveredTopbarKey(itemKey);
+          }}
           onBlur={() => setHoveredTopbarKey((current) => current === itemKey ? null : current)}
-          onClick={() => openTopbarItem(pluginId, item)}
+          onClick={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            setTopbarOverlayAnchor({ key: itemKey, right: rect.right, bottom: rect.bottom });
+            openTopbarItem(pluginId, item);
+          }}
           style={{
             position: "relative",
             width: size.width,
@@ -714,14 +727,14 @@ export function PluginManager({
             </>
           )}
         </button>
-        {hoveredTopbarKey === itemKey ? (
+        {hoveredTopbarKey === itemKey && topbarOverlayAnchor?.key === itemKey && typeof document !== "undefined" ? createPortal(
           <div
             role="tooltip"
             style={{
-              position: "absolute",
-              top: "calc(100% + 6px)",
-              right: 0,
-              zIndex: 1002,
+              position: "fixed",
+              top: topbarOverlayAnchor.bottom + 6,
+              right: Math.max(12, window.innerWidth - topbarOverlayAnchor.right),
+              zIndex: 2002,
               width: "max-content",
               maxWidth: "calc(100vw - 24px)",
               padding: "7px 9px",
@@ -738,16 +751,18 @@ export function PluginManager({
             }}
           >
             {item.tooltip || (item.target ? `${item.title} · ${item.target}` : item.title)}
-          </div>
+          </div>,
+          document.body,
         ) : null}
-        {menuOpen && item.menu ? (
+        {menuOpen && item.menu && topbarOverlayAnchor?.key === itemKey && typeof document !== "undefined" ? createPortal(
           <div
             role="menu"
             aria-label={item.title}
+            data-plugin-topbar-menu-key={itemKey}
             style={{
-              position: "absolute",
-              top: "calc(100% + 6px)",
-              right: 0,
+              position: "fixed",
+              top: topbarOverlayAnchor.bottom + 6,
+              right: Math.max(12, window.innerWidth - topbarOverlayAnchor.right),
               width: 310,
               maxHeight: "min(420px, 70vh)",
               overflowY: "auto",
@@ -793,7 +808,8 @@ export function PluginManager({
                 {entry.value ? <span style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace", fontSize: 11 }}>{entry.value}</span> : null}
               </button>
             ))}
-          </div>
+          </div>,
+          document.body,
         ) : null}
         </div>
       );
