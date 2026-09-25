@@ -20,7 +20,7 @@ RemoteHand V1 is intentionally focused on the workflows needed for day-to-day te
 - Dark, light, and system themes
 - Configurable color scheme, UI font, and terminal appearance
 - Optional startup at user login and system-tray integration
-- Configurable global shortcut to show, restore, and focus the existing RemoteHand window
+- Configurable global shortcut to show, focus, or tuck away the existing RemoteHand window
 - Start minimized and minimize-to-tray support
 - Tray shortcuts for Home, Connections, New Terminal, and Settings
 - Terminal selection auto-copy, native xterm paste handling, right-click paste, and multi-line paste confirmation
@@ -153,10 +153,10 @@ Startup & Tray settings include:
 - Start minimized for automatic launches
 - Show RemoteHand in the system tray
 - Minimize to tray when closing
-- Enable or disable the global show shortcut
+- Enable or disable the global RemoteHand shortcut
 - Capture a custom global shortcut by clicking the shortcut field and pressing the desired key combination
 
-The default global shortcut is **Ctrl + Shift + Space**. It shows, restores, and focuses the existing RemoteHand window from anywhere without launching a second instance. Changes are applied explicitly, and unapplied captured shortcuts are discarded when Settings closes.
+The default global shortcut is **Ctrl + Shift + Space**. It shows and focuses the existing RemoteHand window from anywhere without launching a second instance. When RemoteHand is already focused, pressing the shortcut hides it to the system tray when the tray icon is enabled, or minimizes it to the taskbar when the tray icon is disabled. Restoring through the shortcut resumes the last focused in-app control when available. Changes are applied explicitly, and unapplied captured shortcuts are discarded when Settings closes.
 
 The tray menu provides context-aware Show/Hide control plus quick access to Home, Connections, New Terminal, Settings, and Exit.
 
@@ -176,13 +176,13 @@ Settings are stored portably under `data/config/settings.json`.
 
 ## Plugins
 
-RemoteHand supports out-of-process executable plugins that extend the app without modifying core. Plugins can contribute panels, sidebar buttons, commands, and live top-bar widgets. Plugin API v1 has shipped and remains the current plugin API in v1.2.14.
+RemoteHand supports out-of-process executable plugins that extend the app without modifying core. Plugins can contribute panels, sidebar buttons, commands, and live top-bar widgets. Plugin API v1 has shipped and remains the current plugin API in v1.2.15.
 
 The plugin system is built on a simple rule: core owns infrastructure, plugins own functionality. RemoteHand core provides lifecycle, permissions, storage, IPC, and generic UI surfaces. Plugins provide protocol-specific behavior - for example, VNC, RDP, or host monitoring - that core does not need to know about.
 
 Plugin API v1 is documented in docs/PLUGINS.md. It covers package layout, the manifest, IPC, plugin-scoped storage, network/clipboard host services, panel hosting, top-bar contributions, system-tray contributions, native notifications, and generic panel-context routing.
 
-RemoteHand v1.2.14 includes the generic plugin host improvements introduced across the v1.2.x line with stable Windows tray identities, adaptive tray graphs, host-owned interface contribution ordering, 16 MiB per-entry plugin storage, top-bar badges, queued native Windows notifications, and notification actions that can restore/focus a plugin panel with context. These are generic API-v1 capabilities; plugin-specific monitoring or protocol semantics remain outside RemoteHand core.
+RemoteHand v1.2.15 includes the generic plugin host improvements introduced across the v1.2.x line with stable Windows tray identities, adaptive tray graphs, host-owned interface contribution ordering, 16 MiB per-entry plugin storage, top-bar badges, queued native Windows notifications, and notification actions that can restore/focus a plugin panel with context. These are generic API-v1 capabilities; plugin-specific monitoring or protocol semantics remain outside RemoteHand core.
 
 Plugins are disabled by default after install. Only install plugins you trust - a plugin is a native executable with the host process privileges. See SECURITY.md for the plugin threat model.
 
@@ -223,7 +223,7 @@ RemoteHand is configured as portable-only. Tauri bundling/installers are disable
 
 ## V1 Status
 
-**Status: V1 feature baseline complete. RemoteHand v1.2.14 carries the mature v1.2.x plugin/runtime foundation and adds a configurable global show shortcut, alongside the responsive fixed shell, paged plugin top-bar overflow, anchored core controls, and persisted Left / Center / Right top-bar alignment. RemoteHand Target Monitor v0.7.4 is validated on Windows x86_64 against these plugin API v1 capabilities.**
+**Status: V1 feature baseline complete. RemoteHand v1.2.15 carries the mature v1.2.x plugin/runtime foundation and adds a tray-aware global RemoteHand shortcut toggle, alongside the responsive fixed shell, paged plugin top-bar overflow, anchored core controls, and persisted Left / Center / Right top-bar alignment. RemoteHand Target Monitor v0.7.4 is validated on Windows x86_64 against these plugin API v1 capabilities.**
 
 The current V1 has been exercised on the Windows Tauri build for the primary workspace, terminal, connection, Home, persistence, credential-vault, and SFTP workflows. Remaining work belongs to post-V1 expansion and hardening rather than the original bootstrap phase.
 
