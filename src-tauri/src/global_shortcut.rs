@@ -8,10 +8,21 @@ pub struct GlobalShortcutState {
     registered: Arc<Mutex<Option<String>>>,
 }
 
-fn focus_main_window(app: &AppHandle) -> Result<(), String> {
+fn toggle_main_window(app: &AppHandle) -> Result<(), String> {
     let window = app
         .get_webview_window("main")
         .ok_or_else(|| "main window is not available".to_string())?;
+
+    let visible = window.is_visible().map_err(|error| error.to_string())?;
+    let focused = window.is_focused().map_err(|error| error.to_string())?;
+
+    if visible && focused {
+        window.hide().map_err(|error| error.to_string())?;
+        if let Some(tray_state) = app.try_state::<crate::startup_tray::StartupTrayState>() {
+            tray_state.sync_window_menu(app);
+        }
+        return Ok(());
+    }
 
     if window.is_minimized().map_err(|error| error.to_string())? {
         window.unminimize().map_err(|error| error.to_string())?;
@@ -19,6 +30,9 @@ fn focus_main_window(app: &AppHandle) -> Result<(), String> {
 
     window.show().map_err(|error| error.to_string())?;
     window.set_focus().map_err(|error| error.to_string())?;
+    if let Some(tray_state) = app.try_state::<crate::startup_tray::StartupTrayState>() {
+        tray_state.sync_window_menu(app);
+    }
     window
         .emit("remotehand-global-shortcut-restored", ())
         .map_err(|error| error.to_string())
@@ -31,8 +45,8 @@ fn register(app: &AppHandle, shortcut: &str) -> Result<(), String> {
                 return;
             }
 
-            if let Err(error) = focus_main_window(app) {
-                log::warn!("Failed to focus RemoteHand from global shortcut: {error}");
+            if let Err(error) = toggle_main_window(app) {
+                log::warn!("Failed to toggle RemoteHand from global shortcut: {error}");
             }
         })
         .map_err(|error| error.to_string())
