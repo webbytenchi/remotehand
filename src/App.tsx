@@ -600,12 +600,12 @@ const [globalShortcutError, setGlobalShortcutError] = useState("");
 const [globalShortcutApplying, setGlobalShortcutApplying] = useState(false);
 const [settingsOpen, setSettingsOpen] = useState(false);
 const [settingsTab, setSettingsTab] = useState<"appearance" | "layout" | "startup" | "plugins" | "about" | "papa">("appearance");
-useEffect(() => {
-if (settingsOpen) return;
+const closeSettings = useCallback(() => {
 setGlobalShortcutDraft(settings.globalShortcut);
 setGlobalShortcutCapturing(false);
 setGlobalShortcutError("");
-}, [settingsOpen, settings.globalShortcut]);
+setSettingsOpen(false);
+}, [settings.globalShortcut]);
 const [papaTabUnlocked, setPapaTabUnlocked] = useState(false);
 const [papaConfettiActive, setPapaConfettiActive] = useState(false);
 const papaSequenceRef = useRef<string[]>([]);
@@ -1800,7 +1800,7 @@ popoutUrl="popout.html"
 </section>
 <PluginManager
 open={settingsOpen && settingsTab === "plugins"}
-onClose={() => setSettingsOpen(false)}
+onClose={closeSettings}
 embedded
 embeddedHost={pluginSettingsHost}
 onChanged={() => void refreshPlugins()}
@@ -1816,8 +1816,8 @@ open={settingsOpen}
 title="Settings"
 className="settings-modal"
 confirmLabel={settingsTab === "papa" ? "Always" : "Done"}
-onConfirm={() => setSettingsOpen(false)}
-onCancel={() => setSettingsOpen(false)}
+onConfirm={closeSettings}
+onCancel={closeSettings}
 focusActions={false}
 tabs={<div className="settings-tabs" role="tablist" aria-label="Settings sections">
 <button type="button" role="tab" aria-selected={settingsTab === "appearance"} className={settingsTab === "appearance" ? "active" : ""} onClick={() => setSettingsTab("appearance")}>Appearance</button>
