@@ -1963,7 +1963,7 @@ if (isTauri()) void invoke("set_close_to_tray", { value }).catch((error) => cons
 </label>
 <div className="settings-section-heading" style={{ marginTop: 8 }}>
 <strong>Global shortcut</strong>
-<span>Bring the existing RemoteHand window to the foreground from anywhere.</span>
+<span>Show, focus, or tuck away the existing RemoteHand window from anywhere.</span>
 </div>
 <label className="settings-toggle">
 <input
@@ -1972,7 +1972,7 @@ checked={settings.globalShortcutEnabled}
 disabled={globalShortcutApplying}
 onChange={(event) => void applyGlobalShortcut(event.target.checked, globalShortcutDraft)}
 />
-<span><strong>Enable Global RemoteHand Shortcut</strong><small>Press the shortcut anywhere to show and focus RemoteHand. Press it again while RemoteHand is focused to hide it to the tray.</small></span>
+<span><strong>Enable Global RemoteHand Shortcut</strong><small>Press the shortcut anywhere to show and focus RemoteHand. Press it again while RemoteHand is focused to hide it to the system tray, or minimize it to the taskbar when the tray icon is disabled.</small></span>
 </label>
 <div className="settings-field">
 <label htmlFor="global-shortcut">Shortcut</label>
