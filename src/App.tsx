@@ -576,6 +576,16 @@ return (
 </svg>
 );
 }
+if (icon === "gauge") {
+return (
+<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+<path d="M3.2 14.8a7 7 0 1 1 13.6 0" />
+<path d="M10 10l3.8-3.1" />
+<circle cx="10" cy="10" r="1" />
+<path d="M5.5 15h9" />
+</svg>
+);
+}
 return <>◇</>;
 }
 
