@@ -2,6 +2,33 @@
 
 All notable changes to RemoteHand are documented here.
 
+## `1.2.16` - 2026-09-26
+
+### Added
+
+- **Plugin-owned sidebar icon assets.** Sidebar contributions may now reference a relative SVG, PNG, or WebP asset from the plugin package instead of requiring RemoteHand core to know a plugin-specific icon.
+- **Safe sidebar icon loading.** RemoteHand validates the declared asset path, package containment, supported format, regular-file/symlink constraints, and a 256 KiB size limit before exposing the icon to the frontend.
+- **Theme-aware SVG icons.** Plugin SVG sidebar assets are rendered as host-colored masks so the icon follows RemoteHand's current theme while the plugin continues to own the icon shape.
+
+### Improved
+
+- **Host-owned icon sizing.** Sidebar icon layout is constrained by RemoteHand so oversized plugin assets cannot spill outside the normal sidebar slot.
+- **Plugin independence.** New plugins can ship their own sidebar icon without requiring a RemoteHand source update for each icon shape.
+
+### Compatibility
+
+- Plugin API remains **v1**.
+- Existing built-in/legacy sidebar icon identifiers continue to work.
+- Existing plugins that do not provide an asset icon continue to use the normal fallback behavior.
+- PNG/WebP assets retain their own raster colors; SVG assets use the host's current sidebar color.
+
+### Verification
+
+- Production frontend build passed.
+- Rust tests passed with **40 tests and 0 failures**.
+- Windows Tauri build passed.
+- Manual Windows acceptance confirmed a plugin-owned System Monitor SVG rendered at the correct size and followed the RemoteHand theme.
+
 ## `1.2.15` - 2026-09-26
 
 ### Improved
