@@ -573,10 +573,10 @@ return <>◇</>;
 }
 
 function PluginSidebarIcon({ pluginId, icon }: { pluginId: string; icon: string }) {
-const [src, setSrc] = useState<string | null>(null);
+const [asset, setAsset] = useState<{ src: string; mimeType: string } | null>(null);
 useEffect(() => {
 if (!icon || icon === "monitor-pulse" || !isTauri()) {
-setSrc(null);
+setAsset(null);
 return;
 }
 let disposed = false;
@@ -586,18 +586,26 @@ void invoke<{ mimeType: string; bytes: number[] }>("plugin_read_sidebar_icon", {
 if (disposed) return;
 const blob = new Blob([new Uint8Array(result.bytes)], { type: result.mimeType });
 objectUrl = URL.createObjectURL(blob);
-setSrc(objectUrl);
+setAsset({ src: objectUrl, mimeType: result.mimeType });
 })
 .catch(() => {
-if (!disposed) setSrc(null);
+if (!disposed) setAsset(null);
 });
 return () => {
 disposed = true;
 if (objectUrl) URL.revokeObjectURL(objectUrl);
 };
 }, [pluginId, icon]);
-if (src) {
-return <img className="plugin-sidebar-icon-image" src={src} alt="" draggable={false} />;
+if (asset?.mimeType === "image/svg+xml") {
+return (
+<span
+className="plugin-sidebar-icon-mask"
+style={{ WebkitMaskImage: `url("${asset.src}")`, maskImage: `url("${asset.src}")` }}
+/>
+);
+}
+if (asset) {
+return <img className="plugin-sidebar-icon-image" src={asset.src} alt="" draggable={false} />;
 }
 return <LegacyPluginSidebarIcon icon={icon} />;
 }
