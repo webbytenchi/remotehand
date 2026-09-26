@@ -558,7 +558,7 @@ onClick={(event) => runTabAction(event, () => props.api.close())}
 );
 }
 
-function renderPluginSidebarIcon(icon: string) {
+function LegacyPluginSidebarIcon({ icon }: { icon: string }) {
 if (icon === "monitor-pulse") {
 return (
 <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -569,24 +569,37 @@ return (
 </svg>
 );
 }
-if (icon === "activity") {
-return (
-<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-<path d="M2 10h3l2-5 3.2 10 2.4-7 1.7 2H18" />
-</svg>
-);
-}
-if (icon === "gauge") {
-return (
-<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-<path d="M3.2 14.8a7 7 0 1 1 13.6 0" />
-<path d="M10 10l3.8-3.1" />
-<circle cx="10" cy="10" r="1" />
-<path d="M5.5 15h9" />
-</svg>
-);
-}
 return <>◇</>;
+}
+
+function PluginSidebarIcon({ pluginId, icon }: { pluginId: string; icon: string }) {
+const [src, setSrc] = useState<string | null>(null);
+useEffect(() => {
+if (!icon || icon === "monitor-pulse" || !isTauri()) {
+setSrc(null);
+return;
+}
+let disposed = false;
+let objectUrl: string | null = null;
+void invoke<{ mimeType: string; bytes: number[] }>("plugin_read_sidebar_icon", { id: pluginId, icon })
+.then((result) => {
+if (disposed) return;
+const blob = new Blob([new Uint8Array(result.bytes)], { type: result.mimeType });
+objectUrl = URL.createObjectURL(blob);
+setSrc(objectUrl);
+})
+.catch(() => {
+if (!disposed) setSrc(null);
+});
+return () => {
+disposed = true;
+if (objectUrl) URL.revokeObjectURL(objectUrl);
+};
+}, [pluginId, icon]);
+if (src) {
+return <img className="plugin-sidebar-icon-image" src={src} alt="" draggable={false} />;
+}
+return <LegacyPluginSidebarIcon icon={icon} />;
 }
 
 function App() {
@@ -1824,7 +1837,7 @@ key={plugin.manifest.id + ":" + sidebar.id}
 onClick={() => openPluginPanel(plugin, sidebar.panel)}
 title={sidebar.title}
 >
-<span className="sidebar-icon" aria-hidden="true">{renderPluginSidebarIcon(sidebar.icon)}</span>
+<span className="sidebar-icon" aria-hidden="true"><PluginSidebarIcon pluginId={plugin.manifest.id} icon={sidebar.icon} /></span>
 <span className="sidebar-label">{sidebar.title}</span>
 </button>
 ))
