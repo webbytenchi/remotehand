@@ -284,6 +284,21 @@ fn validate_relative_package_path(value: &str, label: &str) -> Result<(), String
 fn validate_contribution_id(value: &str) -> bool {
     valid_identifier(value)
 }
+fn validate_contribution_icon(value: &str) -> Result<(), String> {
+    if value.is_empty() || value == "monitor-pulse" {
+        return Ok(());
+    }
+    validate_relative_package_path(value, "contribution icon")?;
+    let extension = Path::new(value)
+        .extension()
+        .and_then(|item| item.to_str())
+        .map(|item| item.to_ascii_lowercase())
+        .ok_or_else(|| "contribution icon must use svg, png, or webp".to_string())?;
+    if !matches!(extension.as_str(), "svg" | "png" | "webp") {
+        return Err("contribution icon must use svg, png, or webp".to_string());
+    }
+    Ok(())
+}
 fn validate_contribution_list(
     kind: &str,
     values: &[PluginContribution],
@@ -306,9 +321,7 @@ fn validate_contribution_list(
                 contribution.id
             ));
         }
-        if !contribution.icon.is_empty() {
-            validate_relative_package_path(&contribution.icon, "contribution icon")?;
-        }
+        validate_contribution_icon(&contribution.icon)?;
         if !contribution.entry.is_empty() {
             validate_relative_package_path(&contribution.entry, "panel entry")?;
         }
@@ -948,6 +961,16 @@ mod tests {
         item.api_version = PLUGIN_API_VERSION + 1;
         let error = validate_manifest(&item).unwrap_err();
         assert!(error.contains("plugin API"));
+    }
+
+    #[test]
+    fn contribution_icons_allow_legacy_or_supported_assets() {
+        assert!(validate_contribution_icon("").is_ok());
+        assert!(validate_contribution_icon("monitor-pulse").is_ok());
+        assert!(validate_contribution_icon("assets/sidebar.svg").is_ok());
+        assert!(validate_contribution_icon("assets/sidebar.png").is_ok());
+        assert!(validate_contribution_icon("assets/sidebar.webp").is_ok());
+        assert!(validate_contribution_icon("assets/sidebar.exe").is_err());
     }
 
     #[test]
