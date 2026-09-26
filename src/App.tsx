@@ -569,6 +569,13 @@ return (
 </svg>
 );
 }
+if (icon === "activity") {
+return (
+<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+<path d="M2 10h3l2-5 3.2 10 2.4-7 1.7 2H18" />
+</svg>
+);
+}
 return <>◇</>;
 }
 
