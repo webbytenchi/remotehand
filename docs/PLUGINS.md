@@ -183,11 +183,13 @@ Each contribution object has these fields:
 |---|---|---|---|
 | id | string | yes | Unique within the plugin. |
 | title | string | yes | Display text (button label, panel title, command label). |
-| icon | string | no | Relative path to an SVG icon inside the package. |
+| icon | string | no | Legacy host icon id or relative path to an SVG, PNG, or WebP icon inside the package. |
 | panel | string | no | For sidebar entries, the id of the panel this button opens. |
 | entry | string | no | For panel entries, relative path to the panel HTML file. |
 
 A sidebar contribution normally needs id, title, icon, and panel. A panel contribution needs id, title, and entry.
+
+For plugin-owned sidebar assets, `icon` must be a relative package path ending in `.svg`, `.png`, or `.webp`. RemoteHand validates that the resolved file stays inside the installed plugin package, is a regular non-symlink file, uses a supported format, and is no larger than 256 KiB. SVG assets are rendered as masks using the host's current sidebar color, so the plugin owns the shape while RemoteHand owns theme color and sizing. PNG/WebP assets render as raster images and retain their own colors. Existing legacy host icon identifiers remain supported.
 
 Note on top-bar contributions: these are not declared in contributes. Top-bar items are published at runtime by the running plugin, because they carry live data. See the Top-bar contributions section.
 
