@@ -134,11 +134,37 @@ select {
 }
 .sidebar-action .sidebar-icon {
   width: 20px;
+  height: 20px;
   flex: 0 0 20px;
   color: #7f8ca0;
   text-align: center;
   font-size: 16px;
   line-height: 1;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.sidebar-action .sidebar-icon > svg,
+.sidebar-action .sidebar-icon > .plugin-sidebar-icon-image,
+.sidebar-action .sidebar-icon > .plugin-sidebar-icon-mask {
+  display: block;
+  width: 18px;
+  height: 18px;
+  max-width: 18px;
+  max-height: 18px;
+  flex: 0 0 18px;
+}
+.sidebar-action .sidebar-icon > .plugin-sidebar-icon-image {
+  object-fit: contain;
+}
+.sidebar-action .sidebar-icon > .plugin-sidebar-icon-mask {
+  background: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
 }
 .sidebar-label {
   min-width: 0;

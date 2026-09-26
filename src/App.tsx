@@ -558,7 +558,7 @@ onClick={(event) => runTabAction(event, () => props.api.close())}
 );
 }
 
-function renderPluginSidebarIcon(icon: string) {
+function LegacyPluginSidebarIcon({ icon }: { icon: string }) {
 if (icon === "monitor-pulse") {
 return (
 <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -570,6 +570,44 @@ return (
 );
 }
 return <>◇</>;
+}
+
+function PluginSidebarIcon({ pluginId, icon }: { pluginId: string; icon: string }) {
+const [asset, setAsset] = useState<{ src: string; mimeType: string } | null>(null);
+useEffect(() => {
+if (!icon || icon === "monitor-pulse" || !isTauri()) {
+setAsset(null);
+return;
+}
+let disposed = false;
+let objectUrl: string | null = null;
+void invoke<{ mimeType: string; bytes: number[] }>("plugin_read_sidebar_icon", { id: pluginId, icon })
+.then((result) => {
+if (disposed) return;
+const blob = new Blob([new Uint8Array(result.bytes)], { type: result.mimeType });
+objectUrl = URL.createObjectURL(blob);
+setAsset({ src: objectUrl, mimeType: result.mimeType });
+})
+.catch(() => {
+if (!disposed) setAsset(null);
+});
+return () => {
+disposed = true;
+if (objectUrl) URL.revokeObjectURL(objectUrl);
+};
+}, [pluginId, icon]);
+if (asset?.mimeType === "image/svg+xml") {
+return (
+<span
+className="plugin-sidebar-icon-mask"
+style={{ WebkitMaskImage: `url("${asset.src}")`, maskImage: `url("${asset.src}")` }}
+/>
+);
+}
+if (asset) {
+return <img className="plugin-sidebar-icon-image" src={asset.src} alt="" draggable={false} />;
+}
+return <LegacyPluginSidebarIcon icon={icon} />;
 }
 
 function App() {
@@ -1807,7 +1845,7 @@ key={plugin.manifest.id + ":" + sidebar.id}
 onClick={() => openPluginPanel(plugin, sidebar.panel)}
 title={sidebar.title}
 >
-<span className="sidebar-icon" aria-hidden="true">{renderPluginSidebarIcon(sidebar.icon)}</span>
+<span className="sidebar-icon" aria-hidden="true"><PluginSidebarIcon pluginId={plugin.manifest.id} icon={sidebar.icon} /></span>
 <span className="sidebar-label">{sidebar.title}</span>
 </button>
 ))

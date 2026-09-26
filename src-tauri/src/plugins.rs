@@ -71,6 +71,13 @@ pub struct PluginContribution {
     #[serde(default)]
     pub entry: String,
 }
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginIconData {
+    pub mime_type: String,
+    pub bytes: Vec<u8>,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginInfo {
@@ -277,6 +284,21 @@ fn validate_relative_package_path(value: &str, label: &str) -> Result<(), String
 fn validate_contribution_id(value: &str) -> bool {
     valid_identifier(value)
 }
+fn validate_contribution_icon(value: &str) -> Result<(), String> {
+    if value.is_empty() || value == "monitor-pulse" {
+        return Ok(());
+    }
+    validate_relative_package_path(value, "contribution icon")?;
+    let extension = Path::new(value)
+        .extension()
+        .and_then(|item| item.to_str())
+        .map(|item| item.to_ascii_lowercase())
+        .ok_or_else(|| "contribution icon must use svg, png, or webp".to_string())?;
+    if !matches!(extension.as_str(), "svg" | "png" | "webp") {
+        return Err("contribution icon must use svg, png, or webp".to_string());
+    }
+    Ok(())
+}
 fn validate_contribution_list(
     kind: &str,
     values: &[PluginContribution],
@@ -299,9 +321,7 @@ fn validate_contribution_list(
                 contribution.id
             ));
         }
-        if !contribution.icon.is_empty() {
-            validate_relative_package_path(&contribution.icon, "contribution icon")?;
-        }
+        validate_contribution_icon(&contribution.icon)?;
         if !contribution.entry.is_empty() {
             validate_relative_package_path(&contribution.entry, "panel entry")?;
         }
@@ -762,6 +782,55 @@ pub fn plugin_read_panel_html(id: String, panel_id: String) -> Result<String, St
 }
 
 #[tauri::command]
+pub fn plugin_read_sidebar_icon(id: String, icon: String) -> Result<PluginIconData, String> {
+    const MAX_PLUGIN_ICON_BYTES: u64 = 256 * 1024;
+    let plugin = require_installed(&id)?;
+    if !plugin.enabled {
+        return Err("plugin is disabled".to_string());
+    }
+    let declared = plugin
+        .manifest
+        .contributes
+        .sidebar
+        .iter()
+        .any(|sidebar| sidebar.icon == icon);
+    if !declared {
+        return Err("plugin sidebar icon is not declared".to_string());
+    }
+    validate_relative_package_path(&icon, "contribution icon")?;
+    let extension = Path::new(&icon)
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase())
+        .ok_or_else(|| "plugin sidebar icon must use svg, png, or webp".to_string())?;
+    let mime_type = match extension.as_str() {
+        "svg" => "image/svg+xml",
+        "png" => "image/png",
+        "webp" => "image/webp",
+        _ => return Err("plugin sidebar icon must use svg, png, or webp".to_string()),
+    };
+    let root = fs::canonicalize(plugins_root_for_runtime()?.join(&plugin.directory))
+        .map_err(|error| error.to_string())?;
+    let path = root.join(&icon);
+    let metadata = fs::symlink_metadata(&path).map_err(|error| error.to_string())?;
+    if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
+        return Err("plugin sidebar icon must be a regular file".to_string());
+    }
+    if metadata.len() > MAX_PLUGIN_ICON_BYTES {
+        return Err("plugin sidebar icon exceeds 256 KiB".to_string());
+    }
+    let canonical = fs::canonicalize(&path).map_err(|error| error.to_string())?;
+    if !canonical.starts_with(&root) {
+        return Err("plugin sidebar icon escaped the plugin package".to_string());
+    }
+    let bytes = fs::read(canonical).map_err(|error| error.to_string())?;
+    Ok(PluginIconData {
+        mime_type: mime_type.to_string(),
+        bytes,
+    })
+}
+
+#[tauri::command]
 pub fn plugin_set_enabled(
     id: String,
     enabled: bool,
@@ -892,6 +961,36 @@ mod tests {
         item.api_version = PLUGIN_API_VERSION + 1;
         let error = validate_manifest(&item).unwrap_err();
         assert!(error.contains("plugin API"));
+    }
+
+    #[test]
+    fn contribution_icons_allow_legacy_or_supported_assets() {
+        assert!(validate_contribution_icon("").is_ok());
+        assert!(validate_contribution_icon("monitor-pulse").is_ok());
+        assert!(validate_contribution_icon("assets/sidebar.svg").is_ok());
+        assert!(validate_contribution_icon("assets/sidebar.png").is_ok());
+        assert!(validate_contribution_icon("assets/sidebar.webp").is_ok());
+        assert!(validate_contribution_icon("assets/sidebar.exe").is_err());
+    }
+
+    #[test]
+    fn contribution_icons_stay_package_relative() {
+        let mut item = manifest("remotehand.test", &[]);
+        item.contributes.panels.push(PluginContribution {
+            id: "panel".to_string(),
+            title: "Panel".to_string(),
+            icon: String::new(),
+            panel: String::new(),
+            entry: "ui/index.html".to_string(),
+        });
+        item.contributes.sidebar.push(PluginContribution {
+            id: "sidebar".to_string(),
+            title: "Sidebar".to_string(),
+            icon: "../escape.svg".to_string(),
+            panel: "panel".to_string(),
+            entry: String::new(),
+        });
+        assert!(validate_manifest(&item).is_err());
     }
 
     #[test]
