@@ -2,6 +2,32 @@
 
 All notable changes to RemoteHand are documented here.
 
+## `1.2.17` - 2026-09-27
+
+### Added
+
+- **Generic plugin file-open host API.** Plugins with the `files.open` permission can request a host-owned native file picker and receive the selected local path without implementing their own top-level dialog process.
+- **Plugin terminal appearance propagation.** Plugin panels now receive RemoteHand's configured terminal font family, font size, foreground, and background in addition to the existing UI appearance values.
+
+### Improved
+
+- **Host-owned file dialog behavior.** Plugin Save dialogs are parented to the main RemoteHand window, keeping native Open/Save flows associated with RemoteHand instead of behaving as unrelated top-level windows.
+- **Reusable editor-style appearance.** Plugins that render code, logs, consoles, or other monospace surfaces can inherit the same terminal appearance chosen by the user without editor-specific logic in core.
+
+### Compatibility
+
+- Plugin API remains **v1**.
+- Existing plugins require no migration.
+- `files.open` is opt-in through the plugin permission list.
+- Existing `files.save` behavior remains compatible.
+
+### Verification
+
+- Rust tests passed with **41 tests and 0 failures** on the feature branch.
+- Production Windows builds passed during development.
+- Manual Windows acceptance confirmed host-owned Open and Save As dialogs remain in front of RemoteHand.
+- Manual acceptance confirmed plugin code surfaces can follow RemoteHand terminal font, size, foreground, and background settings.
+
 ## `1.2.16` - 2026-09-26
 
 ### Added
