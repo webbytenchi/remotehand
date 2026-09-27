@@ -899,6 +899,21 @@ overflow-x: hidden !important;
 overflow-y: auto !important;
 scrollbar-width: thin;
 }
+
+/* xterm runtime scrollbar (actual DOM used by the bundled renderer). */
+.terminal-host .xterm .xterm-scrollable-element > .scrollbar.vertical {
+background: transparent !important;
+}
+.terminal-host .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {
+left: 3px !important;
+width: 8px !important;
+border-radius: 999px !important;
+background: var(--scrollbar-thumb) !important;
+}
+.terminal-host .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider:hover,
+.terminal-host .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider.active {
+background: var(--scrollbar-thumb-hover) !important;
+}
 .terminal-host .xterm-rows {
 margin: 0;
 }
@@ -2243,8 +2258,6 @@ border-radius: 8px;
 .plugin-list {
 display: grid;
 gap: 10px;
-max-height: 430px;
-overflow: auto;
 }
 .plugin-card {
 display: grid;

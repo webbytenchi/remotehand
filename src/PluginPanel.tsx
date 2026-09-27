@@ -73,6 +73,43 @@ type: "remotehand.appearance";
 appearance: PluginAppearance;
 };
 const PLUGIN_SECURITY_HEAD = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; font-src data:; media-src data: blob:; object-src 'none'; frame-src 'none'; child-src 'none'; form-action 'none'; base-uri 'none';">`;
+const PLUGIN_SCROLLBAR_STYLE = `
+<style data-remotehand-scrollbars>
+:root {
+  --remotehand-scrollbar-size: 8px;
+  --remotehand-scrollbar-thumb: rgba(148, 163, 184, 0.38);
+  --remotehand-scrollbar-thumb-hover: rgba(168, 185, 210, 0.62);
+}
+:root[data-remotehand-theme="light"] {
+  --remotehand-scrollbar-thumb: rgba(71, 85, 105, 0.40);
+  --remotehand-scrollbar-thumb-hover: rgba(51, 65, 85, 0.62);
+}
+* {
+  scrollbar-width: thin !important;
+  scrollbar-color: var(--remotehand-scrollbar-thumb) transparent !important;
+}
+*::-webkit-scrollbar {
+  width: var(--remotehand-scrollbar-size) !important;
+  height: var(--remotehand-scrollbar-size) !important;
+}
+*::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+*::-webkit-scrollbar-thumb {
+  min-height: 28px;
+  border: 2px solid transparent !important;
+  border-radius: 999px !important;
+  background: var(--remotehand-scrollbar-thumb) !important;
+  background-clip: padding-box !important;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--remotehand-scrollbar-thumb-hover) !important;
+  background-clip: padding-box !important;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent !important;
+}
+</style>`;
 const BRIDGE_SCRIPT = `
 <script>
 (() => {
@@ -153,9 +190,9 @@ const lower = html.toLowerCase();
 const headStart = lower.indexOf("<head");
 if (headStart >= 0) {
 const headOpenEnd = lower.indexOf(">", headStart);
-if (headOpenEnd >= 0) { const insertAt = headOpenEnd + 1; return html.slice(0, insertAt) + PLUGIN_SECURITY_HEAD + BRIDGE_SCRIPT + html.slice(insertAt); }
+if (headOpenEnd >= 0) { const insertAt = headOpenEnd + 1; return html.slice(0, insertAt) + PLUGIN_SECURITY_HEAD + PLUGIN_SCROLLBAR_STYLE + BRIDGE_SCRIPT + html.slice(insertAt); }
 }
-return PLUGIN_SECURITY_HEAD + BRIDGE_SCRIPT + html;
+return PLUGIN_SECURITY_HEAD + PLUGIN_SCROLLBAR_STYLE + BRIDGE_SCRIPT + html;
 }
 export function PluginPanel({ api, params }: IDockviewPanelProps<PluginPanelParams>) {
 const iframeRef = useRef<HTMLIFrameElement>(null);

@@ -2,6 +2,31 @@
 
 All notable changes to RemoteHand are documented here.
 
+
+## `1.2.18` - 2026-09-28
+
+### Improved
+
+- **Modern scrollbar styling.** RemoteHand core scrollbars now use a slimmer rounded thumb with a transparent track for a cleaner, more consistent desktop appearance.
+- **Plugin scrollbar consistency.** Sandboxed plugin panels receive the same host-owned scrollbar styling automatically, so existing plugins can follow RemoteHand's visual treatment without plugin-specific changes.
+- **Terminal scrollbar polish.** Local Terminal, PowerShell, and Command Prompt xterm surfaces now use the same rounded scrollbar treatment while preserving xterm's existing scroll behavior.
+- **Plugin Manager scrolling.** Settings → Plugins now uses the Settings modal as the single scroll owner instead of nesting a second independently scrolling plugin list.
+
+### Compatibility
+
+- Plugin API remains **v1**.
+- Existing plugins require no migration.
+- Scrollbar presentation remains host-owned; plugin functionality and runtime behavior are unchanged.
+
+### Verification
+
+- Frontend lint completed with **18 warnings and 0 errors**.
+- Frontend tests passed with **7 tests and 0 failures**.
+- Production frontend build passed.
+- `cargo check` passed.
+- Manual Windows acceptance confirmed the modern scrollbar treatment across Settings, plugin panels, Local Terminal, PowerShell, and Command Prompt, including removal of the nested Plugins scrollbar.
+
+
 ## `1.2.17` - 2026-09-27
 
 ### Added

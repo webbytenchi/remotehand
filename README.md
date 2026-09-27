@@ -28,6 +28,7 @@ RemoteHand V1 is intentionally focused on the workflows needed for day-to-day te
 - Responsive plugin top bar with overflow paging and configurable Left / Center / Right alignment
 - Fixed top bar and sidebar with scrolling contained inside the workspace
 - Plugin top-bar tooltips and interactive menus render above the responsive contribution strip
+- Consistent thin, rounded scrollbars across RemoteHand core surfaces, plugin panels, and local terminal views
 
 ## Current V1 Architecture
 
