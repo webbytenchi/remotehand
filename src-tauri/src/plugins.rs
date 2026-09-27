@@ -18,6 +18,7 @@ const ALLOWED_PERMISSIONS: &[&str] = &[
     "network.inspect",
     "clipboard.read",
     "clipboard.write",
+    "files.open",
     "files.save",
     "credentials.use",
     "credentials.store",
