@@ -45,6 +45,8 @@ uiFontFamily: string;
 uiFontSize: string;
 terminalFontFamily: string;
 terminalFontSize: string;
+terminalBackground: string;
+terminalForeground: string;
 colors: {
 background: string;
 surface: string;
@@ -86,6 +88,8 @@ if (appearance.uiFontFamily) root.style.setProperty("--remotehand-ui-font-family
 if (appearance.uiFontSize) root.style.setProperty("--remotehand-ui-font-size", appearance.uiFontSize);
 if (appearance.terminalFontFamily) root.style.setProperty("--remotehand-terminal-font-family", appearance.terminalFontFamily);
 if (appearance.terminalFontSize) root.style.setProperty("--remotehand-terminal-font-size", appearance.terminalFontSize);
+if (appearance.terminalBackground) root.style.setProperty("--remotehand-terminal-background", appearance.terminalBackground);
+if (appearance.terminalForeground) root.style.setProperty("--remotehand-terminal-foreground", appearance.terminalForeground);
 if (appearance.colors && typeof appearance.colors === "object") {
 for (const [name, value] of Object.entries(appearance.colors)) {
 if (typeof value !== "string") continue;
@@ -142,7 +146,7 @@ const computed = getComputedStyle(root);
 const theme = root.dataset.theme === "light" ? "light" : "dark";
 const light = theme === "light";
 const read = (name: string, fallback: string) => computed.getPropertyValue(name).trim() || fallback;
-return { theme, colorScheme: root.dataset.scheme || "blue", uiFontFamily: read("--ui-font-family", 'ui-sans-serif, system-ui, sans-serif'), uiFontSize: read("--ui-font-size", "13px"), terminalFontFamily: read("--terminal-font-family", '"JetBrains Mono", "Cascadia Code", Consolas, monospace'), terminalFontSize: read("--terminal-font-size", "13px"), colors: { background: light ? "#f4f5f7" : "#11151a", surface: light ? "#ffffff" : "#171d24", surfaceRaised: light ? "#f8f9fb" : "#1d252f", border: light ? "#c8d0da" : "#35404d", text: light ? "#20242c" : "#dee5ef", mutedText: light ? "#667085" : "#93a1b2", inputBackground: light ? "#ffffff" : "#0f141a", buttonBackground: light ? "#eef1f4" : "#232c37", buttonHover: light ? "#e2e7ec" : "#2a3542", accent: read("--accent", light ? "#356fa9" : "#70a7e8"), accentBorder: read("--accent-border", light ? "#8fb3d8" : "#3b5f8d"), accentSurface: read("--accent-surface", light ? "#e7f0fa" : "#16263a"), accentSurfaceHover: read("--accent-surface-hover", light ? "#d9e9f8" : "#1d3550"), dangerText: light ? "#a12a2a" : "#efaaaa", dangerBorder: light ? "#d4a1a1" : "#5a3035", dangerSurface: light ? "#fff0f0" : "#241316", successText: light ? "#27643c" : "#bce5c7", successSurface: light ? "#e8f6ed" : "#214c34" } };
+return { theme, colorScheme: root.dataset.scheme || "blue", uiFontFamily: read("--ui-font-family", 'ui-sans-serif, system-ui, sans-serif'), uiFontSize: read("--ui-font-size", "13px"), terminalFontFamily: read("--terminal-font-family", '"JetBrains Mono", "Cascadia Code", Consolas, monospace'), terminalFontSize: read("--terminal-font-size", "13px"), terminalBackground: read("--terminal-background", light ? "#ffffff" : "#11151a"), terminalForeground: read("--terminal-foreground", light ? "#20242c" : "#d8dde6"), colors: { background: light ? "#f4f5f7" : "#11151a", surface: light ? "#ffffff" : "#171d24", surfaceRaised: light ? "#f8f9fb" : "#1d252f", border: light ? "#c8d0da" : "#35404d", text: light ? "#20242c" : "#dee5ef", mutedText: light ? "#667085" : "#93a1b2", inputBackground: light ? "#ffffff" : "#0f141a", buttonBackground: light ? "#eef1f4" : "#232c37", buttonHover: light ? "#e2e7ec" : "#2a3542", accent: read("--accent", light ? "#356fa9" : "#70a7e8"), accentBorder: read("--accent-border", light ? "#8fb3d8" : "#3b5f8d"), accentSurface: read("--accent-surface", light ? "#e7f0fa" : "#16263a"), accentSurfaceHover: read("--accent-surface-hover", light ? "#d9e9f8" : "#1d3550"), dangerText: light ? "#a12a2a" : "#efaaaa", dangerBorder: light ? "#d4a1a1" : "#5a3035", dangerSurface: light ? "#fff0f0" : "#241316", successText: light ? "#27643c" : "#bce5c7", successSurface: light ? "#e8f6ed" : "#214c34" } };
 }
 function injectBridge(html: string) {
 const lower = html.toLowerCase();
