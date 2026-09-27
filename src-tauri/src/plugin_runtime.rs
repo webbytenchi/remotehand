@@ -271,11 +271,36 @@ struct FileSaveFilter {
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FileOpenParams {
+    #[serde(default)]
+    filters: Vec<FileSaveFilter>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct FileSaveParams {
     suggested_name: String,
     content: String,
     #[serde(default)]
     filters: Vec<FileSaveFilter>,
+}
+fn validate_file_open_params(params:&FileOpenParams)->Result<(),String>{
+    if params.filters.len()>8 {
+        return Err("file.open has too many file filters".to_string());
+    }
+    for filter in &params.filters {
+        if filter.name.trim().is_empty() || filter.name.len()>64 || filter.extensions.is_empty() || filter.extensions.len()>32 {
+            return Err("file.open contains an invalid file filter".to_string());
+        }
+        for extension in &filter.extensions {
+            if extension == "*" {
+                continue;
+            }
+            if extension.is_empty() || extension.len()>16 || !extension.bytes().all(|b|b.is_ascii_alphanumeric()) {
+                return Err("file.open contains an invalid file extension".to_string());
+            }
+        }
+    }
+    Ok(())
 }
 fn validate_file_save_params(params:&FileSaveParams)->Result<(),String>{
     if params.suggested_name.trim().is_empty() || params.suggested_name.len()>255 {
@@ -347,6 +372,12 @@ fn validate_plugin_request(permissions: &[String], request: &PluginRequest) -> R
         "clipboard.write" => {
             if !permission_granted(permissions, "clipboard.write") {
                 return Err("plugin lacks clipboard.write permission".to_string());
+            }
+            Ok(())
+        }
+        "file.open" => {
+            if !permission_granted(permissions, "files.open") {
+                return Err("plugin lacks files.open permission".to_string());
             }
             Ok(())
         }
@@ -423,6 +454,23 @@ fn handle_plugin_request(
                 .set_text(params.text)
                 .map_err(|error| format!("failed to write clipboard: {error}"))?;
             Ok(serde_json::json!({ "copied": true }))
+        }
+        "file.open" => {
+            let params: FileOpenParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid file.open params: {error}"))?;
+            validate_file_open_params(&params)?;
+            let mut dialog = rfd::FileDialog::new();
+            if let Some(window) = app_handle.get_webview_window("main") {
+                dialog = dialog.set_parent(&window);
+            }
+            for filter in &params.filters {
+                let extensions=filter.extensions.iter().map(String::as_str).collect::<Vec<_>>();
+                dialog=dialog.add_filter(&filter.name,&extensions);
+            }
+            let Some(path)=dialog.pick_file() else {
+                return Ok(serde_json::json!({"opened":false}));
+            };
+            Ok(serde_json::json!({"opened":true,"path":path.to_string_lossy()}))
         }
         "file.save" => {
             let params: FileSaveParams = serde_json::from_value(request.params.clone())
@@ -979,6 +1027,20 @@ mod tests {
         };
         assert!(validate_plugin_request(&["clipboard.write".to_string()], &request).is_ok());
         assert!(validate_plugin_request(&[], &request).is_err());
+    }
+
+    #[test]
+    fn validates_file_open_permission_and_params() {
+        let request = PluginRequest {
+            message_type: "plugin.request".to_string(),
+            request_id: 1,
+            method: "file.open".to_string(),
+            params: serde_json::json!({ "filters": [{ "name": "Text", "extensions": ["txt", "md"] }] }),
+        };
+        assert!(validate_plugin_request(&["files.open".to_string()], &request).is_ok());
+        assert_eq!(validate_plugin_request(&[], &request).unwrap_err(),"plugin lacks files.open permission");
+        let params:FileOpenParams=serde_json::from_value(request.params.clone()).unwrap();
+        assert!(validate_file_open_params(&params).is_ok());
     }
 
     #[test]
