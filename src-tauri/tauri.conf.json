@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "RemoteHand",
-  "version": "1.2.19",
+  "version": "1.2.20",
   "identifier": "io.remotehand.app",
   "build": {
     "frontendDist": "../dist",

@@ -133,6 +133,11 @@ pluginId: string;
 event: string;
 payload: unknown;
 };
+type PluginOpenPanelEvent = {
+pluginId: string;
+panelId: string;
+context?: { targetId?: string; target?: string; view?: string; alertKey?: string; path?: string };
+};
 type RemoteHandPopoutWindow = Window & {
 __REMOTEHAND_NATIVE_WINDOW_LABEL__?: string;
 };
@@ -997,7 +1002,7 @@ return;
 }
 addTerminal(undefined, activity.kind === "terminal" ? "default" : activity.kind);
 }, [addTerminal, connectSsh, openSftp]);
-const openPluginPanel = useCallback((plugin: PluginInfo, panelId: string, context?: { targetId?: string; target?: string; view?: string; alertKey?: string }) => {
+const openPluginPanel = useCallback((plugin: PluginInfo, panelId: string, context?: { targetId?: string; target?: string; view?: string; alertKey?: string; path?: string }) => {
 const api = apiRef.current;
 if (!api) return;
 const panel = plugin.manifest.contributes.panels.find((item) => item.id === panelId);
@@ -1038,6 +1043,26 @@ title: panel.title,
 params,
 });
 }, []);
+useEffect(() => {
+if (!isTauri()) return;
+let cancelled = false;
+let unlisten: (() => void) | undefined;
+void listen<PluginOpenPanelEvent>("remotehand-open-plugin-panel", (event) => {
+const request = event.payload;
+const plugin = plugins.find(
+(item) => item.enabled && item.manifest.id === request.pluginId,
+);
+if (!plugin) return;
+openPluginPanel(plugin, request.panelId, request.context);
+}).then((dispose) => {
+if (cancelled) dispose();
+else unlisten = dispose;
+});
+return () => {
+cancelled = true;
+unlisten?.();
+};
+}, [openPluginPanel, plugins]);
 const openHome = useCallback(() => {
 const api = apiRef.current;
 if (!api) return;

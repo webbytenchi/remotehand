@@ -2,6 +2,26 @@
 
 All notable changes to RemoteHand are documented here.
 
+## `1.2.20` - 2026-09-28
+
+### Added
+
+- **Generic plugin-to-plugin panel opening.** Plugins with the new `plugins.open` permission can check whether another plugin is installed and enabled, then request one of that plugin's declared panels through the host.
+- **Structured panel context.** Plugin-open requests can carry a bounded object context so the target panel can receive a specific resource, such as a local file path, without hard-coding plugin-specific behavior into RemoteHand core.
+
+### Safety and compatibility
+
+- Plugin API remains **v1**.
+- `plugins.open` is opt-in and is required for both availability checks and panel-open requests.
+- Target plugins must be installed, enabled, and declare the requested panel.
+- Open-panel context must be an object and is limited to **64 KiB**.
+- Existing plugins require no migration.
+
+### Verification
+
+- Added targeted Rust coverage for the `plugins.open` manifest permission, host API permission checks, availability parameters, and panel-context validation.
+- Manual Windows acceptance confirmed File Manager can open supported files in Editor through the generic host path and react immediately when Editor is enabled or disabled.
+
 ## `1.2.19` - 2026-09-28
 
 ### Improved

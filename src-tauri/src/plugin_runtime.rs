@@ -283,6 +283,19 @@ struct FileSaveParams {
     #[serde(default)]
     filters: Vec<FileSaveFilter>,
 }
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PluginAvailableParams {
+    plugin_id: String,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PluginOpenPanelParams {
+    plugin_id: String,
+    panel_id: String,
+    #[serde(default)]
+    context: serde_json::Value,
+}
 fn validate_file_open_params(params:&FileOpenParams)->Result<(),String>{
     if params.filters.len()>8 {
         return Err("file.open has too many file filters".to_string());
@@ -328,6 +341,20 @@ fn validate_file_save_params(params:&FileSaveParams)->Result<(),String>{
     }
     Ok(())
 }
+fn validate_plugin_open_panel_params(params: &PluginOpenPanelParams) -> Result<(), String> {
+    if params.context != serde_json::Value::Null && !params.context.is_object() {
+        return Err("plugin.open_panel context must be an object".to_string());
+    }
+    if serde_json::to_vec(&params.context)
+        .map_err(|error| format!("invalid plugin.open_panel context: {error}"))?
+        .len()
+        > 64 * 1024
+    {
+        return Err("plugin.open_panel context exceeds 64 KiB".to_string());
+    }
+    Ok(())
+}
+
 fn permission_granted(permissions: &[String], permission: &str) -> bool {
     permissions.iter().any(|value| value == permission)
 }
@@ -384,6 +411,12 @@ fn validate_plugin_request(permissions: &[String], request: &PluginRequest) -> R
         "file.save" => {
             if !permission_granted(permissions, "files.save") {
                 return Err("plugin lacks files.save permission".to_string());
+            }
+            Ok(())
+        }
+        "plugin.available" | "plugin.open_panel" => {
+            if !permission_granted(permissions, "plugins.open") {
+                return Err("plugin lacks plugins.open permission".to_string());
             }
             Ok(())
         }
@@ -490,6 +523,42 @@ fn handle_plugin_request(
             fs::write(&path, params.content.as_bytes())
                 .map_err(|error| format!("failed to save file: {error}"))?;
             Ok(serde_json::json!({"saved":true,"path":path.to_string_lossy()}))
+        }
+        "plugin.available" => {
+            let params: PluginAvailableParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid plugin.available params: {error}"))?;
+            Ok(serde_json::json!({
+                "available": crate::plugins::plugin_available(&params.plugin_id)?
+            }))
+        }
+        "plugin.open_panel" => {
+            let params: PluginOpenPanelParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid plugin.open_panel params: {error}"))?;
+            validate_plugin_open_panel_params(&params)?;
+            let target = crate::plugins::require_installed(&params.plugin_id)?;
+            if !target.enabled {
+                return Err("target plugin is disabled".to_string());
+            }
+            if !target
+                .manifest
+                .contributes
+                .panels
+                .iter()
+                .any(|panel| panel.id == params.panel_id)
+            {
+                return Err("target plugin panel is not declared".to_string());
+            }
+            app_handle
+                .emit(
+                    "remotehand-open-plugin-panel",
+                    serde_json::json!({
+                        "pluginId": params.plugin_id,
+                        "panelId": params.panel_id,
+                        "context": params.context
+                    }),
+                )
+                .map_err(|error| format!("failed to request plugin panel: {error}"))?;
+            Ok(serde_json::json!({ "opened": true }))
         }
         "network.interfaces" => {
             let mut grouped: BTreeMap<String, (Option<String>, Vec<serde_json::Value>)> =
@@ -1057,6 +1126,57 @@ mod tests {
         assert!(validate_file_save_params(&params).is_ok());
         let invalid=FileSaveParams{suggested_name:"../report.csv".into(),content:String::new(),filters:Vec::new()};
         assert!(validate_file_save_params(&invalid).is_err());
+    }
+
+    #[test]
+    fn validates_plugins_open_permission_and_params() {
+        for method in ["plugin.available", "plugin.open_panel"] {
+            let request = PluginRequest {
+                message_type: "plugin.request".to_string(),
+                request_id: 21,
+                method: method.to_string(),
+                params: serde_json::json!({}),
+            };
+            assert_eq!(
+                validate_plugin_request(&[], &request).unwrap_err(),
+                "plugin lacks plugins.open permission"
+            );
+            assert!(validate_plugin_request(&["plugins.open".to_string()], &request).is_ok());
+        }
+
+        let available: PluginAvailableParams = serde_json::from_value(
+            serde_json::json!({ "pluginId": "remotehand.editor" })
+        )
+        .unwrap();
+        assert_eq!(available.plugin_id, "remotehand.editor");
+
+        let valid: PluginOpenPanelParams = serde_json::from_value(serde_json::json!({
+            "pluginId": "remotehand.editor",
+            "panelId": "editor",
+            "context": { "path": "C:/test.txt" }
+        }))
+        .unwrap();
+        assert!(validate_plugin_open_panel_params(&valid).is_ok());
+
+        let invalid_context = PluginOpenPanelParams {
+            plugin_id: "remotehand.editor".to_string(),
+            panel_id: "editor".to_string(),
+            context: serde_json::json!("not-an-object"),
+        };
+        assert_eq!(
+            validate_plugin_open_panel_params(&invalid_context).unwrap_err(),
+            "plugin.open_panel context must be an object"
+        );
+
+        let oversized_context = PluginOpenPanelParams {
+            plugin_id: "remotehand.editor".to_string(),
+            panel_id: "editor".to_string(),
+            context: serde_json::json!({ "data": "x".repeat(64 * 1024) }),
+        };
+        assert_eq!(
+            validate_plugin_open_panel_params(&oversized_context).unwrap_err(),
+            "plugin.open_panel context exceeds 64 KiB"
+        );
     }
 
     #[test]

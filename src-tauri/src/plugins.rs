@@ -26,6 +26,7 @@ const ALLOWED_PERMISSIONS: &[&str] = &[
     "storage.plugin",
     "tray.contribute",
     "notifications.show",
+    "plugins.open",
 ];
 const ALLOWED_CONTRIBUTION_KINDS: &[&str] = &["sidebar", "panel", "command"];
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -706,7 +707,7 @@ fn discover_plugins() -> Result<Vec<PluginInfo>, String> {
     plugins.sort_by(|left, right| left.manifest.name.cmp(&right.manifest.name));
     Ok(plugins)
 }
-fn require_installed(id: &str) -> Result<PluginInfo, String> {
+pub(crate) fn require_installed(id: &str) -> Result<PluginInfo, String> {
     if !valid_identifier(id) {
         return Err("invalid plugin id".to_string());
     }
@@ -746,6 +747,15 @@ pub fn plugin_install_from_folder() -> Result<Option<PluginInfo>, String> {
 #[tauri::command]
 pub fn plugin_list() -> Result<Vec<PluginInfo>, String> {
     discover_plugins()
+}
+
+pub(crate) fn plugin_available(id: &str) -> Result<bool, String> {
+    if !valid_identifier(id) {
+        return Ok(false);
+    }
+    Ok(discover_plugins()?
+        .into_iter()
+        .any(|plugin| plugin.manifest.id == id && plugin.enabled))
 }
 #[tauri::command]
 pub fn plugin_read_panel_html(id: String, panel_id: String) -> Result<String, String> {
@@ -930,6 +940,15 @@ mod tests {
         assert!(validate_manifest(&manifest(
             "remotehand.test",
             &["network.connect", "storage.plugin"]
+        ))
+        .is_ok());
+    }
+
+    #[test]
+    fn accepts_plugins_open_permission() {
+        assert!(validate_manifest(&manifest(
+            "remotehand.test",
+            &["plugins.open"]
         ))
         .is_ok());
     }
