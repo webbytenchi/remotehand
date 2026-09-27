@@ -116,4 +116,4 @@ The GitHub Release must be checked after publication to confirm:
 
 ## Current reference
 
-RemoteHand v1.2.18 follows this release format and workflow. Continue using the same sequence for future releases: branch validation, docs/version prep, merge and branch cleanup, exact-main release build, smoke test, packaging/checksums, annotated tag, then GitHub Release publication.
+RemoteHand v1.2.19 follows this release format and workflow. Continue using the same sequence for future releases: branch validation, docs/version prep, merge and branch cleanup, exact-main release build, smoke test, packaging/checksums, annotated tag, then GitHub Release publication.

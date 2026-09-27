@@ -2,6 +2,27 @@
 
 All notable changes to RemoteHand are documented here.
 
+## `1.2.19` - 2026-09-28
+
+### Improved
+
+- **Native desktop interaction polish.** RemoteHand suppresses the browser/WebView context menu on normal application chrome while preserving native context menus for editable controls.
+- **Accidental text-selection prevention.** Normal RemoteHand chrome is non-selectable by default, while terminals, editable controls, and explicitly selectable surfaces retain text selection.
+- **Plugin panel consistency.** Sandboxed plugin panels receive the same host-owned context-menu suppression and non-selectable-by-default behavior, with opt-in hooks for plugin surfaces that intentionally need native context menus or selectable text.
+
+### Compatibility
+
+- Plugin API remains **v1**.
+- Plugins can opt a surface back into text selection with `data-remotehand-selectable="true"`.
+- Plugins can opt a surface into the native WebView context menu with `data-remotehand-native-context-menu="true"`.
+
+### Verification
+
+- Manual Windows acceptance confirmed browser/WebView context menus are suppressed across normal RemoteHand chrome and plugin panels.
+- Manual Windows acceptance confirmed normal application chrome no longer exposes accidental text selection.
+- Terminal, Editor, input, and other intentionally interactive surfaces were spot-checked to preserve expected selection/editing behavior.
+
+
 
 ## `1.2.18` - 2026-09-28
 

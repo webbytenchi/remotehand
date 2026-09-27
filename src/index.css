@@ -26,6 +26,23 @@ body,
 }
 body {
   min-height: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/*
+ * RemoteHand chrome behaves like a desktop application rather than a web page:
+ * labels, tabs, buttons, cards, and status text are not accidentally selectable.
+ * Surfaces where selecting/copying text is useful opt back in explicitly.
+ */
+input,
+textarea,
+[contenteditable="true"],
+.xterm,
+.terminal-paste-preview,
+[data-remotehand-selectable="true"] {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 * {

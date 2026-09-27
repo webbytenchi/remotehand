@@ -73,6 +73,21 @@ type: "remotehand.appearance";
 appearance: PluginAppearance;
 };
 const PLUGIN_SECURITY_HEAD = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; font-src data:; media-src data: blob:; object-src 'none'; frame-src 'none'; child-src 'none'; form-action 'none'; base-uri 'none';">`;
+const PLUGIN_NATIVE_UI_STYLE = `
+<style data-remotehand-native-ui>
+html,
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+input,
+textarea,
+[contenteditable="true"],
+[data-remotehand-selectable="true"] {
+  user-select: text;
+  -webkit-user-select: text;
+}
+</style>`;
 const PLUGIN_SCROLLBAR_STYLE = `
 <style data-remotehand-scrollbars>
 :root {
@@ -116,6 +131,14 @@ const BRIDGE_SCRIPT = `
 let sequence = 0;
 const pending = new Map();
 const eventListeners = new Map();
+function allowsNativeContextMenu(target) {
+if (!(target instanceof Element)) return false;
+return Boolean(target.closest('input, textarea, [contenteditable="true"], [data-remotehand-native-context-menu="true"]'));
+}
+document.addEventListener("contextmenu", (event) => {
+if (allowsNativeContextMenu(event.target)) return;
+event.preventDefault();
+}, true);
 function applyAppearance(appearance) {
 if (!appearance || typeof appearance !== "object") return;
 const root = document.documentElement;
@@ -190,9 +213,9 @@ const lower = html.toLowerCase();
 const headStart = lower.indexOf("<head");
 if (headStart >= 0) {
 const headOpenEnd = lower.indexOf(">", headStart);
-if (headOpenEnd >= 0) { const insertAt = headOpenEnd + 1; return html.slice(0, insertAt) + PLUGIN_SECURITY_HEAD + PLUGIN_SCROLLBAR_STYLE + BRIDGE_SCRIPT + html.slice(insertAt); }
+if (headOpenEnd >= 0) { const insertAt = headOpenEnd + 1; return html.slice(0, insertAt) + PLUGIN_SECURITY_HEAD + PLUGIN_NATIVE_UI_STYLE + PLUGIN_SCROLLBAR_STYLE + BRIDGE_SCRIPT + html.slice(insertAt); }
 }
-return PLUGIN_SECURITY_HEAD + PLUGIN_SCROLLBAR_STYLE + BRIDGE_SCRIPT + html;
+return PLUGIN_SECURITY_HEAD + PLUGIN_NATIVE_UI_STYLE + PLUGIN_SCROLLBAR_STYLE + BRIDGE_SCRIPT + html;
 }
 export function PluginPanel({ api, params }: IDockviewPanelProps<PluginPanelParams>) {
 const iframeRef = useRef<HTMLIFrameElement>(null);
