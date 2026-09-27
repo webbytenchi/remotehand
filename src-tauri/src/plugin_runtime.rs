@@ -429,6 +429,9 @@ fn handle_plugin_request(
                 .map_err(|error| format!("invalid file.save params: {error}"))?;
             validate_file_save_params(&params)?;
             let mut dialog = rfd::FileDialog::new().set_file_name(&params.suggested_name);
+            if let Some(window) = app_handle.get_webview_window("main") {
+                dialog = dialog.set_parent(&window);
+            }
             for filter in &params.filters {
                 let extensions=filter.extensions.iter().map(String::as_str).collect::<Vec<_>>();
                 dialog=dialog.add_filter(&filter.name,&extensions);
