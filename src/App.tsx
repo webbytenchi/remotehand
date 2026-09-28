@@ -153,13 +153,7 @@ const targetWindow = targetDocument.defaultView as RemoteHandPopoutWindow | null
 return targetWindow?.__REMOTEHAND_NATIVE_WINDOW_LABEL__ ?? "main";
 };
 
-const isWorkspaceTabTarget = (event: Event) => {
-const target = event.target as { closest?: (selector: string) => Element | null } | null;
-return Boolean(target?.closest?.(".remotehand-tab-shell"));
-};
-
-const arm = (event: DragEvent) => {
-if (!isWorkspaceTabTarget(event)) return;
+const arm = () => {
 tabDragWindowAssistArmed = true;
 void invoke("prepare_drag_target_windows", { sourceLabel: nativeLabel() }).catch((error) => {
 console.error("Failed to prepare RemoteHand tab drag targets", error);
