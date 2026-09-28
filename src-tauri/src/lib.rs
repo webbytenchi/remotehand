@@ -1,5 +1,6 @@
 mod global_shortcut;
 mod logging;
+mod native_file_drop;
 mod plugin_runtime;
 mod plugins;
 mod sftp;
@@ -390,7 +391,7 @@ pub fn run() {
                 .ok_or_else(|| std::io::Error::other("missing main window config"))?;
             let popout_app = app.handle().clone();
             let popout_counter = popout_counter.clone();
-            tauri::WebviewWindowBuilder::from_config(app.handle(), &main_config)
+            let main_window = tauri::WebviewWindowBuilder::from_config(app.handle(), &main_config)
                 .map_err(std::io::Error::other)?
                 .on_new_window(move |url, features| {
                     let sequence = popout_counter.fetch_add(1, Ordering::Relaxed) + 1;
@@ -420,7 +421,12 @@ pub fn run() {
                         let _ = window.set_title(&title);
                     });
                     match builder.build() {
-                        Ok(window) => tauri::webview::NewWindowResponse::Create { window },
+                        Ok(window) => {
+                            if let Err(error) = native_file_drop::install(&window) {
+                                log::warn!("Failed to install native file-drop bridge for popout: {error}");
+                            }
+                            tauri::webview::NewWindowResponse::Create { window }
+                        }
                         Err(error) => {
                             log::error!("Failed to create panel popout for {url}: {error}");
                             tauri::webview::NewWindowResponse::Deny
@@ -429,6 +435,7 @@ pub fn run() {
                 })
                 .build()
                 .map_err(std::io::Error::other)?;
+            native_file_drop::install(&main_window).map_err(std::io::Error::other)?;
             startup_tray::install(&app.handle().clone(), &startup_tray_state).map_err(std::io::Error::other)?;
             let saved = storage::load_settings().map_err(std::io::Error::other)?;
             startup_tray_state.set_close_to_tray(saved.minimize_to_tray_on_close);
