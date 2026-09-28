@@ -4,10 +4,12 @@ use tauri::{Emitter, WebviewWindow};
 #[cfg(target_os = "windows")]
 use webview2_com::{
     Microsoft::Web::WebView2::Win32::{
-        ICoreWebView2File, ICoreWebView2Frame, ICoreWebView2WebMessageReceivedEventArgs,
-        ICoreWebView2WebMessageReceivedEventArgs2, ICoreWebView2_4,
+        ICoreWebView2File, ICoreWebView2Frame, ICoreWebView2Frame2,
+        ICoreWebView2WebMessageReceivedEventArgs, ICoreWebView2WebMessageReceivedEventArgs2,
+        ICoreWebView2_4,
     },
-    take_pwstr, FrameCreatedEventHandler, WebMessageReceivedEventHandler,
+    take_pwstr, FrameCreatedEventHandler, FrameWebMessageReceivedEventHandler,
+    WebMessageReceivedEventHandler,
 };
 #[cfg(target_os = "windows")]
 use windows::core::{Interface, PWSTR};
@@ -144,8 +146,12 @@ fn handle_web_message(
 
 #[cfg(target_os = "windows")]
 fn install_frame_handler(window: &WebviewWindow, frame: &ICoreWebView2Frame) -> Result<(), String> {
+    let frame2: ICoreWebView2Frame2 = frame
+        .cast()
+        .map_err(|error| format!("WebView2 frame does not expose message events: {error}"))?;
+
     let handler_window = window.clone();
-    let handler = WebMessageReceivedEventHandler::create(Box::new(move |_sender, args| {
+    let handler = FrameWebMessageReceivedEventHandler::create(Box::new(move |_sender, args| {
         if let Some(args) = args {
             if let Err(error) = handle_web_message(&handler_window, &args) {
                 log::warn!("Native frame file-drop message rejected: {error}");
@@ -155,7 +161,7 @@ fn install_frame_handler(window: &WebviewWindow, frame: &ICoreWebView2Frame) -> 
     }));
     let mut token = 0i64;
     unsafe {
-        frame
+        frame2
             .add_WebMessageReceived(&handler, &mut token)
             .map_err(|error| format!("cannot register WebView2 frame file-drop handler: {error}"))
     }
