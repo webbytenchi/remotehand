@@ -606,7 +606,7 @@ window.remotehand.onEvent("files.drop", ({ paths, position }) => {
 });
 ~~~
 
-RemoteHand obtains these paths from the native desktop drag/drop event rather than from browser File System Access APIs. Plugins should use their normal runtime/backend file-opening path after receiving a drop and should not retain browser file handles or request browser filesystem write permission.
+RemoteHand preserves normal HTML drag/drop in plugin panels, then uses WebView2's native representation of the dropped DOM File objects to recover their real local paths in the host. Plugins should use their normal runtime/backend file-opening path after receiving a drop and should not retain browser file handles or request browser filesystem write permission.
 
 The event is only delivered to the plugin panel under the native drop point and only when that plugin declares `files.open`. A plugin remains responsible for deciding which part of its own UI accepts the drop, validating count/type/size, and handling the file through its normal plugin runtime.
 
