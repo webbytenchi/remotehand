@@ -1748,7 +1748,13 @@ return;
 if (workspaceDropPosition === "within") {
 panel.api.moveTo({ group: popout.group });
 } else {
-panel.api.moveTo({ group: popout.group, position: workspaceDropPosition });
+const dockviewPosition =
+workspaceDropPosition === "above"
+? "top"
+: workspaceDropPosition === "below"
+? "bottom"
+: workspaceDropPosition;
+panel.api.moveTo({ group: popout.group, position: dockviewPosition });
 }
 panel.api.setActive();
 workspaceDragPanelIdRef.current = null;
