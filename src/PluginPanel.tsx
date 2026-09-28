@@ -170,9 +170,18 @@ root.style.setProperty("--remotehand-" + cssName, value);
 }
 window.dispatchEvent(new CustomEvent("remotehand-appearance-change", { detail: appearance }));
 }
+document.addEventListener("dragover", (event) => {
+const files = event.dataTransfer && event.dataTransfer.files;
+const types = event.dataTransfer && Array.from(event.dataTransfer.types || []);
+if ((!files || files.length === 0) && !types.includes("Files")) return;
+// RemoteHand owns native file-drop delivery. Suppress Chromium/WebView2's
+// default file handling while preserving propagation for plugin UI handlers.
+event.preventDefault();
+}, true);
 document.addEventListener("drop", (event) => {
 const files = event.dataTransfer && event.dataTransfer.files;
 if (!files || files.length === 0) return;
+event.preventDefault();
 const nativeBridge = window.chrome && window.chrome.webview;
 if (!nativeBridge || typeof nativeBridge.postMessageWithAdditionalObjects !== "function") {
 console.error("RemoteHand WebView2 native file-drop bridge is unavailable in this frame");
