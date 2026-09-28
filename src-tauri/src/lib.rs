@@ -139,6 +139,25 @@ fn focus_single_panel_popout(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn prepare_drag_target_windows(app: tauri::AppHandle, source_label: String) -> Result<(), String> {
+    if source_label != "main" && !source_label.starts_with("panel-popout-") {
+        return Err("refusing to prepare drag targets for a non-RemoteHand window".to_string());
+    }
+
+    for (candidate_label, candidate) in app.webview_windows() {
+        let is_workspace_window =
+            candidate_label == "main" || candidate_label.starts_with("panel-popout-");
+        if !is_workspace_window {
+            continue;
+        }
+        candidate
+            .set_always_on_top(candidate_label != source_label)
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn raise_drag_target_window(app: tauri::AppHandle, label: String) -> Result<(), String> {
     if label != "main" && !label.starts_with("panel-popout-") {
         return Err("refusing to raise a non-RemoteHand window".to_string());
@@ -167,6 +186,24 @@ fn release_drag_target_windows(app: tauri::AppHandle) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[tauri::command]
+fn finish_drag_target_window(app: tauri::AppHandle, label: String) -> Result<(), String> {
+    if label != "main" && !label.starts_with("panel-popout-") {
+        return Err("refusing to focus a non-RemoteHand window".to_string());
+    }
+
+    release_drag_target_windows(app.clone())?;
+
+    let window = app
+        .get_webview_window(&label)
+        .ok_or_else(|| format!("RemoteHand drag target is not available: {label}"))?;
+    if window.is_minimized().map_err(|error| error.to_string())? {
+        window.unminimize().map_err(|error| error.to_string())?;
+    }
+    window.show().map_err(|error| error.to_string())?;
+    window.set_focus().map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -315,8 +352,10 @@ pub fn run() {
             hide_single_panel_popout,
             focus_main_window,
             focus_single_panel_popout,
+            prepare_drag_target_windows,
             raise_drag_target_window,
             release_drag_target_windows,
+            finish_drag_target_window,
             show_pending_popout,
             startup_tray::set_startup_enabled,
             startup_tray::startup_enabled,

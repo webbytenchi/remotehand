@@ -141,7 +141,53 @@ context?: { targetId?: string; target?: string; view?: string; alertKey?: string
 type RemoteHandPopoutWindow = Window & {
 __REMOTEHAND_NATIVE_WINDOW_LABEL__?: string;
 };
-const tabDragAssistDocuments = new WeakSet<Document>();
+const tabDragAssistDocuments = new Set<Document>();
+let tabDragWindowAssistArmed = false;
+const dragIframePointerEvents = new Map<HTMLIFrameElement, string>();
+
+function setWorkspaceDragIframePassThrough(enabled: boolean) {
+if (!enabled) {
+for (const [frame, previous] of dragIframePointerEvents) {
+if (previous) frame.style.pointerEvents = previous;
+else frame.style.removeProperty("pointer-events");
+}
+dragIframePointerEvents.clear();
+return;
+}
+
+for (const targetDocument of tabDragAssistDocuments) {
+const targetWindow = targetDocument.defaultView;
+if (!targetWindow || targetWindow.closed) continue;
+
+targetDocument.querySelectorAll<HTMLIFrameElement>("iframe.plugin-panel-frame").forEach((frame) => {
+if (!dragIframePointerEvents.has(frame)) {
+dragIframePointerEvents.set(frame, frame.style.pointerEvents);
+}
+frame.style.pointerEvents = "none";
+});
+}
+}
+
+function beginWorkspaceTabDrag(sourceWindow: Window) {
+if (!isTauri()) return;
+tabDragWindowAssistArmed = true;
+setWorkspaceDragIframePassThrough(true);
+const sourceLabel =
+(sourceWindow as RemoteHandPopoutWindow).__REMOTEHAND_NATIVE_WINDOW_LABEL__ ?? "main";
+void invoke("prepare_drag_target_windows", { sourceLabel }).catch((error) => {
+console.error("Failed to prepare RemoteHand tab drag targets", error);
+});
+}
+
+function releaseWorkspaceTabDragAssist() {
+const wasArmed = tabDragWindowAssistArmed;
+tabDragWindowAssistArmed = false;
+setWorkspaceDragIframePassThrough(false);
+if (!wasArmed) return;
+void invoke("release_drag_target_windows").catch((error) => {
+console.error("Failed to release RemoteHand drag window stacking", error);
+});
+}
 
 function installTabDragWindowAssist(targetDocument: Document) {
 if (tabDragAssistDocuments.has(targetDocument) || !isTauri()) return;
@@ -153,21 +199,35 @@ return targetWindow?.__REMOTEHAND_NATIVE_WINDOW_LABEL__ ?? "main";
 };
 
 const raiseHere = () => {
+if (!tabDragWindowAssistArmed) return;
 void invoke("raise_drag_target_window", { label: nativeLabel() }).catch((error) => {
 console.error("Failed to raise hovered RemoteHand window during tab drag", error);
 });
 };
 
 const release = () => {
-void invoke("release_drag_target_windows").catch((error) => {
-console.error("Failed to release RemoteHand drag window stacking", error);
+releaseWorkspaceTabDragAssist();
+};
+
+const finishDrop = () => {
+if (!tabDragWindowAssistArmed) return;
+tabDragWindowAssistArmed = false;
+setWorkspaceDragIframePassThrough(false);
+void invoke("finish_drag_target_window", { label: nativeLabel() }).catch((error) => {
+console.error("Failed to finish RemoteHand tab drag target focus", error);
+void invoke("release_drag_target_windows").catch(() => undefined);
 });
+};
+
+const unload = () => {
+tabDragAssistDocuments.delete(targetDocument);
+release();
 };
 
 targetDocument.addEventListener("dragenter", raiseHere, true);
 targetDocument.addEventListener("dragend", release, true);
-targetDocument.addEventListener("drop", release, true);
-targetDocument.defaultView?.addEventListener("beforeunload", release, { once: true });
+targetDocument.addEventListener("drop", finishDrop, true);
+targetDocument.defaultView?.addEventListener("beforeunload", unload, { once: true });
 }
 
 const HOME_MESSAGES = [
@@ -1523,6 +1583,9 @@ return () => window.removeEventListener("keydown", onKeyDown);
 }, [redoLayout, undoLayout]);
 const handleReady = async (event: DockviewReadyEvent) => {
 apiRef.current = event.api;
+event.api.onWillDragPanel((dragEvent) => {
+beginWorkspaceTabDrag(dragEvent.panel.api.getWindow());
+});
 if (isTauri()) {
 try {
 const saved = await invoke<WorkspaceLayout | null>("load_workspace");
@@ -1570,6 +1633,7 @@ panel.api.updateParameters({ activities: recentActivities });
 captureLayout(event.api);
 event.api.onDidLayoutChange(() => {
 captureLayout(event.api);
+releaseWorkspaceTabDragAssist();
 });
 event.api.onDidAddPopoutGroup((popout) => {
 popout.group.activePanel?.api.setActive();
