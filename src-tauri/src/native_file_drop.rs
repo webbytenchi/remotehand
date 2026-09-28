@@ -4,10 +4,10 @@ use tauri::{Emitter, WebviewWindow};
 #[cfg(target_os = "windows")]
 use webview2_com::{
     Microsoft::Web::WebView2::Win32::{
-        ICoreWebView2File, ICoreWebView2WebMessageReceivedEventArgs,
-        ICoreWebView2WebMessageReceivedEventArgs2,
+        ICoreWebView2File, ICoreWebView2Frame, ICoreWebView2WebMessageReceivedEventArgs,
+        ICoreWebView2WebMessageReceivedEventArgs2, ICoreWebView2_4,
     },
-    take_pwstr, WebMessageReceivedEventHandler,
+    take_pwstr, FrameCreatedEventHandler, WebMessageReceivedEventHandler,
 };
 #[cfg(target_os = "windows")]
 use windows::core::{Interface, PWSTR};
@@ -143,6 +143,25 @@ fn handle_web_message(
 }
 
 #[cfg(target_os = "windows")]
+fn install_frame_handler(window: &WebviewWindow, frame: &ICoreWebView2Frame) -> Result<(), String> {
+    let handler_window = window.clone();
+    let handler = WebMessageReceivedEventHandler::create(Box::new(move |_sender, args| {
+        if let Some(args) = args {
+            if let Err(error) = handle_web_message(&handler_window, &args) {
+                log::warn!("Native frame file-drop message rejected: {error}");
+            }
+        }
+        Ok(())
+    }));
+    let mut token = 0i64;
+    unsafe {
+        frame
+            .add_WebMessageReceived(&handler, &mut token)
+            .map_err(|error| format!("cannot register WebView2 frame file-drop handler: {error}"))
+    }
+}
+
+#[cfg(target_os = "windows")]
 pub fn install(window: &WebviewWindow) -> Result<(), String> {
     let event_window = window.clone();
     window
@@ -156,6 +175,7 @@ pub fn install(window: &WebviewWindow) -> Result<(), String> {
                 }
             };
 
+            // Keep the top-level handler for host-owned content.
             let handler_window = event_window.clone();
             let handler = WebMessageReceivedEventHandler::create(Box::new(move |_sender, args| {
                 if let Some(args) = args {
@@ -165,10 +185,40 @@ pub fn install(window: &WebviewWindow) -> Result<(), String> {
                 }
                 Ok(())
             }));
-
             let mut token = 0i64;
             if let Err(error) = unsafe { core.add_WebMessageReceived(&handler, &mut token) } {
                 log::error!("Failed to register WebView2 native file-drop handler: {error}");
+            }
+
+            // Plugin panels are srcdoc iframes. WebView2 routes messages sent by
+            // an iframe to that frame's WebMessageReceived event rather than the
+            // top-level CoreWebView2 event, so subscribe as frames are created.
+            let core4: ICoreWebView2_4 = match core.cast() {
+                Ok(core4) => core4,
+                Err(error) => {
+                    log::error!("WebView2 does not expose frame events for native file drops: {error}");
+                    return;
+                }
+            };
+            let frame_window = event_window.clone();
+            let frame_handler = FrameCreatedEventHandler::create(Box::new(move |_sender, args| {
+                if let Some(args) = args {
+                    match unsafe { args.Frame() } {
+                        Ok(frame) => {
+                            if let Err(error) = install_frame_handler(&frame_window, &frame) {
+                                log::warn!("Failed to install native file-drop handler for frame: {error}");
+                            }
+                        }
+                        Err(error) => {
+                            log::warn!("Failed to access created WebView2 frame: {error}");
+                        }
+                    }
+                }
+                Ok(())
+            }));
+            let mut frame_token = 0i64;
+            if let Err(error) = unsafe { core4.add_FrameCreated(&frame_handler, &mut frame_token) } {
+                log::error!("Failed to register WebView2 frame-created handler: {error}");
             }
         })
         .map_err(|error| format!("cannot access native webview for file drops: {error}"))
