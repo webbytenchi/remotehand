@@ -303,6 +303,7 @@ pub fn run() {
             plugins::plugin_install_from_zip,
             plugins::plugin_install_from_folder,
             plugins::plugin_list,
+            plugins::plugin_has_permission,
             plugins::plugin_read_panel_html,
             plugins::plugin_read_sidebar_icon,
             plugins::plugin_set_enabled,
