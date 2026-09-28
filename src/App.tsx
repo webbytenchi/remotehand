@@ -161,6 +161,9 @@ return Boolean(target?.closest?.(".remotehand-tab-shell"));
 const arm = (event: DragEvent) => {
 if (!isWorkspaceTabTarget(event)) return;
 tabDragWindowAssistArmed = true;
+void invoke("prepare_drag_target_windows", { sourceLabel: nativeLabel() }).catch((error) => {
+console.error("Failed to prepare RemoteHand tab drag targets", error);
+});
 };
 
 const raiseHere = () => {
