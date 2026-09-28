@@ -181,6 +181,7 @@ console.error("Failed to release RemoteHand drag window stacking", error);
 
 targetDocument.addEventListener("pointerdown", arm, true);
 targetDocument.addEventListener("pointerup", release, true);
+targetDocument.addEventListener("pointercancel", release, true);
 targetDocument.addEventListener("dragenter", raiseHere, true);
 targetDocument.addEventListener("dragend", release, true);
 targetDocument.addEventListener("drop", release, true);
