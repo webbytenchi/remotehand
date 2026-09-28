@@ -429,6 +429,14 @@ fn validate_plugin_request(permissions: &[String], request: &PluginRequest) -> R
         other => Err(format!("unsupported host API method: {other}")),
     }
 }
+fn focused_dialog_parent(app_handle: &AppHandle) -> Option<tauri::WebviewWindow> {
+    app_handle
+        .webview_windows()
+        .into_values()
+        .find(|window| window.is_focused().unwrap_or(false))
+        .or_else(|| app_handle.get_webview_window("main"))
+}
+
 fn handle_plugin_request(
     app_handle: &AppHandle,
     plugin_id: &str,
@@ -493,7 +501,7 @@ fn handle_plugin_request(
                 .map_err(|error| format!("invalid file.open params: {error}"))?;
             validate_file_open_params(&params)?;
             let mut dialog = rfd::FileDialog::new();
-            if let Some(window) = app_handle.get_webview_window("main") {
+            if let Some(window) = focused_dialog_parent(app_handle) {
                 dialog = dialog.set_parent(&window);
             }
             for filter in &params.filters {
@@ -510,7 +518,7 @@ fn handle_plugin_request(
                 .map_err(|error| format!("invalid file.save params: {error}"))?;
             validate_file_save_params(&params)?;
             let mut dialog = rfd::FileDialog::new().set_file_name(&params.suggested_name);
-            if let Some(window) = app_handle.get_webview_window("main") {
+            if let Some(window) = focused_dialog_parent(app_handle) {
                 dialog = dialog.set_parent(&window);
             }
             for filter in &params.filters {
