@@ -1569,7 +1569,7 @@ if (nativeEvent instanceof DragEvent) {
 const target = nativeEvent.target;
 const sourceDocument =
 target instanceof Node
-? target.ownerDocument
+? (target.ownerDocument ?? sourceWindow.document)
 : sourceWindow.document;
 sourceDocument.addEventListener("dragend", () => {
 workspaceDragPanelIdRef.current = null;
