@@ -1644,35 +1644,88 @@ position: "fixed",
 inset: "0",
 zIndex: "2147483647",
 display: "none",
-alignItems: "center",
-justifyContent: "center",
-background: "rgba(17, 21, 26, 0.18)",
-border: "2px dashed var(--accent-border, #5d7fa4)",
-boxSizing: "border-box",
-color: "var(--text, #eef3f8)",
-fontFamily: "var(--ui-font-family, Inter, ui-sans-serif, system-ui, sans-serif)",
-fontSize: "14px",
-fontWeight: "700",
 pointerEvents: "auto",
 });
-const workspaceDropLabel = targetDocument.createElement("div");
-workspaceDropLabel.textContent = "Drop tab here";
-Object.assign(workspaceDropLabel.style, {
-padding: "10px 16px",
+
+const workspaceDropIndicator = targetDocument.createElement("div");
+Object.assign(workspaceDropIndicator.style, {
+position: "absolute",
+inset: "25%",
+border: "2px solid var(--accent-border, #5d7fa4)",
 borderRadius: "8px",
-background: "rgba(23, 29, 36, 0.92)",
+background: "rgba(93, 127, 164, 0.20)",
+boxShadow: "0 0 0 1px rgba(255,255,255,.05) inset",
+pointerEvents: "none",
+transition: "inset 80ms ease, left 80ms ease, right 80ms ease, top 80ms ease, bottom 80ms ease",
+});
+workspaceDropOverlay.appendChild(workspaceDropIndicator);
+
+const workspaceDropLabel = targetDocument.createElement("div");
+workspaceDropLabel.textContent = "Drop as tab";
+Object.assign(workspaceDropLabel.style, {
+position: "absolute",
+left: "50%",
+top: "50%",
+transform: "translate(-50%, -50%)",
+padding: "8px 12px",
+borderRadius: "7px",
+background: "rgba(23, 29, 36, 0.94)",
 border: "1px solid var(--accent-border, #5d7fa4)",
 boxShadow: "0 8px 28px rgba(0,0,0,.30)",
+color: "var(--text, #eef3f8)",
+fontFamily: "var(--ui-font-family, Inter, ui-sans-serif, system-ui, sans-serif)",
+fontSize: "13px",
+fontWeight: "700",
+pointerEvents: "none",
 });
 workspaceDropOverlay.appendChild(workspaceDropLabel);
 targetDocument.body.appendChild(workspaceDropOverlay);
 workspaceDropOverlaysRef.current.set(popout.window, workspaceDropOverlay);
+
+type WorkspaceDropPosition = "left" | "right" | "above" | "below" | "within";
+let workspaceDropPosition: WorkspaceDropPosition = "within";
+
+const renderWorkspaceDropPosition = (position: WorkspaceDropPosition) => {
+workspaceDropPosition = position;
+if (position === "left") {
+Object.assign(workspaceDropIndicator.style, { left: "2%", right: "52%", top: "2%", bottom: "2%" });
+workspaceDropLabel.textContent = "Dock left";
+} else if (position === "right") {
+Object.assign(workspaceDropIndicator.style, { left: "52%", right: "2%", top: "2%", bottom: "2%" });
+workspaceDropLabel.textContent = "Dock right";
+} else if (position === "above") {
+Object.assign(workspaceDropIndicator.style, { left: "2%", right: "2%", top: "2%", bottom: "52%" });
+workspaceDropLabel.textContent = "Dock above";
+} else if (position === "below") {
+Object.assign(workspaceDropIndicator.style, { left: "2%", right: "2%", top: "52%", bottom: "2%" });
+workspaceDropLabel.textContent = "Dock below";
+} else {
+Object.assign(workspaceDropIndicator.style, { left: "25%", right: "25%", top: "25%", bottom: "25%" });
+workspaceDropLabel.textContent = "Drop as tab";
+}
+};
 
 workspaceDropOverlay.addEventListener("dragover", (dragOverEvent) => {
 if (!workspaceDragPanelIdRef.current) return;
 dragOverEvent.preventDefault();
 dragOverEvent.stopPropagation();
 if (dragOverEvent.dataTransfer) dragOverEvent.dataTransfer.dropEffect = "move";
+
+const rect = workspaceDropOverlay.getBoundingClientRect();
+const x = rect.width ? (dragOverEvent.clientX - rect.left) / rect.width : 0.5;
+const y = rect.height ? (dragOverEvent.clientY - rect.top) / rect.height : 0.5;
+const edge = 0.25;
+
+if (x < edge) renderWorkspaceDropPosition("left");
+else if (x > 1 - edge) renderWorkspaceDropPosition("right");
+else if (y < edge) renderWorkspaceDropPosition("above");
+else if (y > 1 - edge) renderWorkspaceDropPosition("below");
+else renderWorkspaceDropPosition("within");
+});
+
+workspaceDropOverlay.addEventListener("dragleave", (dragLeaveEvent) => {
+if (dragLeaveEvent.relatedTarget && workspaceDropOverlay.contains(dragLeaveEvent.relatedTarget as Node)) return;
+renderWorkspaceDropPosition("within");
 });
 
 workspaceDropOverlay.addEventListener("drop", (dropEvent) => {
@@ -1688,9 +1741,14 @@ clearWorkspaceDropOverlays();
 return;
 }
 
+if (workspaceDropPosition === "within") {
 panel.api.moveTo({ group: popout.group });
+} else {
+panel.api.moveTo({ group: popout.group, position: workspaceDropPosition });
+}
 panel.api.setActive();
 workspaceDragPanelIdRef.current = null;
+renderWorkspaceDropPosition("within");
 clearWorkspaceDropOverlays();
 
 const nativeLabel = (popout.window as RemoteHandPopoutWindow).__REMOTEHAND_NATIVE_WINDOW_LABEL__;
