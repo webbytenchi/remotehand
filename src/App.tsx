@@ -146,24 +146,24 @@ let tabDragWindowAssistArmed = false;
 const dragIframePointerEvents = new Map<HTMLIFrameElement, string>();
 
 function setWorkspaceDragIframePassThrough(enabled: boolean) {
+if (!enabled) {
+for (const [frame, previous] of dragIframePointerEvents) {
+if (previous) frame.style.pointerEvents = previous;
+else frame.style.removeProperty("pointer-events");
+}
+dragIframePointerEvents.clear();
+return;
+}
+
 for (const targetDocument of tabDragAssistDocuments) {
 const targetWindow = targetDocument.defaultView;
 if (!targetWindow || targetWindow.closed) continue;
 
 targetDocument.querySelectorAll<HTMLIFrameElement>("iframe.plugin-panel-frame").forEach((frame) => {
-if (enabled) {
 if (!dragIframePointerEvents.has(frame)) {
 dragIframePointerEvents.set(frame, frame.style.pointerEvents);
 }
 frame.style.pointerEvents = "none";
-return;
-}
-
-const previous = dragIframePointerEvents.get(frame);
-if (previous === undefined) return;
-if (previous) frame.style.pointerEvents = previous;
-else frame.style.removeProperty("pointer-events");
-dragIframePointerEvents.delete(frame);
 });
 }
 }
