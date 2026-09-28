@@ -1,5 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { IDockviewPanelProps } from "dockview-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 export type PluginPanelParams = {
@@ -191,7 +192,7 @@ pending.delete(message.requestId);
 if (message.ok) pendingRequest.resolve(message.result); else pendingRequest.reject(new Error(message.error || "Plugin request failed"));
 return;
 }
-if (message.type === "remotehand.plugin.event") {
+if (message.type === "remotehand.plugin.event" || message.type === "remotehand.host.event") {
 const listeners = eventListeners.get(message.event);
 if (!listeners) return;
 for (const listener of Array.from(listeners)) { try { listener(message.payload); } catch (error) { console.error("RemoteHand plugin event listener failed", error); } }
@@ -286,6 +287,44 @@ if (tauriEvent.payload.pluginId !== pluginId) return;
 iframeRef.current?.contentWindow?.postMessage({ type: "remotehand.plugin.event", event: tauriEvent.payload.event, payload: tauriEvent.payload.payload } satisfies PluginBridgeEvent, "*");
 }).then((dispose) => { if (cancelled) dispose(); else unlisten = dispose; });
 return () => { cancelled = true; unlisten?.(); };
+}, [pluginId]);
+
+useEffect(() => {
+if (!isTauri() || !pluginId) return;
+let cancelled = false;
+let unlisten: (() => void) | undefined;
+
+void invoke<boolean>("plugin_has_permission", { id: pluginId, permission: "files.open" })
+.then((allowed) => {
+if (!allowed || cancelled) return;
+return getCurrentWebview().onDragDropEvent((event) => {
+if (event.payload.type !== "drop") return;
+const frame = iframeRef.current;
+const ownerWindow = frame?.ownerDocument.defaultView;
+if (!frame || !ownerWindow) return;
+const rect = frame.getBoundingClientRect();
+const scale = ownerWindow.devicePixelRatio || 1;
+const x = event.payload.position.x / scale;
+const y = event.payload.position.y / scale;
+if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return;
+const paths = event.payload.paths.filter((path) => typeof path === "string" && path.length > 0);
+if (paths.length === 0) return;
+frame.contentWindow?.postMessage({ type: "remotehand.host.event", event: "files.drop", payload: { paths } }, "*");
+});
+})
+.then((dispose) => {
+if (!dispose) return;
+if (cancelled) dispose();
+else unlisten = dispose;
+})
+.catch((error) => {
+if (!cancelled) console.error("RemoteHand native file-drop bridge failed", error);
+});
+
+return () => {
+cancelled = true;
+unlisten?.();
+};
 }, [pluginId]);
 const repairedDocumentRef = useRef<Document | null>(null);
 const repairSheetRef = useRef<CSSStyleSheet | null>(null);
