@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::{Emitter, WebviewWindow};
 
 #[cfg(target_os = "windows")]
@@ -16,6 +17,7 @@ use windows::core::{Interface, PWSTR};
 
 const DROP_MESSAGE_TYPE: &str = "remotehand.files.drop";
 const MAX_DROP_FILES: u32 = 32;
+static DROP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -37,6 +39,8 @@ fn handle_web_message(
     window: &WebviewWindow,
     args: &ICoreWebView2WebMessageReceivedEventArgs,
 ) -> Result<(), String> {
+    let drop_id = DROP_SEQUENCE.fetch_add(1, Ordering::Relaxed) + 1;
+    log::info!("Native file drop {drop_id}: callback entered");
     let mut message_json = PWSTR::null();
     unsafe {
         args.WebMessageAsJson(&mut message_json)
@@ -49,6 +53,7 @@ fn handle_web_message(
     if message.get("type").and_then(serde_json::Value::as_str) != Some(DROP_MESSAGE_TYPE) {
         return Ok(());
     }
+    log::info!("Native file drop {drop_id}: message parsed");
 
     let plugin_id = message
         .get("pluginId")
@@ -93,7 +98,9 @@ fn handle_web_message(
             .Count(&mut count)
             .map_err(|error| format!("cannot count WebView2 drop objects: {error}"))?;
     }
+    log::info!("Native file drop {drop_id}: additional objects count={count}");
     if count == 0 {
+        log::info!("Native file drop {drop_id}: no additional objects; callback returning");
         return Ok(());
     }
     if count > MAX_DROP_FILES {
@@ -125,8 +132,13 @@ fn handle_web_message(
     }
 
     if paths.is_empty() {
+        log::info!("Native file drop {drop_id}: no file paths extracted; callback returning");
         return Ok(());
     }
+    log::info!(
+        "Native file drop {drop_id}: extracted {} path(s)",
+        paths.len()
+    );
 
     let payload = NativeFileDropPayload {
         plugin_id: plugin_id.to_string(),
@@ -144,11 +156,15 @@ fn handle_web_message(
     // native callback unwind first and avoids re-entrant WebView2/Tauri work
     // when several file drops arrive in succession.
     tauri::async_runtime::spawn(async move {
+        log::info!("Native file drop {drop_id}: deferred emit starting");
         if let Err(error) = event_window.emit("remotehand-native-file-drop", payload) {
-            log::warn!("Cannot deliver native file drop: {error}");
+            log::warn!("Native file drop {drop_id}: cannot deliver event: {error}");
+        } else {
+            log::info!("Native file drop {drop_id}: deferred emit finished");
         }
     });
 
+    log::info!("Native file drop {drop_id}: callback returning");
     Ok(())
 }
 
