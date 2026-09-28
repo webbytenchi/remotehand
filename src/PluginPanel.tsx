@@ -21,6 +21,13 @@ requestId: string;
 method: string;
 params?: unknown;
 };
+type PluginFileDropMessage = {
+type: "remotehand.plugin.files.drop";
+pluginId: string;
+panelId: string;
+position: { x: number; y: number };
+files: File[];
+};
 type PluginBridgeResponse = {
 type: "remotehand.plugin.response";
 requestId: string;
@@ -173,15 +180,14 @@ window.dispatchEvent(new CustomEvent("remotehand-appearance-change", { detail: a
 document.addEventListener("drop", (event) => {
 const files = event.dataTransfer && event.dataTransfer.files;
 if (!files || files.length === 0) return;
-const nativeBridge = window.chrome && window.chrome.webview;
-if (!nativeBridge || typeof nativeBridge.postMessageWithAdditionalObjects !== "function") return;
 try {
-nativeBridge.postMessageWithAdditionalObjects({
-type: "remotehand.files.drop",
+parent.postMessage({
+type: "remotehand.plugin.files.drop",
 pluginId,
 panelId,
 position: { x: event.clientX, y: event.clientY },
-}, files);
+files: Array.from(files),
+}, "*");
 } catch (error) {
 console.error("RemoteHand native file-drop handoff failed", error);
 }
@@ -271,11 +277,33 @@ iframeRef.current?.contentWindow?.postMessage({ type: "remotehand.appearance", a
 const postContext = (nextContext: PluginContext = contextRef.current) => {
 iframeRef.current?.contentWindow?.postMessage({ type: "remotehand.plugin.context", context: nextContext ?? {} }, "*");
 };
-const onMessage = (event: MessageEvent<PluginBridgeRequest | { type: "remotehand.plugin.ready" }>) => {
+const onMessage = (event: MessageEvent<PluginBridgeRequest | PluginFileDropMessage | { type: "remotehand.plugin.ready" }>) => {
 if (event.source !== iframeRef.current?.contentWindow) return;
 const message = event.data;
 if (!message) return;
 if (message.type === "remotehand.plugin.ready") { postAppearance(); postContext(); return; }
+if (message.type === "remotehand.plugin.files.drop") {
+if (message.pluginId !== pluginId || message.panelId !== panelId) return;
+if (!Array.isArray(message.files) || message.files.length === 0) return;
+const nativeBridge = (window as Window & {
+chrome?: { webview?: { postMessageWithAdditionalObjects?: (message: unknown, objects: unknown[]) => void } };
+}).chrome?.webview;
+if (!nativeBridge?.postMessageWithAdditionalObjects) {
+console.error("RemoteHand WebView2 native file-drop bridge is unavailable");
+return;
+}
+try {
+nativeBridge.postMessageWithAdditionalObjects({
+type: "remotehand.files.drop",
+pluginId,
+panelId,
+position: message.position,
+}, message.files);
+} catch (error) {
+console.error("RemoteHand native file-drop handoff failed", error);
+}
+return;
+}
 if (message.type !== "remotehand.plugin.request") return;
 if (typeof message.requestId !== "string" || typeof message.method !== "string") return;
 const respond = (response: PluginBridgeResponse) => { iframeRef.current?.contentWindow?.postMessage(response, "*"); };
