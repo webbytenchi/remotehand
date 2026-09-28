@@ -168,6 +168,27 @@ frame.style.pointerEvents = "none";
 }
 }
 
+function beginWorkspaceTabDrag(sourceWindow: Window) {
+if (!isTauri()) return;
+tabDragWindowAssistArmed = true;
+setWorkspaceDragIframePassThrough(true);
+const sourceLabel =
+(sourceWindow as RemoteHandPopoutWindow).__REMOTEHAND_NATIVE_WINDOW_LABEL__ ?? "main";
+void invoke("prepare_drag_target_windows", { sourceLabel }).catch((error) => {
+console.error("Failed to prepare RemoteHand tab drag targets", error);
+});
+}
+
+function releaseWorkspaceTabDragAssist() {
+const wasArmed = tabDragWindowAssistArmed;
+tabDragWindowAssistArmed = false;
+setWorkspaceDragIframePassThrough(false);
+if (!wasArmed) return;
+void invoke("release_drag_target_windows").catch((error) => {
+console.error("Failed to release RemoteHand drag window stacking", error);
+});
+}
+
 function installTabDragWindowAssist(targetDocument: Document) {
 if (tabDragAssistDocuments.has(targetDocument) || !isTauri()) return;
 tabDragAssistDocuments.add(targetDocument);
@@ -175,14 +196,6 @@ tabDragAssistDocuments.add(targetDocument);
 const nativeLabel = () => {
 const targetWindow = targetDocument.defaultView as RemoteHandPopoutWindow | null;
 return targetWindow?.__REMOTEHAND_NATIVE_WINDOW_LABEL__ ?? "main";
-};
-
-const arm = () => {
-tabDragWindowAssistArmed = true;
-setWorkspaceDragIframePassThrough(true);
-void invoke("prepare_drag_target_windows", { sourceLabel: nativeLabel() }).catch((error) => {
-console.error("Failed to prepare RemoteHand tab drag targets", error);
-});
 };
 
 const raiseHere = () => {
@@ -193,13 +206,7 @@ console.error("Failed to raise hovered RemoteHand window during tab drag", error
 };
 
 const release = () => {
-const wasArmed = tabDragWindowAssistArmed;
-tabDragWindowAssistArmed = false;
-setWorkspaceDragIframePassThrough(false);
-if (!wasArmed) return;
-void invoke("release_drag_target_windows").catch((error) => {
-console.error("Failed to release RemoteHand drag window stacking", error);
-});
+releaseWorkspaceTabDragAssist();
 };
 
 const finishDrop = () => {
@@ -217,7 +224,6 @@ tabDragAssistDocuments.delete(targetDocument);
 release();
 };
 
-targetDocument.addEventListener("dragstart", arm, true);
 targetDocument.addEventListener("dragenter", raiseHere, true);
 targetDocument.addEventListener("dragend", release, true);
 targetDocument.addEventListener("drop", finishDrop, true);
@@ -1577,6 +1583,9 @@ return () => window.removeEventListener("keydown", onKeyDown);
 }, [redoLayout, undoLayout]);
 const handleReady = async (event: DockviewReadyEvent) => {
 apiRef.current = event.api;
+event.api.onWillDragPanel((dragEvent) => {
+beginWorkspaceTabDrag(dragEvent.panel.api.getWindow());
+});
 if (isTauri()) {
 try {
 const saved = await invoke<WorkspaceLayout | null>("load_workspace");
@@ -1624,6 +1633,7 @@ panel.api.updateParameters({ activities: recentActivities });
 captureLayout(event.api);
 event.api.onDidLayoutChange(() => {
 captureLayout(event.api);
+releaseWorkspaceTabDragAssist();
 });
 event.api.onDidAddPopoutGroup((popout) => {
 popout.group.activePanel?.api.setActive();
