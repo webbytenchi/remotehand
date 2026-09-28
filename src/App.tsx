@@ -158,8 +158,8 @@ const target = event.target as { closest?: (selector: string) => Element | null 
 return Boolean(target?.closest?.(".remotehand-tab-shell"));
 };
 
-const arm = (event: PointerEvent) => {
-if (event.button !== 0 || !isWorkspaceTabTarget(event)) return;
+const arm = (event: DragEvent) => {
+if (!isWorkspaceTabTarget(event)) return;
 tabDragWindowAssistArmed = true;
 };
 
@@ -188,9 +188,7 @@ void invoke("release_drag_target_windows").catch(() => undefined);
 });
 };
 
-targetDocument.addEventListener("pointerdown", arm, true);
-targetDocument.addEventListener("pointerup", release, true);
-targetDocument.addEventListener("pointercancel", release, true);
+targetDocument.addEventListener("dragstart", arm, true);
 targetDocument.addEventListener("dragenter", raiseHere, true);
 targetDocument.addEventListener("dragend", release, true);
 targetDocument.addEventListener("drop", finishDrop, true);
