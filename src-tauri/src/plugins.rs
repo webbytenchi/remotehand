@@ -749,13 +749,12 @@ pub fn plugin_list() -> Result<Vec<PluginInfo>, String> {
     discover_plugins()
 }
 
-#[tauri::command]
-pub fn plugin_has_permission(id: String, permission: String) -> Result<bool, String> {
-    if !ALLOWED_PERMISSIONS.contains(&permission.as_str()) {
+pub(crate) fn plugin_has_permission(id: &str, permission: &str) -> Result<bool, String> {
+    if !ALLOWED_PERMISSIONS.contains(&permission) {
         return Err("unsupported plugin permission".to_string());
     }
-    let plugin = require_installed(&id)?;
-    Ok(plugin.enabled && plugin.manifest.permissions.iter().any(|value| value == &permission))
+    let plugin = require_installed(id)?;
+    Ok(plugin.enabled && plugin.manifest.permissions.iter().any(|value| value == permission))
 }
 
 pub(crate) fn plugin_available(id: &str) -> Result<bool, String> {
