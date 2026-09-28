@@ -205,6 +205,8 @@ Recognized permissions:
 | network.inspect | Query host network-interface identity through `network.interfaces`. |
 | clipboard.read | Read from the system clipboard. |
 | clipboard.write | Write bounded text to the system clipboard through `clipboard.write`. |
+| files.open | Open user-selected local files through `file.open` and receive native `files.drop` panel events. |
+| files.save | Save user-selected local files through `file.save`. |
 | tray.contribute | Publish and update generic per-plugin system-tray items through `tray.update`. |
 | notifications.show | Show bounded native notifications associated with a plugin tray item through `notification.show`. |
 | credentials.use | Request a specific credential from the vault by opaque reference. |
@@ -585,13 +587,28 @@ In the actual document this is written as a single-line meta tag with quotes. co
 RemoteHand injects a bridge script into every plugin panel. The bridge exposes a small API to the plugin UI:
 
 ~~~js
-window.remotehand.request(method, params) // Promise - call a host service
-window.remotehand.onEvent(name, listener) // subscribe to events from the plugin runtime
+window.remotehand.request(method, params) // Promise - call the plugin runtime
+window.remotehand.onEvent(name, listener) // subscribe to runtime or host panel events
 ~~~
 
-window.remotehand.request sends a plugin.request to the host via postMessage, waits for the reply, and resolves or rejects the promise.
+window.remotehand.request sends a host.request to the plugin runtime through the RemoteHand bridge, waits for the plugin.response, and resolves or rejects the promise.
 
-window.remotehand.onEvent subscribes to events emitted by the plugin own runtime process. The bridge delivers these over remotehand.plugin.event messages.
+window.remotehand.onEvent subscribes to one-way events delivered to the panel. Runtime events arrive from the plugin process. RemoteHand may also deliver generic host panel events when the plugin has the required permission.
+
+### Native file drops
+
+A plugin panel that declares `files.open` can receive native operating-system file drops through the panel bridge:
+
+~~~js
+window.remotehand.onEvent("files.drop", ({ paths, position }) => {
+  // paths: native local paths supplied by the host
+  // position: { x, y } in CSS pixels relative to the plugin panel
+});
+~~~
+
+RemoteHand obtains these paths from the native desktop drag/drop event rather than from browser File System Access APIs. Plugins should use their normal runtime/backend file-opening path after receiving a drop and should not retain browser file handles or request browser filesystem write permission.
+
+The event is only delivered to the plugin panel under the native drop point and only when that plugin declares `files.open`. A plugin remains responsible for deciding which part of its own UI accepts the drop, validating count/type/size, and handling the file through its normal plugin runtime.
 
 ### Panel lifecycle
 
