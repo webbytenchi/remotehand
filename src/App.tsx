@@ -1639,6 +1639,7 @@ installTabDragWindowAssist(targetDocument);
 
 const workspaceDropOverlay = targetDocument.createElement("div");
 workspaceDropOverlay.setAttribute("data-remotehand-workspace-drop-overlay", "true");
+workspaceDropOverlay.className = "drop-target";
 Object.assign(workspaceDropOverlay.style, {
 position: "fixed",
 inset: "0",
@@ -1647,38 +1648,26 @@ display: "none",
 pointerEvents: "auto",
 });
 
+const workspaceDropZone = targetDocument.createElement("div");
+workspaceDropZone.className = "drop-target-dropzone";
+Object.assign(workspaceDropZone.style, {
+position: "absolute",
+inset: "0",
+pointerEvents: "none",
+});
+
 const workspaceDropIndicator = targetDocument.createElement("div");
+workspaceDropIndicator.className = "drop-target-selection dv-drop-target-center";
 Object.assign(workspaceDropIndicator.style, {
 position: "absolute",
-inset: "25%",
-border: "2px solid var(--accent-border, #5d7fa4)",
-borderRadius: "8px",
-background: "rgba(93, 127, 164, 0.20)",
-boxShadow: "0 0 0 1px rgba(255,255,255,.05) inset",
-pointerEvents: "none",
-transition: "inset 80ms ease, left 80ms ease, right 80ms ease, top 80ms ease, bottom 80ms ease",
-});
-workspaceDropOverlay.appendChild(workspaceDropIndicator);
-
-const workspaceDropLabel = targetDocument.createElement("div");
-workspaceDropLabel.textContent = "Drop as tab";
-Object.assign(workspaceDropLabel.style, {
-position: "absolute",
-left: "50%",
-top: "50%",
-transform: "translate(-50%, -50%)",
-padding: "8px 12px",
-borderRadius: "7px",
-background: "rgba(23, 29, 36, 0.94)",
-border: "1px solid var(--accent-border, #5d7fa4)",
-boxShadow: "0 8px 28px rgba(0,0,0,.30)",
-color: "var(--text, #eef3f8)",
-fontFamily: "var(--ui-font-family, Inter, ui-sans-serif, system-ui, sans-serif)",
-fontSize: "13px",
-fontWeight: "700",
+top: "0",
+left: "0",
+width: "100%",
+height: "100%",
 pointerEvents: "none",
 });
-workspaceDropOverlay.appendChild(workspaceDropLabel);
+workspaceDropZone.appendChild(workspaceDropIndicator);
+workspaceDropOverlay.appendChild(workspaceDropZone);
 targetDocument.body.appendChild(workspaceDropOverlay);
 workspaceDropOverlaysRef.current.set(popout.window, workspaceDropOverlay);
 
@@ -1687,21 +1676,36 @@ let workspaceDropPosition: WorkspaceDropPosition = "within";
 
 const renderWorkspaceDropPosition = (position: WorkspaceDropPosition) => {
 workspaceDropPosition = position;
+
+workspaceDropIndicator.classList.remove(
+"dv-drop-target-left",
+"dv-drop-target-right",
+"dv-drop-target-top",
+"dv-drop-target-bottom",
+"dv-drop-target-center",
+);
+
+workspaceDropIndicator.style.top = "0";
+workspaceDropIndicator.style.left = "0";
+workspaceDropIndicator.style.width = "100%";
+workspaceDropIndicator.style.height = "100%";
+
 if (position === "left") {
-Object.assign(workspaceDropIndicator.style, { left: "2%", right: "52%", top: "2%", bottom: "2%" });
-workspaceDropLabel.textContent = "Dock left";
+workspaceDropIndicator.classList.add("dv-drop-target-left");
+workspaceDropIndicator.style.width = "50%";
 } else if (position === "right") {
-Object.assign(workspaceDropIndicator.style, { left: "52%", right: "2%", top: "2%", bottom: "2%" });
-workspaceDropLabel.textContent = "Dock right";
+workspaceDropIndicator.classList.add("dv-drop-target-right");
+workspaceDropIndicator.style.left = "50%";
+workspaceDropIndicator.style.width = "50%";
 } else if (position === "above") {
-Object.assign(workspaceDropIndicator.style, { left: "2%", right: "2%", top: "2%", bottom: "52%" });
-workspaceDropLabel.textContent = "Dock above";
+workspaceDropIndicator.classList.add("dv-drop-target-top");
+workspaceDropIndicator.style.height = "50%";
 } else if (position === "below") {
-Object.assign(workspaceDropIndicator.style, { left: "2%", right: "2%", top: "52%", bottom: "2%" });
-workspaceDropLabel.textContent = "Dock below";
+workspaceDropIndicator.classList.add("dv-drop-target-bottom");
+workspaceDropIndicator.style.top = "50%";
+workspaceDropIndicator.style.height = "50%";
 } else {
-Object.assign(workspaceDropIndicator.style, { left: "25%", right: "25%", top: "25%", bottom: "25%" });
-workspaceDropLabel.textContent = "Drop as tab";
+workspaceDropIndicator.classList.add("dv-drop-target-center");
 }
 };
 
@@ -1714,7 +1718,7 @@ if (dragOverEvent.dataTransfer) dragOverEvent.dataTransfer.dropEffect = "move";
 const rect = workspaceDropOverlay.getBoundingClientRect();
 const x = rect.width ? (dragOverEvent.clientX - rect.left) / rect.width : 0.5;
 const y = rect.height ? (dragOverEvent.clientY - rect.top) / rect.height : 0.5;
-const edge = 0.25;
+const edge = 0.20;
 
 if (x < edge) renderWorkspaceDropPosition("left");
 else if (x > 1 - edge) renderWorkspaceDropPosition("right");
