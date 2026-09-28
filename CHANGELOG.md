@@ -2,6 +2,30 @@
 
 All notable changes to RemoteHand are documented here.
 
+## `1.2.21` - 2026-09-29
+
+### Added
+
+- **Native Explorer file drop for plugins.** Plugins with `files.open` can receive host-resolved native file paths from Windows Explorer drops while keeping normal HTML5 drag/drop behavior inside plugin panels.
+- **Frame-aware WebView2 drop bridge.** RemoteHand handles plugin `srcdoc` iframe messages at the WebView2 frame level and resolves `ICoreWebView2File.Path` values without exposing browser pseudo-paths.
+
+### Fixed
+
+- **Multi-file drop freeze.** Suppresses Chromium/WebView2 default native-file drop handling after the host bridge accepts the drop, preventing the application from becoming unresponsive while preserving plugin drop handlers.
+- **Popout file-dialog focus.** Plugin Open and Save As dialogs now parent to the currently focused RemoteHand window, with main as fallback, so popped-out plugin panels remain correctly in front after native dialogs close.
+- **Workspace drag behavior.** Workspace-tab drags can surface hidden plugin popouts when appropriate, while Explorer/file drags do not incorrectly bring plugin popouts forward.
+
+### Compatibility
+
+- Plugin API remains **v1**.
+- Native file-drop delivery is permission-gated by `files.open`.
+- Tauri native drag/drop remains disabled so WebView HTML5 drag/drop semantics are preserved.
+- Existing plugins that do not use native file-drop require no migration.
+
+### Verification
+
+- Manual Windows acceptance passed for main-window and popped-out Editor native drops, multi-file drops, caret-path insertion, popout Open/Save As focus, and workspace-tab versus Explorer-drag popout behavior.
+
 ## `1.2.20` - 2026-09-28
 
 ### Added
