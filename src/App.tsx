@@ -179,12 +179,21 @@ console.error("Failed to release RemoteHand drag window stacking", error);
 });
 };
 
+const finishDrop = () => {
+if (!tabDragWindowAssistArmed) return;
+tabDragWindowAssistArmed = false;
+void invoke("finish_drag_target_window", { label: nativeLabel() }).catch((error) => {
+console.error("Failed to finish RemoteHand tab drag target focus", error);
+void invoke("release_drag_target_windows").catch(() => undefined);
+});
+};
+
 targetDocument.addEventListener("pointerdown", arm, true);
 targetDocument.addEventListener("pointerup", release, true);
 targetDocument.addEventListener("pointercancel", release, true);
 targetDocument.addEventListener("dragenter", raiseHere, true);
 targetDocument.addEventListener("dragend", release, true);
-targetDocument.addEventListener("drop", release, true);
+targetDocument.addEventListener("drop", finishDrop, true);
 targetDocument.defaultView?.addEventListener("beforeunload", release, { once: true });
 }
 
