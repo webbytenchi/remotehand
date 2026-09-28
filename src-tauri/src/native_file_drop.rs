@@ -70,10 +70,7 @@ fn handle_web_message(
         return Err("native file-drop message is missing plugin, panel, or position".to_string());
     }
 
-    if !crate::plugins::plugin_has_permission(
-        plugin_id.to_string(),
-        "files.open".to_string(),
-    )? {
+    if !crate::plugins::plugin_has_permission(plugin_id, "files.open")? {
         return Err(format!(
             "plugin {plugin_id} is not enabled with files.open permission"
         ));
