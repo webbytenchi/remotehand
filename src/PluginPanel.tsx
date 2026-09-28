@@ -309,7 +309,11 @@ const y = event.payload.position.y / scale;
 if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return;
 const paths = event.payload.paths.filter((path) => typeof path === "string" && path.length > 0);
 if (paths.length === 0) return;
-frame.contentWindow?.postMessage({ type: "remotehand.host.event", event: "files.drop", payload: { paths } }, "*");
+frame.contentWindow?.postMessage({
+type: "remotehand.host.event",
+event: "files.drop",
+payload: { paths, position: { x: x - rect.left, y: y - rect.top } },
+}, "*");
 });
 })
 .then((dispose) => {
