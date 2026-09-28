@@ -128,20 +128,28 @@ fn handle_web_message(
         return Ok(());
     }
 
-    window
-        .emit(
-            "remotehand-native-file-drop",
-            NativeFileDropPayload {
-                plugin_id: plugin_id.to_string(),
-                panel_id: panel_id.to_string(),
-                paths,
-                position: NativeFileDropPosition {
-                    x: x.unwrap_or_default(),
-                    y: y.unwrap_or_default(),
-                },
-            },
-        )
-        .map_err(|error| format!("cannot deliver native file drop: {error}"))
+    let payload = NativeFileDropPayload {
+        plugin_id: plugin_id.to_string(),
+        panel_id: panel_id.to_string(),
+        paths,
+        position: NativeFileDropPosition {
+            x: x.unwrap_or_default(),
+            y: y.unwrap_or_default(),
+        },
+    };
+    let event_window = window.clone();
+
+    // Do not synchronously emit back into the WebView while handling
+    // WebView2's WebMessageReceived COM callback. Deferring delivery lets the
+    // native callback unwind first and avoids re-entrant WebView2/Tauri work
+    // when several file drops arrive in succession.
+    tauri::async_runtime::spawn(async move {
+        if let Err(error) = event_window.emit("remotehand-native-file-drop", payload) {
+            log::warn!("Cannot deliver native file drop: {error}");
+        }
+    });
+
+    Ok(())
 }
 
 #[cfg(target_os = "windows")]
