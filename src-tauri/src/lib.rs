@@ -170,6 +170,24 @@ fn release_drag_target_windows(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn finish_drag_target_window(app: tauri::AppHandle, label: String) -> Result<(), String> {
+    if label != "main" && !label.starts_with("panel-popout-") {
+        return Err("refusing to focus a non-RemoteHand window".to_string());
+    }
+
+    release_drag_target_windows(app.clone())?;
+
+    let window = app
+        .get_webview_window(&label)
+        .ok_or_else(|| format!("RemoteHand drag target is not available: {label}"))?;
+    if window.is_minimized().map_err(|error| error.to_string())? {
+        window.unminimize().map_err(|error| error.to_string())?;
+    }
+    window.show().map_err(|error| error.to_string())?;
+    window.set_focus().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 fn show_pending_popout(app: tauri::AppHandle) -> Result<(), String> {
     let mut popouts: Vec<_> = app
         .webview_windows()
@@ -317,6 +335,7 @@ pub fn run() {
             focus_single_panel_popout,
             raise_drag_target_window,
             release_drag_target_windows,
+            finish_drag_target_window,
             show_pending_popout,
             startup_tray::set_startup_enabled,
             startup_tray::startup_enabled,
