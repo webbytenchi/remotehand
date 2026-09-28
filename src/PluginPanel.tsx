@@ -1,6 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { IDockviewPanelProps } from "dockview-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 export type PluginPanelParams = {
@@ -35,9 +34,15 @@ event: string;
 payload: unknown;
 };
 type PluginBridgeEvent = {
-type: "remotehand.plugin.event";
+type: "remotehand.plugin.event" | "remotehand.host.event";
 event: string;
 payload: unknown;
+};
+type NativeFileDropEvent = {
+pluginId: string;
+panelId: string;
+paths: string[];
+position: { x: number; y: number };
 };
 type PluginAppearance = {
 theme: "dark" | "light";
@@ -126,9 +131,14 @@ const PLUGIN_SCROLLBAR_STYLE = `
   background: transparent !important;
 }
 </style>`;
-const BRIDGE_SCRIPT = `
+function bridgeScript(pluginId: string, panelId: string) {
+const pluginIdJson = JSON.stringify(pluginId);
+const panelIdJson = JSON.stringify(panelId);
+return `
 <script>
 (() => {
+const pluginId = ${pluginIdJson};
+const panelId = ${panelIdJson};
 let sequence = 0;
 const pending = new Map();
 const eventListeners = new Map();
@@ -160,6 +170,22 @@ root.style.setProperty("--remotehand-" + cssName, value);
 }
 window.dispatchEvent(new CustomEvent("remotehand-appearance-change", { detail: appearance }));
 }
+document.addEventListener("drop", (event) => {
+const files = event.dataTransfer && event.dataTransfer.files;
+if (!files || files.length === 0) return;
+const nativeBridge = window.chrome && window.chrome.webview;
+if (!nativeBridge || typeof nativeBridge.postMessageWithAdditionalObjects !== "function") return;
+try {
+nativeBridge.postMessageWithAdditionalObjects({
+type: "remotehand.files.drop",
+pluginId,
+panelId,
+position: { x: event.clientX, y: event.clientY },
+}, files);
+} catch (error) {
+console.error("RemoteHand native file-drop handoff failed", error);
+}
+}, true);
 window.remotehand = Object.freeze({
 request(method, params = null) {
 return new Promise((resolve, reject) => {
@@ -201,6 +227,7 @@ for (const listener of Array.from(listeners)) { try { listener(message.payload);
 parent.postMessage({ type: "remotehand.plugin.ready" }, "*");
 })();
 </script>`;
+}
 function readPluginAppearance(): PluginAppearance {
 const root = document.documentElement;
 const computed = getComputedStyle(root);
@@ -209,14 +236,15 @@ const light = theme === "light";
 const read = (name: string, fallback: string) => computed.getPropertyValue(name).trim() || fallback;
 return { theme, colorScheme: root.dataset.scheme || "blue", uiFontFamily: read("--ui-font-family", 'ui-sans-serif, system-ui, sans-serif'), uiFontSize: read("--ui-font-size", "13px"), terminalFontFamily: read("--terminal-font-family", '"JetBrains Mono", "Cascadia Code", Consolas, monospace'), terminalFontSize: read("--terminal-font-size", "13px"), terminalBackground: read("--terminal-background", light ? "#ffffff" : "#11151a"), terminalForeground: read("--terminal-foreground", light ? "#20242c" : "#d8dde6"), colors: { background: light ? "#f4f5f7" : "#11151a", surface: light ? "#ffffff" : "#171d24", surfaceRaised: light ? "#f8f9fb" : "#1d252f", border: light ? "#c8d0da" : "#35404d", text: light ? "#20242c" : "#dee5ef", mutedText: light ? "#667085" : "#93a1b2", inputBackground: light ? "#ffffff" : "#0f141a", buttonBackground: light ? "#eef1f4" : "#232c37", buttonHover: light ? "#e2e7ec" : "#2a3542", accent: read("--accent", light ? "#356fa9" : "#70a7e8"), accentBorder: read("--accent-border", light ? "#8fb3d8" : "#3b5f8d"), accentSurface: read("--accent-surface", light ? "#e7f0fa" : "#16263a"), accentSurfaceHover: read("--accent-surface-hover", light ? "#d9e9f8" : "#1d3550"), dangerText: light ? "#a12a2a" : "#efaaaa", dangerBorder: light ? "#d4a1a1" : "#5a3035", dangerSurface: light ? "#fff0f0" : "#241316", successText: light ? "#27643c" : "#bce5c7", successSurface: light ? "#e8f6ed" : "#214c34" } };
 }
-function injectBridge(html: string) {
+function injectBridge(html: string, pluginId: string, panelId: string) {
+const bridge = bridgeScript(pluginId, panelId);
 const lower = html.toLowerCase();
 const headStart = lower.indexOf("<head");
 if (headStart >= 0) {
 const headOpenEnd = lower.indexOf(">", headStart);
-if (headOpenEnd >= 0) { const insertAt = headOpenEnd + 1; return html.slice(0, insertAt) + PLUGIN_SECURITY_HEAD + PLUGIN_NATIVE_UI_STYLE + PLUGIN_SCROLLBAR_STYLE + BRIDGE_SCRIPT + html.slice(insertAt); }
+if (headOpenEnd >= 0) { const insertAt = headOpenEnd + 1; return html.slice(0, insertAt) + PLUGIN_SECURITY_HEAD + PLUGIN_NATIVE_UI_STYLE + PLUGIN_SCROLLBAR_STYLE + bridge + html.slice(insertAt); }
 }
-return PLUGIN_SECURITY_HEAD + PLUGIN_NATIVE_UI_STYLE + PLUGIN_SCROLLBAR_STYLE + BRIDGE_SCRIPT + html;
+return PLUGIN_SECURITY_HEAD + PLUGIN_NATIVE_UI_STYLE + PLUGIN_SCROLLBAR_STYLE + bridge + html;
 }
 export function PluginPanel({ api, params }: IDockviewPanelProps<PluginPanelParams>) {
 const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -233,7 +261,7 @@ setHtml(null);
 setError(null);
 if (!pluginId || !panelId) { setError("Plugin panel metadata is missing."); return; }
 if (!isTauri()) { setError("Plugin panels require the RemoteHand desktop app."); return; }
-void invoke<string>("plugin_read_panel_html", { id: pluginId, panelId }).then((source) => { if (!cancelled) setHtml(injectBridge(source)); }).catch((cause) => { if (!cancelled) setError(String(cause)); });
+void invoke<string>("plugin_read_panel_html", { id: pluginId, panelId }).then((source) => { if (!cancelled) setHtml(injectBridge(source, pluginId, panelId)); }).catch((cause) => { if (!cancelled) setError(String(cause)); });
 return () => { cancelled = true; };
 }, [panelId, pluginId]);
 useEffect(() => {
@@ -290,46 +318,26 @@ return () => { cancelled = true; unlisten?.(); };
 }, [pluginId]);
 
 useEffect(() => {
-if (!isTauri() || !pluginId) return;
+if (!isTauri() || !pluginId || !panelId) return;
 let cancelled = false;
 let unlisten: (() => void) | undefined;
-
-void invoke<boolean>("plugin_has_permission", { id: pluginId, permission: "files.open" })
-.then((allowed) => {
-if (!allowed || cancelled) return;
-return getCurrentWebview().onDragDropEvent((event) => {
-if (event.payload.type !== "drop") return;
-const frame = iframeRef.current;
-const ownerWindow = frame?.ownerDocument.defaultView;
-if (!frame || !ownerWindow) return;
-const rect = frame.getBoundingClientRect();
-const scale = ownerWindow.devicePixelRatio || 1;
-const x = event.payload.position.x / scale;
-const y = event.payload.position.y / scale;
-if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return;
-const paths = event.payload.paths.filter((path) => typeof path === "string" && path.length > 0);
-if (paths.length === 0) return;
-frame.contentWindow?.postMessage({
+void listen<NativeFileDropEvent>("remotehand-native-file-drop", (tauriEvent) => {
+const payload = tauriEvent.payload;
+if (payload.pluginId !== pluginId || payload.panelId !== panelId) return;
+iframeRef.current?.contentWindow?.postMessage({
 type: "remotehand.host.event",
 event: "files.drop",
-payload: { paths, position: { x: x - rect.left, y: y - rect.top } },
-}, "*");
-});
-})
-.then((dispose) => {
-if (!dispose) return;
+payload: { paths: payload.paths, position: payload.position },
+} satisfies PluginBridgeEvent, "*");
+}).then((dispose) => {
 if (cancelled) dispose();
 else unlisten = dispose;
-})
-.catch((error) => {
-if (!cancelled) console.error("RemoteHand native file-drop bridge failed", error);
 });
-
 return () => {
 cancelled = true;
 unlisten?.();
 };
-}, [pluginId]);
+}, [pluginId, panelId]);
 const repairedDocumentRef = useRef<Document | null>(null);
 const repairSheetRef = useRef<CSSStyleSheet | null>(null);
 const [popoutStylesReady, setPopoutStylesReady] = useState(api.location.type !== "popout");
