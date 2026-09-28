@@ -142,6 +142,7 @@ type RemoteHandPopoutWindow = Window & {
 __REMOTEHAND_NATIVE_WINDOW_LABEL__?: string;
 };
 const tabDragAssistDocuments = new WeakSet<Document>();
+let tabDragWindowAssistArmed = false;
 
 function installTabDragWindowAssist(targetDocument: Document) {
 if (tabDragAssistDocuments.has(targetDocument) || !isTauri()) return;
@@ -152,18 +153,34 @@ const targetWindow = targetDocument.defaultView as RemoteHandPopoutWindow | null
 return targetWindow?.__REMOTEHAND_NATIVE_WINDOW_LABEL__ ?? "main";
 };
 
+const isWorkspaceTabTarget = (event: Event) => {
+const target = event.target as { closest?: (selector: string) => Element | null } | null;
+return Boolean(target?.closest?.(".remotehand-tab-shell"));
+};
+
+const arm = (event: PointerEvent) => {
+if (event.button !== 0 || !isWorkspaceTabTarget(event)) return;
+tabDragWindowAssistArmed = true;
+};
+
 const raiseHere = () => {
+if (!tabDragWindowAssistArmed) return;
 void invoke("raise_drag_target_window", { label: nativeLabel() }).catch((error) => {
 console.error("Failed to raise hovered RemoteHand window during tab drag", error);
 });
 };
 
 const release = () => {
+const wasArmed = tabDragWindowAssistArmed;
+tabDragWindowAssistArmed = false;
+if (!wasArmed) return;
 void invoke("release_drag_target_windows").catch((error) => {
 console.error("Failed to release RemoteHand drag window stacking", error);
 });
 };
 
+targetDocument.addEventListener("pointerdown", arm, true);
+targetDocument.addEventListener("pointerup", release, true);
 targetDocument.addEventListener("dragenter", raiseHere, true);
 targetDocument.addEventListener("dragend", release, true);
 targetDocument.addEventListener("drop", release, true);
