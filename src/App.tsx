@@ -141,8 +141,32 @@ context?: { targetId?: string; target?: string; view?: string; alertKey?: string
 type RemoteHandPopoutWindow = Window & {
 __REMOTEHAND_NATIVE_WINDOW_LABEL__?: string;
 };
-const tabDragAssistDocuments = new WeakSet<Document>();
+const tabDragAssistDocuments = new Set<Document>();
 let tabDragWindowAssistArmed = false;
+const dragIframePointerEvents = new Map<HTMLIFrameElement, string>();
+
+function setWorkspaceDragIframePassThrough(enabled: boolean) {
+for (const targetDocument of tabDragAssistDocuments) {
+const targetWindow = targetDocument.defaultView;
+if (!targetWindow || targetWindow.closed) continue;
+
+targetDocument.querySelectorAll<HTMLIFrameElement>("iframe.plugin-panel-frame").forEach((frame) => {
+if (enabled) {
+if (!dragIframePointerEvents.has(frame)) {
+dragIframePointerEvents.set(frame, frame.style.pointerEvents);
+}
+frame.style.pointerEvents = "none";
+return;
+}
+
+const previous = dragIframePointerEvents.get(frame);
+if (previous === undefined) return;
+if (previous) frame.style.pointerEvents = previous;
+else frame.style.removeProperty("pointer-events");
+dragIframePointerEvents.delete(frame);
+});
+}
+}
 
 function installTabDragWindowAssist(targetDocument: Document) {
 if (tabDragAssistDocuments.has(targetDocument) || !isTauri()) return;
@@ -155,6 +179,7 @@ return targetWindow?.__REMOTEHAND_NATIVE_WINDOW_LABEL__ ?? "main";
 
 const arm = () => {
 tabDragWindowAssistArmed = true;
+setWorkspaceDragIframePassThrough(true);
 void invoke("prepare_drag_target_windows", { sourceLabel: nativeLabel() }).catch((error) => {
 console.error("Failed to prepare RemoteHand tab drag targets", error);
 });
@@ -170,6 +195,7 @@ console.error("Failed to raise hovered RemoteHand window during tab drag", error
 const release = () => {
 const wasArmed = tabDragWindowAssistArmed;
 tabDragWindowAssistArmed = false;
+setWorkspaceDragIframePassThrough(false);
 if (!wasArmed) return;
 void invoke("release_drag_target_windows").catch((error) => {
 console.error("Failed to release RemoteHand drag window stacking", error);
@@ -179,17 +205,23 @@ console.error("Failed to release RemoteHand drag window stacking", error);
 const finishDrop = () => {
 if (!tabDragWindowAssistArmed) return;
 tabDragWindowAssistArmed = false;
+setWorkspaceDragIframePassThrough(false);
 void invoke("finish_drag_target_window", { label: nativeLabel() }).catch((error) => {
 console.error("Failed to finish RemoteHand tab drag target focus", error);
 void invoke("release_drag_target_windows").catch(() => undefined);
 });
 };
 
+const unload = () => {
+tabDragAssistDocuments.delete(targetDocument);
+release();
+};
+
 targetDocument.addEventListener("dragstart", arm, true);
 targetDocument.addEventListener("dragenter", raiseHere, true);
 targetDocument.addEventListener("dragend", release, true);
 targetDocument.addEventListener("drop", finishDrop, true);
-targetDocument.defaultView?.addEventListener("beforeunload", release, { once: true });
+targetDocument.defaultView?.addEventListener("beforeunload", unload, { once: true });
 }
 
 const HOME_MESSAGES = [
@@ -730,8 +762,6 @@ const workspaceSaveTimerRef = useRef<number | null>(null);
 const workspacePersistenceEnabledRef = useRef(true);
 const poppedOutPanelRef = useRef<{ panelId: string; count: number; window?: Window } | null>(null);
 const popoutWindowsRef = useRef<Map<string, RemoteHandPopoutWindow>>(new Map());
-const workspaceDragPanelIdRef = useRef<string | null>(null);
-const workspaceDropOverlaysRef = useRef<Map<Window, HTMLElement>>(new Map());
 const mainReturnGroupRef = useRef<Map<string, string>>(new Map());
 const lastFocusedElementRef = useRef<HTMLElement | null>(null);
 useEffect(() => {
@@ -1545,38 +1575,8 @@ redoLayout();
 window.addEventListener("keydown", onKeyDown);
 return () => window.removeEventListener("keydown", onKeyDown);
 }, [redoLayout, undoLayout]);
-const clearWorkspaceDropOverlays = () => {
-for (const overlay of workspaceDropOverlaysRef.current.values()) {
-overlay.style.display = "none";
-}
-};
-
-const showWorkspaceDropOverlays = (sourceWindow: Window) => {
-for (const [targetWindow, overlay] of workspaceDropOverlaysRef.current.entries()) {
-overlay.style.display = targetWindow === sourceWindow ? "none" : "flex";
-}
-};
-
 const handleReady = async (event: DockviewReadyEvent) => {
 apiRef.current = event.api;
-event.api.onWillDragPanel((dragEvent) => {
-workspaceDragPanelIdRef.current = dragEvent.panel.id;
-const sourceWindow = dragEvent.panel.api.getWindow();
-showWorkspaceDropOverlays(sourceWindow);
-
-const nativeEvent = dragEvent.nativeEvent;
-if (nativeEvent instanceof DragEvent) {
-const target = nativeEvent.target;
-const sourceDocument =
-target instanceof Node
-? (target.ownerDocument ?? sourceWindow.document)
-: sourceWindow.document;
-sourceDocument.addEventListener("dragend", () => {
-workspaceDragPanelIdRef.current = null;
-clearWorkspaceDropOverlays();
-}, { once: true, capture: true });
-}
-});
 if (isTauri()) {
 try {
 const saved = await invoke<WorkspaceLayout | null>("load_workspace");
@@ -1636,142 +1636,6 @@ window: popout.window,
 };
 const targetDocument = popout.window.document;
 installTabDragWindowAssist(targetDocument);
-
-const workspaceDropOverlay = targetDocument.createElement("div");
-workspaceDropOverlay.setAttribute("data-remotehand-workspace-drop-overlay", "true");
-workspaceDropOverlay.className = "drop-target";
-Object.assign(workspaceDropOverlay.style, {
-position: "fixed",
-inset: "0",
-zIndex: "2147483647",
-display: "none",
-pointerEvents: "auto",
-});
-
-const workspaceDropZone = targetDocument.createElement("div");
-workspaceDropZone.className = "drop-target-dropzone";
-Object.assign(workspaceDropZone.style, {
-position: "absolute",
-inset: "0",
-pointerEvents: "none",
-});
-
-const workspaceDropIndicator = targetDocument.createElement("div");
-workspaceDropIndicator.className = "drop-target-selection dv-drop-target-center";
-Object.assign(workspaceDropIndicator.style, {
-position: "absolute",
-top: "0",
-left: "0",
-width: "100%",
-height: "100%",
-pointerEvents: "none",
-});
-workspaceDropZone.appendChild(workspaceDropIndicator);
-workspaceDropOverlay.appendChild(workspaceDropZone);
-targetDocument.body.appendChild(workspaceDropOverlay);
-workspaceDropOverlaysRef.current.set(popout.window, workspaceDropOverlay);
-
-type WorkspaceDropPosition = "left" | "right" | "above" | "below" | "within";
-let workspaceDropPosition: WorkspaceDropPosition = "within";
-
-const renderWorkspaceDropPosition = (position: WorkspaceDropPosition) => {
-workspaceDropPosition = position;
-
-workspaceDropIndicator.classList.remove(
-"dv-drop-target-left",
-"dv-drop-target-right",
-"dv-drop-target-top",
-"dv-drop-target-bottom",
-"dv-drop-target-center",
-);
-
-workspaceDropIndicator.style.top = "0";
-workspaceDropIndicator.style.left = "0";
-workspaceDropIndicator.style.width = "100%";
-workspaceDropIndicator.style.height = "100%";
-
-if (position === "left") {
-workspaceDropIndicator.classList.add("dv-drop-target-left");
-workspaceDropIndicator.style.width = "50%";
-} else if (position === "right") {
-workspaceDropIndicator.classList.add("dv-drop-target-right");
-workspaceDropIndicator.style.left = "50%";
-workspaceDropIndicator.style.width = "50%";
-} else if (position === "above") {
-workspaceDropIndicator.classList.add("dv-drop-target-top");
-workspaceDropIndicator.style.height = "50%";
-} else if (position === "below") {
-workspaceDropIndicator.classList.add("dv-drop-target-bottom");
-workspaceDropIndicator.style.top = "50%";
-workspaceDropIndicator.style.height = "50%";
-} else {
-workspaceDropIndicator.classList.add("dv-drop-target-center");
-}
-};
-
-workspaceDropOverlay.addEventListener("dragover", (dragOverEvent) => {
-if (!workspaceDragPanelIdRef.current) return;
-dragOverEvent.preventDefault();
-dragOverEvent.stopPropagation();
-if (dragOverEvent.dataTransfer) dragOverEvent.dataTransfer.dropEffect = "move";
-
-const rect = workspaceDropOverlay.getBoundingClientRect();
-const x = rect.width ? (dragOverEvent.clientX - rect.left) / rect.width : 0.5;
-const y = rect.height ? (dragOverEvent.clientY - rect.top) / rect.height : 0.5;
-const edge = 0.20;
-
-if (x < edge) renderWorkspaceDropPosition("left");
-else if (x > 1 - edge) renderWorkspaceDropPosition("right");
-else if (y < edge) renderWorkspaceDropPosition("above");
-else if (y > 1 - edge) renderWorkspaceDropPosition("below");
-else renderWorkspaceDropPosition("within");
-});
-
-workspaceDropOverlay.addEventListener("dragleave", (dragLeaveEvent) => {
-if (dragLeaveEvent.relatedTarget && workspaceDropOverlay.contains(dragLeaveEvent.relatedTarget as Node)) return;
-renderWorkspaceDropPosition("within");
-});
-
-workspaceDropOverlay.addEventListener("drop", (dropEvent) => {
-const panelId = workspaceDragPanelIdRef.current;
-if (!panelId) return;
-dropEvent.preventDefault();
-dropEvent.stopPropagation();
-
-const panel = event.api.getPanel(panelId);
-if (!panel || panel.api.getWindow() === popout.window) {
-workspaceDragPanelIdRef.current = null;
-clearWorkspaceDropOverlays();
-return;
-}
-
-if (workspaceDropPosition === "within") {
-panel.api.moveTo({ group: popout.group });
-} else {
-const dockviewPosition =
-workspaceDropPosition === "above"
-? "top"
-: workspaceDropPosition === "below"
-? "bottom"
-: workspaceDropPosition;
-panel.api.moveTo({ group: popout.group, position: dockviewPosition });
-}
-panel.api.setActive();
-workspaceDragPanelIdRef.current = null;
-renderWorkspaceDropPosition("within");
-clearWorkspaceDropOverlays();
-
-const nativeLabel = (popout.window as RemoteHandPopoutWindow).__REMOTEHAND_NATIVE_WINDOW_LABEL__;
-if (isTauri() && nativeLabel) {
-void invoke("finish_drag_target_window", { label: nativeLabel }).catch((error) => {
-console.error("Failed to finish whole-popout tab drop focus", error);
-void invoke("release_drag_target_windows").catch(() => undefined);
-});
-} else {
-popout.window.focus();
-}
-});
-
 const root = targetDocument.documentElement;
 const source = document.documentElement;
 root.dataset.theme = source.dataset.theme;
@@ -1811,9 +1675,6 @@ revealPopout();
 });
 event.api.onDidRemovePopoutGroup((removedPopout) => {
 const popoutWindow = popoutWindowsRef.current.get(removedPopout.id);
-if (popoutWindow) {
-workspaceDropOverlaysRef.current.delete(popoutWindow);
-}
 popoutWindowsRef.current.delete(removedPopout.id);
 const nativeLabel = popoutWindow?.__REMOTEHAND_NATIVE_WINDOW_LABEL__;
 window.setTimeout(() => {
