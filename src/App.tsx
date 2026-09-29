@@ -19,6 +19,7 @@ import { SftpPanel } from "./SftpPanel";
 import { AppModal } from "./AppModal";
 import { PluginManager } from "./PluginManager";
 import { PluginPanel, sendPluginPanelContext, type PluginPanelParams } from "./PluginPanel";
+import { remoteHandFunctionKeyDisposition } from "./functionKeys";
 import {
   EMPTY_UI_CONTRIBUTION_LAYOUT,
   contributionOrderIndex,
@@ -1562,7 +1563,26 @@ bind("remotehand-tray-settings", () => { setSettingsTab("appearance"); setSettin
 return () => { cancelled = true; disposables.forEach((dispose) => dispose()); };
 }, [addConnections, addTerminal, openHome]);
 useEffect(() => {
+const openSettingsFromFunctionKey = () => {
+setSettingsTab("appearance");
+setSettingsOpen(true);
+};
 const onKeyDown = (event: KeyboardEvent) => {
+const functionKeyDisposition = remoteHandFunctionKeyDisposition(event.key, event);
+if (functionKeyDisposition !== "none") {
+event.preventDefault();
+if (functionKeyDisposition === "settings") {
+event.stopImmediatePropagation();
+openSettingsFromFunctionKey();
+return;
+}
+if (functionKeyDisposition === "blocked") {
+event.stopImmediatePropagation();
+return;
+}
+// Plain F5 is allowed to continue to an intentional plugin-specific handler,
+// but the WebView/browser default refresh action remains suppressed.
+}
 if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
 event.preventDefault();
 setPaletteOpen((open) => !open);
@@ -1578,8 +1598,13 @@ event.preventDefault();
 redoLayout();
 }
 };
-window.addEventListener("keydown", onKeyDown);
-return () => window.removeEventListener("keydown", onKeyDown);
+const onOpenSettings = () => openSettingsFromFunctionKey();
+window.addEventListener("keydown", onKeyDown, true);
+window.addEventListener("remotehand-open-settings", onOpenSettings);
+return () => {
+window.removeEventListener("keydown", onKeyDown, true);
+window.removeEventListener("remotehand-open-settings", onOpenSettings);
+};
 }, [redoLayout, undoLayout]);
 const handleReady = async (event: DockviewReadyEvent) => {
 apiRef.current = event.api;
