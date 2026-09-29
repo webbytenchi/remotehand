@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 type AppModalProps = {
 open: boolean;
 title: string;
@@ -9,6 +9,7 @@ confirmLabel?: string;
 cancelLabel?: string;
 danger?: boolean;
 focusActions?: boolean;
+focusDialog?: boolean;
 confirmOnEnter?: boolean;
 elevated?: boolean;
 onConfirm: () => void;
@@ -24,11 +25,18 @@ confirmLabel = "OK",
 cancelLabel,
 danger = false,
 focusActions = true,
+focusDialog = false,
 confirmOnEnter = false,
 elevated = false,
 onConfirm,
 onCancel,
 }: AppModalProps) {
+const dialogRef = useRef<HTMLDivElement>(null);
+useEffect(() => {
+if (!open || !focusDialog) return;
+const frame = window.requestAnimationFrame(() => dialogRef.current?.focus());
+return () => window.cancelAnimationFrame(frame);
+}, [open, focusDialog]);
 useEffect(() => {
 if (!open) return;
 const handleKeyDown = (event: KeyboardEvent) => {
@@ -49,6 +57,8 @@ if (!open) return null;
 return (
 <div className={`app-modal-backdrop${elevated ? " app-modal-backdrop-elevated" : ""}`} onMouseDown={onCancel}>
 <div
+ref={dialogRef}
+tabIndex={focusDialog ? -1 : undefined}
 className={`app-modal${className ? ` ${className}` : ""}`}
 role="dialog"
 aria-modal="true"
