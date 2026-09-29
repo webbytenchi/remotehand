@@ -24,7 +24,7 @@ params?: unknown;
 };
 type PluginHostFunctionKeyMessage = {
 type: "remotehand.host.function-key";
-key: "F12";
+key: "F1" | "F12";
 };
 type PluginBridgeResponse = {
 type: "remotehand.plugin.response";
@@ -167,8 +167,8 @@ const plainPluginF5 = event.key === "F5"
 && !event.shiftKey;
 if (plainPluginF5) return;
 event.stopImmediatePropagation();
-if (event.key === "F12") {
-parent.postMessage({ type: "remotehand.host.function-key", key: "F12" }, "*");
+if (event.key === "F1" || event.key === "F12") {
+parent.postMessage({ type: "remotehand.host.function-key", key: event.key }, "*");
 }
 }, true);
 function applyAppearance(appearance) {
@@ -310,6 +310,7 @@ const message = event.data;
 if (!message) return;
 if (message.type === "remotehand.plugin.ready") { postAppearance(); postContext(); return; }
 if (message.type === "remotehand.host.function-key") {
+if (message.key === "F1") window.dispatchEvent(new CustomEvent("remotehand-open-about"));
 if (message.key === "F12") window.dispatchEvent(new CustomEvent("remotehand-open-settings"));
 return;
 }
