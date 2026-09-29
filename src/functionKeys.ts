@@ -24,15 +24,21 @@ export function remoteHandFunctionKeyDisposition(
   modifiers: FunctionKeyModifiers,
 ): RemoteHandFunctionKeyDisposition {
   if (!FUNCTION_KEY_SET.has(key)) return "none";
-  if (key === "F1") return "about";
-  if (
-    key === "F5"
-    && !modifiers.ctrlKey
+  const plain =
+    !modifiers.ctrlKey
     && !modifiers.altKey
+    && !modifiers.metaKey
+    && !modifiers.shiftKey;
+  if (key === "F1" && plain) return "about";
+  if (key === "F5" && plain) return "plugin";
+  if (
+    key === "F4"
+    && modifiers.altKey
+    && !modifiers.ctrlKey
     && !modifiers.metaKey
     && !modifiers.shiftKey
   ) {
-    return "plugin";
+    return "none";
   }
   return "blocked";
 }
