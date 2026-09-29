@@ -7,16 +7,12 @@ describe("RemoteHand function-key ownership", () => {
   it("blocks unassigned function keys", () => {
     expect(remoteHandFunctionKeyDisposition("F2", noModifiers)).toBe("blocked");
     expect(remoteHandFunctionKeyDisposition("F11", noModifiers)).toBe("blocked");
+    expect(remoteHandFunctionKeyDisposition("F12", noModifiers)).toBe("blocked");
   });
 
   it("maps F1 to About", () => {
     expect(remoteHandFunctionKeyDisposition("F1", noModifiers)).toBe("about");
     expect(remoteHandFunctionKeyDisposition("F1", { ...noModifiers, shiftKey: true })).toBe("about");
-  });
-
-  it("reserves F12 for RemoteHand settings", () => {
-    expect(remoteHandFunctionKeyDisposition("F12", noModifiers)).toBe("settings");
-    expect(remoteHandFunctionKeyDisposition("F12", { ...noModifiers, ctrlKey: true })).toBe("settings");
   });
 
   it("allows only plain F5 to reach plugin-specific handlers", () => {
