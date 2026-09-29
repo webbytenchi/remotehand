@@ -43,7 +43,13 @@ return () => {
 const previous = previousFocusRef.current;
 previousFocusRef.current = null;
 if (!previous || !previous.isConnected) return;
-window.requestAnimationFrame(() => previous.focus({ preventScroll: true }));
+window.requestAnimationFrame(() => {
+if (previous instanceof HTMLIFrameElement) {
+previous.contentWindow?.focus();
+return;
+}
+previous.focus({ preventScroll: true });
+});
 };
 }, [open, restoreFocus]);
 useEffect(() => {
