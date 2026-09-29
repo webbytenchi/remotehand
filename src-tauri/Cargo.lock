@@ -4449,6 +4449,8 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tokio",
  "tray-icon",
+ "webview2-com",
+ "windows 0.61.3",
  "zeroize",
  "zip",
 ]
