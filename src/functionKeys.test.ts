@@ -10,9 +10,14 @@ describe("RemoteHand function-key ownership", () => {
     expect(remoteHandFunctionKeyDisposition("F12", noModifiers)).toBe("blocked");
   });
 
-  it("maps F1 to About", () => {
+  it("maps only plain F1 to About", () => {
     expect(remoteHandFunctionKeyDisposition("F1", noModifiers)).toBe("about");
-    expect(remoteHandFunctionKeyDisposition("F1", { ...noModifiers, shiftKey: true })).toBe("about");
+    expect(remoteHandFunctionKeyDisposition("F1", { ...noModifiers, shiftKey: true })).toBe("blocked");
+  });
+
+  it("allows native Alt-F4 close handling", () => {
+    expect(remoteHandFunctionKeyDisposition("F4", { ...noModifiers, altKey: true })).toBe("none");
+    expect(remoteHandFunctionKeyDisposition("F4", noModifiers)).toBe("blocked");
   });
 
   it("allows only plain F5 to reach plugin-specific handlers", () => {
