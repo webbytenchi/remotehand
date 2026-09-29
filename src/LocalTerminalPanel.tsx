@@ -109,7 +109,7 @@ return;
 for (let index = 0; index < chunks.length; index += 1) {
 await writeTerminal(sessionId, chunks[index]);
 if (index + 1 < chunks.length) {
-await new Promise<void>((resolve) => window.setTimeout(resolve, 4));
+await new Promise<void>((resolve) => window.setTimeout(resolve, 8));
 }
 }
 }
@@ -150,6 +150,12 @@ fitAddonRef.current = fitAddon;
 const terminal = new Terminal({
 cursorBlink: true,
 convertEol: false,
+/*
+ * RemoteHand confirms multi-line paste before it reaches xterm. Keep pasted
+ * newlines as ordinary terminal input so readline does not buffer/repaint the
+ * whole block in bracketed-paste mode while RemoteHand paces the lines below.
+ */
+ignoreBracketedPasteMode: true,
 documentOverride: host.ownerDocument,
 fontFamily: getComputedStyle(host.ownerDocument.documentElement).getPropertyValue("--terminal-font-family").trim() || ["JetBrains Mono", "Cascadia Code", "Cascadia Mono", "Consolas", "Liberation Mono", "monospace"].join(", "),
 fontSize: Number.parseInt(getComputedStyle(host.ownerDocument.documentElement).getPropertyValue("--terminal-font-size"), 10) || 13,
