@@ -2,6 +2,24 @@
 
 All notable changes to RemoteHand are documented here.
 
+## `1.2.24` - 2026-09-30
+
+### Fixed
+
+- **Large multi-line terminal paste rendering.** RemoteHand now forwards large multi-line paste input to the PTY in paced line-sized chunks and suppresses bracketed-paste buffering for that path, preventing SSH shells from visually overwriting or collapsing echoed here-document lines while preserving the exact remote file content.
+
+### Compatibility
+
+- Plugin API remains **v1**.
+- Existing terminal workflows and single-line input remain unchanged.
+- Multi-line paste confirmation remains in place.
+
+### Verification
+
+- Manual Windows acceptance confirmed a previously problematic large SSH here-document now renders cleanly in the RemoteHand terminal.
+- The resulting remote `compose.yml` matched the source content after the paste completed.
+
+
 ## `1.2.23` - 2026-09-30
 
 ### Added
