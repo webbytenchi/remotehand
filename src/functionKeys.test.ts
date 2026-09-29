@@ -5,8 +5,13 @@ const noModifiers = { ctrlKey: false, altKey: false, metaKey: false, shiftKey: f
 
 describe("RemoteHand function-key ownership", () => {
   it("blocks unassigned function keys", () => {
-    expect(remoteHandFunctionKeyDisposition("F1", noModifiers)).toBe("blocked");
+    expect(remoteHandFunctionKeyDisposition("F2", noModifiers)).toBe("blocked");
     expect(remoteHandFunctionKeyDisposition("F11", noModifiers)).toBe("blocked");
+  });
+
+  it("maps F1 to About", () => {
+    expect(remoteHandFunctionKeyDisposition("F1", noModifiers)).toBe("about");
+    expect(remoteHandFunctionKeyDisposition("F1", { ...noModifiers, shiftKey: true })).toBe("about");
   });
 
   it("reserves F12 for RemoteHand settings", () => {
