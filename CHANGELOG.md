@@ -2,6 +2,34 @@
 
 All notable changes to RemoteHand are documented here.
 
+## `1.2.22` - 2026-09-29
+
+### Added
+
+- **Generic top-bar alert icon.** Plugin top-bar contributions can now use a host-rendered alert icon that sits in the upper-left corner without shifting the contribution's normal content.
+
+### Improved
+
+- **Corner-indicator layout.** Top-bar alert icons and numbered badges now align as opposite corner indicators, and title text reserves their space instead of colliding with them.
+- **Long-title ellipsis.** Generic top-bar text now constrains long titles so they render with an ellipsis when they exceed the available width.
+
+### Fixed
+
+- **Rust lockfile synchronization.** The committed lockfile now records the existing direct WebView2 and Windows dependencies declared by RemoteHand.
+
+### Compatibility
+
+- Plugin API remains **v1**.
+- Existing plugin top-bar contributions require no migration; the new alert icon is opt-in through the existing generic top-bar payload.
+
+### Verification
+
+- Frontend production build passed.
+- Rust test suite passed with **43 tests and 0 failures**.
+- Optimized Windows Tauri release build passed.
+- Manual Windows acceptance confirmed alert-icon/badge alignment, title collision avoidance, and long-title ellipsis with Target Monitor v0.7.8.
+
+
 ## `1.2.21` - 2026-09-29
 
 ### Added
