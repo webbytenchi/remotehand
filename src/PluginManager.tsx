@@ -617,16 +617,26 @@ export function PluginManager({
     }
   };
 
-  const renderTopbarContent = (content: TopbarContent, key: string, size: { width: number; height: number }): ReactNode => {
+  const renderTopbarContent = (
+    content: TopbarContent,
+    key: string,
+    size: { width: number; height: number },
+    cornerInsets: { left: number; right: number } = { left: 0, right: 0 },
+  ): ReactNode => {
     const tone = toneVars(content.tone);
     const fontSize = content.fontSize;
     if (content.type === "stack") {
       return <span style={{ position: "absolute", inset: 3, zIndex: 2, display: "flex", flexDirection: "column", justifyContent: "space-between", minWidth: 0 }}>
-        {(content.children ?? []).map((child, index) => renderTopbarContent(child, `${key}:${index}`, size))}
+        {(content.children ?? []).map((child, index) => renderTopbarContent(
+          child,
+          `${key}:${index}`,
+          size,
+          index === 0 && child.type === "text" ? cornerInsets : { left: 0, right: 0 },
+        ))}
       </span>;
     }
     if (content.type === "text") {
-      return <span key={key} style={{ position: "relative", zIndex: 2, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: fontSize ?? 11, fontWeight: 600, lineHeight: 1.05, color: content.color ?? tone.text }}>{content.label ?? content.value ?? ""}</span>;
+      return <span key={key} style={{ position: "relative", zIndex: 2, display: "block", width: "100%", minWidth: 0, boxSizing: "border-box", paddingLeft: cornerInsets.left, paddingRight: cornerInsets.right, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: fontSize ?? 11, fontWeight: 600, lineHeight: 1.05, color: content.color ?? tone.text }}>{content.label ?? content.value ?? ""}</span>;
     }
     if (content.type === "metric") {
       return <span key={key} style={{ position: "relative", zIndex: 2, fontSize: fontSize ?? 14, fontWeight: 700, lineHeight: 1.05, color: content.color }}>{content.value == null ? "—" : String(content.value)}</span>;
@@ -666,6 +676,11 @@ export function PluginManager({
       const itemKey = `${pluginId}:${item.id}`;
       const menuOpen = openTopbarMenuKey === itemKey;
       const leadingIcon = item.icon && item.icon !== "alert";
+      const hasCornerBadge = item.content?.type === "stack" && (item.content.children ?? []).some((child) => child.type === "badge");
+      const titleCornerInsets = {
+        left: item.icon === "alert" ? 17 : 0,
+        right: hasCornerBadge ? 17 : 0,
+      };
       return (
         <div
           key={itemKey}
@@ -715,7 +730,7 @@ export function PluginManager({
           {item.icon === "alert" ? <span style={{ position: "absolute", top: 4, left: 4, zIndex: 5, width: 15, height: 15, display: "grid", placeItems: "center", color: item.content?.color ?? genericTone.text }}>{renderTopbarIcon(item.icon, 14)}</span> : item.icon ? <span style={{ display: "grid", placeItems: "center", flex: "0 0 auto", color: item.content?.color ?? genericTone.text }}>{renderTopbarIcon(item.icon, 17)}</span> : null}
           {hasGenericContent ? (
             <span style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", flex: leadingIcon ? 1 : undefined }}>
-              {renderTopbarContent(item.content!, `${pluginId}:${item.id}:content`, size)}
+              {renderTopbarContent(item.content!, `${pluginId}:${item.id}:content`, size, titleCornerInsets)}
             </span>
           ) : (
             <>
