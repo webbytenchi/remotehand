@@ -2004,6 +2004,7 @@ confirmLabel={settingsTab === "papa" ? "Always" : "Done"}
 onConfirm={closeSettings}
 onCancel={closeSettings}
 focusActions={false}
+focusDialog
 tabs={<div className="settings-tabs" role="tablist" aria-label="Settings sections">
 <button type="button" role="tab" aria-selected={settingsTab === "appearance"} className={settingsTab === "appearance" ? "active" : ""} onClick={() => setSettingsTab("appearance")}>Appearance</button>
 <button type="button" role="tab" aria-selected={settingsTab === "layout"} className={settingsTab === "layout" ? "active" : ""} onClick={() => setSettingsTab("layout")}>Interface</button>
