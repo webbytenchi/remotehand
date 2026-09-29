@@ -2,6 +2,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { IDockviewPanelProps } from "dockview-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { REMOTEHAND_FUNCTION_KEYS } from "./functionKeys";
 export type PluginPanelParams = {
 pluginId: string;
 panelId: string;
@@ -20,6 +21,10 @@ type: "remotehand.plugin.request";
 requestId: string;
 method: string;
 params?: unknown;
+};
+type PluginHostFunctionKeyMessage = {
+type: "remotehand.host.function-key";
+key: "F12";
 };
 type PluginBridgeResponse = {
 type: "remotehand.plugin.response";
@@ -134,11 +139,13 @@ const PLUGIN_SCROLLBAR_STYLE = `
 function bridgeScript(pluginId: string, panelId: string) {
 const pluginIdJson = JSON.stringify(pluginId);
 const panelIdJson = JSON.stringify(panelId);
+const functionKeysJson = JSON.stringify(REMOTEHAND_FUNCTION_KEYS);
 return `
 <script>
 (() => {
 const pluginId = ${pluginIdJson};
 const panelId = ${panelIdJson};
+const remoteHandFunctionKeys = new Set(${functionKeysJson});
 let sequence = 0;
 const pending = new Map();
 const eventListeners = new Map();
@@ -149,6 +156,20 @@ return Boolean(target.closest('input, textarea, [contenteditable="true"], [data-
 document.addEventListener("contextmenu", (event) => {
 if (allowsNativeContextMenu(event.target)) return;
 event.preventDefault();
+}, true);
+document.addEventListener("keydown", (event) => {
+if (!remoteHandFunctionKeys.has(event.key)) return;
+event.preventDefault();
+const plainPluginF5 = event.key === "F5"
+&& !event.ctrlKey
+&& !event.altKey
+&& !event.metaKey
+&& !event.shiftKey;
+if (plainPluginF5) return;
+event.stopImmediatePropagation();
+if (event.key === "F12") {
+parent.postMessage({ type: "remotehand.host.function-key", key: "F12" }, "*");
+}
 }, true);
 function applyAppearance(appearance) {
 if (!appearance || typeof appearance !== "object") return;
@@ -283,11 +304,15 @@ iframeRef.current?.contentWindow?.postMessage({ type: "remotehand.appearance", a
 const postContext = (nextContext: PluginContext = contextRef.current) => {
 iframeRef.current?.contentWindow?.postMessage({ type: "remotehand.plugin.context", context: nextContext ?? {} }, "*");
 };
-const onMessage = (event: MessageEvent<PluginBridgeRequest | { type: "remotehand.plugin.ready" }>) => {
+const onMessage = (event: MessageEvent<PluginBridgeRequest | PluginHostFunctionKeyMessage | { type: "remotehand.plugin.ready" }>) => {
 if (event.source !== iframeRef.current?.contentWindow) return;
 const message = event.data;
 if (!message) return;
 if (message.type === "remotehand.plugin.ready") { postAppearance(); postContext(); return; }
+if (message.type === "remotehand.host.function-key") {
+if (message.key === "F12") window.dispatchEvent(new CustomEvent("remotehand-open-settings"));
+return;
+}
 if (message.type !== "remotehand.plugin.request") return;
 if (typeof message.requestId !== "string" || typeof message.method !== "string") return;
 const respond = (response: PluginBridgeResponse) => { iframeRef.current?.contentWindow?.postMessage(response, "*"); };
