@@ -46,6 +46,7 @@ if (!previous || !previous.isConnected) return;
 window.requestAnimationFrame(() => {
 if (previous instanceof HTMLIFrameElement) {
 previous.contentWindow?.focus();
+previous.contentWindow?.postMessage({ type: "remotehand.host.restore-focus" }, "*");
 return;
 }
 previous.focus({ preventScroll: true });
