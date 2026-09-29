@@ -665,6 +665,7 @@ export function PluginManager({
       const size = clampTopbarSize(item.size);
       const itemKey = `${pluginId}:${item.id}`;
       const menuOpen = openTopbarMenuKey === itemKey;
+      const leadingIcon = item.icon && item.icon !== "alert";
       return (
         <div
           key={itemKey}
@@ -698,8 +699,8 @@ export function PluginManager({
             height: size.height,
             overflow: "hidden",
             display: "flex",
-            flexDirection: item.icon ? "row" : "column",
-            alignItems: item.icon ? "center" : "stretch",
+            flexDirection: leadingIcon ? "row" : "column",
+            alignItems: leadingIcon ? "center" : "stretch",
             justifyContent: "center",
             gap: 1,
             padding: "3px 7px",
@@ -711,9 +712,9 @@ export function PluginManager({
             textAlign: "center",
           }}
         >
-          {item.icon ? <span style={{ display: "grid", placeItems: "center", flex: "0 0 auto", color: item.content?.color ?? genericTone.text }}>{renderTopbarIcon(item.icon, 17)}</span> : null}
+          {item.icon === "alert" ? <span style={{ position: "absolute", top: 1, left: 2, zIndex: 5, width: 15, height: 15, display: "grid", placeItems: "center", color: item.content?.color ?? genericTone.text }}>{renderTopbarIcon(item.icon, 14)}</span> : item.icon ? <span style={{ display: "grid", placeItems: "center", flex: "0 0 auto", color: item.content?.color ?? genericTone.text }}>{renderTopbarIcon(item.icon, 17)}</span> : null}
           {hasGenericContent ? (
-            <span style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", flex: item.icon ? 1 : undefined }}>
+            <span style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", flex: leadingIcon ? 1 : undefined }}>
               {renderTopbarContent(item.content!, `${pluginId}:${item.id}:content`, size)}
             </span>
           ) : (
