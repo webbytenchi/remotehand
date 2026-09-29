@@ -122,6 +122,14 @@ fitAddonRef.current = fitAddon;
 const terminal = new Terminal({
 cursorBlink: true,
 convertEol: false,
+/*
+ * RemoteHand already confirms multi-line pastes before sending them.
+ * Let the shell receive pasted line breaks directly instead of wrapping a
+ * large paste in bracketed-paste markers. Readline can otherwise hold and
+ * repeatedly redraw the entire multi-line buffer, which makes large SSH
+ * here-documents look visually corrupted even when the remote file is correct.
+ */
+ignoreBracketedPasteMode: true,
 documentOverride: host.ownerDocument,
 fontFamily: getComputedStyle(host.ownerDocument.documentElement).getPropertyValue("--terminal-font-family").trim() || ["JetBrains Mono", "Cascadia Code", "Cascadia Mono", "Consolas", "Liberation Mono", "monospace"].join(", "),
 fontSize: Number.parseInt(getComputedStyle(host.ownerDocument.documentElement).getPropertyValue("--terminal-font-size"), 10) || 13,
