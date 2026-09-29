@@ -146,6 +146,7 @@ return `
 const pluginId = ${pluginIdJson};
 const panelId = ${panelIdJson};
 const remoteHandFunctionKeys = new Set(${functionKeysJson});
+let lastFocusedElement = null;
 let sequence = 0;
 const pending = new Map();
 const eventListeners = new Map();
@@ -170,6 +171,7 @@ const plain = !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftK
 if (event.key === "F5" && plain) return;
 event.stopImmediatePropagation();
 if (event.key === "F1" && plain) {
+lastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 parent.postMessage({ type: "remotehand.host.function-key", key: "F1" }, "*");
 }
 }, true);
@@ -241,6 +243,13 @@ window.addEventListener("message", (event) => {
 const message = event.data;
 if (!message) return;
 if (message.type === "remotehand.appearance") { applyAppearance(message.appearance); return; }
+if (message.type === "remotehand.host.restore-focus") {
+const target = lastFocusedElement;
+if (target && target.isConnected) {
+try { target.focus({ preventScroll: true }); } catch { target.focus(); }
+}
+return;
+}
 if (message.type === "remotehand.plugin.context") {
 window.__REMOTEHAND_PLUGIN_CONTEXT__ = message.context || {};
 window.dispatchEvent(new CustomEvent("remotehand-plugin-context", { detail: window.__REMOTEHAND_PLUGIN_CONTEXT__ }));
