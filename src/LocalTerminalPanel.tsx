@@ -86,6 +86,34 @@ async function writeTerminal(sessionId: string, data: string) {
 await invoke("terminal_write", { sessionId, data });
 }
 
+function splitMultilineTerminalInput(data: string): string[] {
+if (!/[\r\n]/.test(data)) return [data];
+return data.match(/[^\r\n]*(?:\r\n|\r|\n)|[^\r\n]+$/g) ?? [data];
+}
+
+async function writeTerminalInput(sessionId: string, data: string) {
+const chunks = splitMultilineTerminalInput(data);
+if (chunks.length === 1) {
+await writeTerminal(sessionId, data);
+return;
+}
+
+/*
+ * A large paste can otherwise be delivered to the local PTY/ssh process as
+ * one burst. The remote TTY may echo that burst while the shell is also
+ * emitting continuation prompts, producing visible line overwrites even
+ * though the received file is correct. Keep xterm's native paste semantics,
+ * but pace multi-line input at line boundaries so echo and prompt output can
+ * drain in order.
+ */
+for (let index = 0; index < chunks.length; index += 1) {
+await writeTerminal(sessionId, chunks[index]);
+if (index + 1 < chunks.length) {
+await new Promise<void>((resolve) => window.setTimeout(resolve, 4));
+}
+}
+}
+
 
 export function LocalTerminalPanel({
 api,
@@ -122,14 +150,6 @@ fitAddonRef.current = fitAddon;
 const terminal = new Terminal({
 cursorBlink: true,
 convertEol: false,
-/*
- * RemoteHand already confirms multi-line pastes before sending them.
- * Let the shell receive pasted line breaks directly instead of wrapping a
- * large paste in bracketed-paste markers. Readline can otherwise hold and
- * repeatedly redraw the entire multi-line buffer, which makes large SSH
- * here-documents look visually corrupted even when the remote file is correct.
- */
-ignoreBracketedPasteMode: true,
 documentOverride: host.ownerDocument,
 fontFamily: getComputedStyle(host.ownerDocument.documentElement).getPropertyValue("--terminal-font-family").trim() || ["JetBrains Mono", "Cascadia Code", "Cascadia Mono", "Consolas", "Liberation Mono", "monospace"].join(", "),
 fontSize: Number.parseInt(getComputedStyle(host.ownerDocument.documentElement).getPropertyValue("--terminal-font-size"), 10) || 13,
@@ -181,7 +201,7 @@ let inputWriteQueue = Promise.resolve();
 
 const inputDisposable = terminal.onData((data) => {
 inputWriteQueue = inputWriteQueue
-.then(() => writeTerminal(backendSessionId, data))
+.then(() => writeTerminalInput(backendSessionId, data))
 .catch((error) => {
 if (!cancelled) {
 terminal.writeln(
