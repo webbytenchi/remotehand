@@ -75,6 +75,7 @@ Terminal interaction includes:
 - Automatic clipboard copy when terminal text is selected
 - Right-click paste workflow
 - Multi-line paste confirmation/protection
+- Paced multi-line PTY input to keep large SSH/here-document pastes visually stable while preserving transmitted content
 - Isolated backend PTY ownership for restored terminal panels
 - Resize propagation to the native PTY
 - Configurable terminal font and theme
