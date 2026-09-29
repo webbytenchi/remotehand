@@ -159,15 +159,17 @@ event.preventDefault();
 }, true);
 document.addEventListener("keydown", (event) => {
 if (!remoteHandFunctionKeys.has(event.key)) return;
-event.preventDefault();
-const plainPluginF5 = event.key === "F5"
+const nativeAltF4 = event.key === "F4"
+&& event.altKey
 && !event.ctrlKey
-&& !event.altKey
 && !event.metaKey
 && !event.shiftKey;
-if (plainPluginF5) return;
+if (nativeAltF4) return;
+event.preventDefault();
+const plain = !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey;
+if (event.key === "F5" && plain) return;
 event.stopImmediatePropagation();
-if (event.key === "F1") {
+if (event.key === "F1" && plain) {
 parent.postMessage({ type: "remotehand.host.function-key", key: "F1" }, "*");
 }
 }, true);
