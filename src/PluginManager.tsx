@@ -22,7 +22,7 @@ type PluginInfo = {
 };
 
 type TopbarTone = "accent" | "success" | "warning" | "danger" | "muted";
-type TopbarIcon = "globe" | "ethernet" | "wifi" | "shield" | "ipv6";
+type TopbarIcon = "globe" | "ethernet" | "wifi" | "shield" | "ipv6" | "alert";
 type TopbarSeriesPoint = { value?: number | null; tone?: TopbarTone; color?: string };
 type TopbarContent = {
   type: "text" | "metric" | "sparkline" | "metric-sparkline" | "status" | "progress" | "badge" | "stack";
@@ -99,7 +99,7 @@ type TrayActionPayload = {
 };
 
 function parseTopbarIcon(value: unknown): TopbarIcon | undefined {
-  return value === "globe" || value === "ethernet" || value === "wifi" || value === "shield" || value === "ipv6"
+  return value === "globe" || value === "ethernet" || value === "wifi" || value === "shield" || value === "ipv6" || value === "alert"
     ? value
     : undefined;
 }
@@ -273,6 +273,9 @@ function renderTopbarIcon(icon: TopbarIcon | undefined, size = 17): ReactNode {
   }
   if (icon === "shield") {
     return <svg {...common}><path d="M12 3 5 6v5c0 4.7 2.8 8 7 10 4.2-2 7-5.3 7-10V6l-7-3Z"/><path d="M9 12l2 2 4-4"/></svg>;
+  }
+  if (icon === "alert") {
+    return <svg {...common}><path d="M10.3 4.1 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 4.1a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>;
   }
   return <svg {...common}><rect x="8" y="3" width="8" height="6" rx="1"/><path d="M12 9v4"/><path d="M5 13h14"/><path d="M5 13v4M12 13v4M19 13v4"/><rect x="2" y="17" width="6" height="4" rx="1"/><rect x="9" y="17" width="6" height="4" rx="1"/><rect x="16" y="17" width="6" height="4" rx="1"/></svg>;
 }
