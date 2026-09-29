@@ -1571,9 +1571,9 @@ const onKeyDown = (event: KeyboardEvent) => {
 const functionKeyDisposition = remoteHandFunctionKeyDisposition(event.key, event);
 if (functionKeyDisposition !== "none") {
 event.preventDefault();
-if (functionKeyDisposition === "settings" || functionKeyDisposition === "about") {
+if (functionKeyDisposition === "about") {
 event.stopImmediatePropagation();
-openSettingsFromFunctionKey(functionKeyDisposition === "about" ? "about" : "appearance");
+openSettingsFromFunctionKey("about");
 return;
 }
 if (functionKeyDisposition === "blocked") {
@@ -1598,14 +1598,11 @@ event.preventDefault();
 redoLayout();
 }
 };
-const onOpenSettings = () => openSettingsFromFunctionKey("appearance");
 const onOpenAbout = () => openSettingsFromFunctionKey("about");
 window.addEventListener("keydown", onKeyDown, true);
-window.addEventListener("remotehand-open-settings", onOpenSettings);
 window.addEventListener("remotehand-open-about", onOpenAbout);
 return () => {
 window.removeEventListener("keydown", onKeyDown, true);
-window.removeEventListener("remotehand-open-settings", onOpenSettings);
 window.removeEventListener("remotehand-open-about", onOpenAbout);
 };
 }, [redoLayout, undoLayout]);
