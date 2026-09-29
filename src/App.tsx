@@ -1563,17 +1563,17 @@ bind("remotehand-tray-settings", () => { setSettingsTab("appearance"); setSettin
 return () => { cancelled = true; disposables.forEach((dispose) => dispose()); };
 }, [addConnections, addTerminal, openHome]);
 useEffect(() => {
-const openSettingsFromFunctionKey = () => {
-setSettingsTab("appearance");
+const openSettingsFromFunctionKey = (tab: "appearance" | "about") => {
+setSettingsTab(tab);
 setSettingsOpen(true);
 };
 const onKeyDown = (event: KeyboardEvent) => {
 const functionKeyDisposition = remoteHandFunctionKeyDisposition(event.key, event);
 if (functionKeyDisposition !== "none") {
 event.preventDefault();
-if (functionKeyDisposition === "settings") {
+if (functionKeyDisposition === "settings" || functionKeyDisposition === "about") {
 event.stopImmediatePropagation();
-openSettingsFromFunctionKey();
+openSettingsFromFunctionKey(functionKeyDisposition === "about" ? "about" : "appearance");
 return;
 }
 if (functionKeyDisposition === "blocked") {
@@ -1598,12 +1598,15 @@ event.preventDefault();
 redoLayout();
 }
 };
-const onOpenSettings = () => openSettingsFromFunctionKey();
+const onOpenSettings = () => openSettingsFromFunctionKey("appearance");
+const onOpenAbout = () => openSettingsFromFunctionKey("about");
 window.addEventListener("keydown", onKeyDown, true);
 window.addEventListener("remotehand-open-settings", onOpenSettings);
+window.addEventListener("remotehand-open-about", onOpenAbout);
 return () => {
 window.removeEventListener("keydown", onKeyDown, true);
 window.removeEventListener("remotehand-open-settings", onOpenSettings);
+window.removeEventListener("remotehand-open-about", onOpenAbout);
 };
 }, [redoLayout, undoLayout]);
 const handleReady = async (event: DockviewReadyEvent) => {
