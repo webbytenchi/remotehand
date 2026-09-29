@@ -2,6 +2,36 @@
 
 All notable changes to RemoteHand are documented here.
 
+## `1.2.23` - 2026-09-30
+
+### Added
+
+- **F1 About shortcut.** Pressing F1 anywhere in RemoteHand opens Settings directly on the About tab, including when a plugin panel currently has keyboard focus.
+
+### Improved
+
+- **Function-key ownership.** RemoteHand now consumes unassigned F1-F12 keys so browser/WebView actions do not leak through into the desktop app.
+- **Plugin-safe F5.** Plain F5 remains available to intentional plugin handlers such as Editor timestamp insertion while RemoteHand still suppresses browser refresh behavior.
+- **Settings focus handoff.** When F1 opens Settings from a plugin, focus moves to the host modal; after ESC closes Settings, focus returns to the exact previously focused plugin control so typing can resume immediately at the existing caret.
+
+### Fixed
+
+- **Alt+F4 close behavior.** The function-key guard now preserves native Alt+F4 handling so RemoteHand follows its normal close/minimize-to-tray behavior instead of swallowing the shortcut.
+
+### Compatibility
+
+- Plugin API remains **v1**.
+- Existing plugins require no migration.
+- Unassigned function keys are host-owned; plain F5 remains the intentional plugin exception.
+
+### Verification
+
+- Frontend unit tests passed with **12 tests and 0 failures**.
+- Production frontend build passed.
+- Optimized Windows Tauri release build passed.
+- Manual Windows acceptance confirmed F1 opens Settings → About from core and plugin focus, ESC returns focus to the previous Editor caret, plain F5 still triggers Editor timestamp insertion, Alt+F4 closes normally, and all other function keys remain inert.
+
+
 ## `1.2.22` - 2026-09-29
 
 ### Added
