@@ -636,7 +636,7 @@ export function PluginManager({
       </span>;
     }
     if (content.type === "text") {
-      return <span key={key} style={{ position: "relative", zIndex: 2, display: "block", width: "100%", minWidth: 0, boxSizing: "border-box", paddingLeft: cornerInsets.left, paddingRight: cornerInsets.right, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: fontSize ?? 11, fontWeight: 600, lineHeight: 1.05, color: content.color ?? tone.text }}>{content.label ?? content.value ?? ""}</span>;
+      return <span key={key} style={{ position: "relative", zIndex: 2, display: "block", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box", paddingLeft: cornerInsets.left, paddingRight: cornerInsets.right, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: fontSize ?? 11, fontWeight: 600, lineHeight: 1.05, color: content.color ?? tone.text }}>{content.label ?? content.value ?? ""}</span>;
     }
     if (content.type === "metric") {
       return <span key={key} style={{ position: "relative", zIndex: 2, fontSize: fontSize ?? 14, fontWeight: 700, lineHeight: 1.05, color: content.color }}>{content.value == null ? "—" : String(content.value)}</span>;
@@ -729,7 +729,7 @@ export function PluginManager({
         >
           {item.icon === "alert" ? <span style={{ position: "absolute", top: 4, left: 4, zIndex: 5, width: 15, height: 15, display: "grid", placeItems: "center", color: item.content?.color ?? genericTone.text }}>{renderTopbarIcon(item.icon, 14)}</span> : item.icon ? <span style={{ display: "grid", placeItems: "center", flex: "0 0 auto", color: item.content?.color ?? genericTone.text }}>{renderTopbarIcon(item.icon, 17)}</span> : null}
           {hasGenericContent ? (
-            <span style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", flex: leadingIcon ? 1 : undefined }}>
+            <span style={{ minWidth: 0, width: "100%", maxWidth: "100%", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flex: leadingIcon ? 1 : undefined }}>
               {renderTopbarContent(item.content!, `${pluginId}:${item.id}:content`, size, titleCornerInsets)}
             </span>
           ) : (
