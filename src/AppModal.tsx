@@ -10,6 +10,7 @@ cancelLabel?: string;
 danger?: boolean;
 focusActions?: boolean;
 focusDialog?: boolean;
+restoreFocus?: boolean;
 confirmOnEnter?: boolean;
 elevated?: boolean;
 onConfirm: () => void;
@@ -26,12 +27,25 @@ cancelLabel,
 danger = false,
 focusActions = true,
 focusDialog = false,
+restoreFocus = false,
 confirmOnEnter = false,
 elevated = false,
 onConfirm,
 onCancel,
 }: AppModalProps) {
 const dialogRef = useRef<HTMLDivElement>(null);
+const previousFocusRef = useRef<HTMLElement | null>(null);
+useEffect(() => {
+if (!open || !restoreFocus) return;
+const active = document.activeElement;
+previousFocusRef.current = active instanceof HTMLElement ? active : null;
+return () => {
+const previous = previousFocusRef.current;
+previousFocusRef.current = null;
+if (!previous || !previous.isConnected) return;
+window.requestAnimationFrame(() => previous.focus({ preventScroll: true }));
+};
+}, [open, restoreFocus]);
 useEffect(() => {
 if (!open || !focusDialog) return;
 const frame = window.requestAnimationFrame(() => dialogRef.current?.focus());
