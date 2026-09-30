@@ -45,7 +45,7 @@ RemoteHand V1 is intentionally focused on the workflows needed for day-to-day te
 | Local terminal / SSH PTY | portable-pty |
 | SSH terminal transport | System `ssh` client launched inside a PTY |
 | Native SFTP | `russh` + `russh-sftp` |
-| Portable credential vault | `age` passphrase encryption |
+| Portable credential vault | Argon2id + XChaCha20-Poly1305 |
 
 RemoteHand deliberately reuses mature protocol implementations rather than implementing SSH or cryptography from scratch.
 
@@ -134,17 +134,29 @@ Window state is also persisted by the native application so the main window can 
 
 The portable model is a core product requirement: normal operation should not require administrator/root privileges, an installer, or a cloud account.
 
-## Credential Vault
+## RemoteHand Vault
 
-RemoteHand includes a portable encrypted credential vault at:
+RemoteHand includes a portable, host-owned encrypted Vault for credentials, API keys, private plugin documents, and plugin-owned encrypted binary blobs.
+
+The primary structured Vault lives at:
 
 ```text
-data/vault/credentials.enc
+data/vault/vault.enc
 ```
 
-The vault uses the established `age` format with passphrase-based encryption. Saved connection profiles store only an opaque credential reference. The master passphrase and decrypted secrets are held in process memory only while the vault is unlocked.
+Plugin-owned encrypted blob payloads are stored separately under:
 
-See [SECURITY.md](SECURITY.md) for the threat model and limitations.
+```text
+data/vault/blobs/
+```
+
+The Vault uses Argon2id for passphrase-based key derivation and XChaCha20-Poly1305 authenticated encryption. Plugins request Vault access through host-owned UI and never receive the Vault passphrase, master key, or session key.
+
+Plugin Vault access is permission-gated and automatically scoped to the authenticated plugin identity. RemoteHand v1.3.1 also adds generic chunked encrypted blob storage for large private payloads, plus Vault status events so plugin panels can immediately redact decrypted content when the Vault locks.
+
+Saved connection profiles keep only opaque credential references; secret values remain Vault-backed.
+
+See [docs/VAULT.md](docs/VAULT.md) for the implemented Vault architecture and [SECURITY.md](SECURITY.md) for the threat model and limitations.
 
 ## Settings
 
@@ -179,13 +191,13 @@ Settings are stored portably under `data/config/settings.json`.
 
 ## Plugins
 
-RemoteHand supports out-of-process executable plugins that extend the app without modifying core. Plugins can contribute panels, sidebar buttons, commands, and live top-bar widgets. Plugin API v1 has shipped and remains the current plugin API in v1.2.19.
+RemoteHand supports out-of-process executable plugins that extend the app without modifying core. Plugins can contribute panels, sidebar buttons, commands, and live top-bar widgets. Plugin API v1 remains the current plugin API in RemoteHand v1.3.1.
 
 The plugin system is built on a simple rule: core owns infrastructure, plugins own functionality. RemoteHand core provides lifecycle, permissions, storage, IPC, and generic UI surfaces. Plugins provide protocol-specific behavior - for example, VNC, RDP, or host monitoring - that core does not need to know about.
 
-Plugin API v1 is documented in docs/PLUGINS.md. It covers package layout, the manifest, IPC, plugin-scoped storage, network/clipboard host services, panel hosting, top-bar contributions, system-tray contributions, native notifications, and generic panel-context routing.
+Plugin API v1 is documented in docs/PLUGINS.md. It covers package layout, the manifest, IPC, plugin-scoped storage, network/clipboard host services, panel hosting, top-bar contributions, system-tray contributions, native notifications, generic panel-context routing, scoped Vault access, Vault status events, and encrypted blob storage.
 
-RemoteHand v1.2.19 includes the generic plugin host improvements introduced across the v1.2.x line with stable Windows tray identities, adaptive tray graphs, host-owned interface contribution ordering, 16 MiB per-entry plugin storage, top-bar badges, queued native Windows notifications, notification actions that can restore/focus a plugin panel with context, and plugin-owned sidebar icon assets with host-controlled sizing and SVG theming. These are generic API-v1 capabilities; plugin-specific monitoring or protocol semantics remain outside RemoteHand core.
+RemoteHand v1.3.1 adds generic Vault blob permissions and `vault.blob.*` methods for plugin-owned binary data, forwards Vault lock-state changes to plugin panels, and serializes each plugin runtime request/response lifetime so concurrent panel calls cannot overtake nested host API responses and desynchronize Plugin API v1 framing. These are generic core capabilities available to any appropriately permissioned plugin; Notes is the first plugin to depend on them.
 
 Plugins are disabled by default after install. Only install plugins you trust - a plugin is a native executable with the host process privileges. See SECURITY.md for the plugin threat model.
 
@@ -226,7 +238,7 @@ RemoteHand is configured as portable-only. Tauri bundling/installers are disable
 
 ## V1 Status
 
-**Status: V1 feature baseline complete. RemoteHand v1.2.19 adds native desktop interaction polish across core and sandboxed plugin panels while preserving the mature Plugin API v1, tray-aware global shortcut behavior, responsive shell, modern scrollbars, and plugin-owned contribution infrastructure.**
+**Status: V1 feature baseline complete. RemoteHand v1.3.1 extends the existing Plugin API v1 platform with generic encrypted Vault blob storage, Vault lock-state events for plugin panels, and serialized plugin runtime request/response handling while preserving backward-compatible API-v1 behavior.**
 
 The current V1 has been exercised on the Windows Tauri build for the primary workspace, terminal, connection, Home, persistence, credential-vault, and SFTP workflows. Remaining work belongs to post-V1 expansion and hardening rather than the original bootstrap phase.
 
@@ -254,6 +266,7 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for the current sequencing.
 
 - [Requirements](docs/REQUIREMENTS.md)
 - [Plugins](docs/PLUGINS.md)
+- [Vault](docs/VAULT.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Security](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
