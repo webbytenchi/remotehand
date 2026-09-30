@@ -2,7 +2,7 @@ use chacha20poly1305::{
     aead::{Aead, KeyInit, Payload},
     XChaCha20Poly1305, XNonce,
 };
-use hmac::{Hmac, KeyInit, Mac};
+use hmac::{Hmac, Mac};
 use rand_core::{OsRng, RngCore};
 use serde::Serialize;
 use sha2::Sha256;
