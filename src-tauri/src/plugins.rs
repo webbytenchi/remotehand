@@ -13,6 +13,7 @@ const MAX_PLUGIN_COUNT: usize = 512;
 const MAX_STATE_BYTES: u64 = 1024 * 1024;
 const MAX_PLUGIN_STORAGE_ENTRY_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_PLUGIN_BYTES: u64 = 64 * 1024 * 1024;
+#[cfg(test)]
 const DEPRECATED_V1_PERMISSIONS: &[&str] = &["credentials.use", "credentials.store"];
 const ALLOWED_PERMISSIONS: &[&str] = &[
     "network.connect",
