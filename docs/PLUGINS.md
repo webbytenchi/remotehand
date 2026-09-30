@@ -26,7 +26,7 @@ Plugin API v1 uses a conservative trust model:
 - Incompatible API versions are rejected at load time.
 - Plugin packages are scanned for symlinks, path traversal, oversized files, and excessive file counts.
 - Plugin removal requires the plugin to be disabled first.
-- Sensitive capabilities (network, clipboard, credentials, vault unlock, plugin storage) require explicit permission declarations in the manifest.
+- Sensitive host-mediated capabilities (network inspection, clipboard, Vault access, file dialogs, plugin storage, and related services) require explicit permission declarations in the manifest.
 - The host reports granted permissions back to the plugin at handshake, so plugins know what they were actually granted.
 
 Declared permissions are not yet a complete OS-level security boundary for arbitrary native code. Plugins are native executables. Only install plugins you trust.
@@ -134,6 +134,8 @@ The Plugin API version this plugin targets. Currently 1.
 
 The host rejects plugins whose apiVersion it does not support. Bumping this field is a breaking change; a plugin written for apiVersion 1 keeps working with apiVersion 1 for the lifetime of that version.
 
+Vault v1.3.0 does **not** bump the Plugin API version. The new Vault permissions and host methods are additive. The older `credentials.use` and `credentials.store` methods remain accepted as deprecated Plugin API v1 compatibility aliases. Removing those aliases would be a breaking change and therefore belongs in a future Plugin API v2 (or another explicitly breaking API revision). A raw plugin `vault.unlock` method is not part of Plugin API v1.
+
 #### author - string, required
 
 Author or organization name. Shown in the Plugin Manager.
@@ -209,9 +211,13 @@ Recognized permissions:
 | files.save | Save user-selected local files through `file.save`. |
 | tray.contribute | Publish and update generic per-plugin system-tray items through `tray.update`. |
 | notifications.show | Show bounded native notifications associated with a plugin tray item through `notification.show`. |
-| credentials.use | Request a specific credential from the vault by opaque reference. |
-| credentials.store | Store a secret in the vault under the plugin namespace. |
-| vault.unlock | Request that the host unlock the vault with a passphrase. Sensitive. |
+| vault.secrets.read | Read secret values from the caller's own Vault namespace through `vault.secret.get`. |
+| vault.secrets.write | Create, replace, or delete secret values in the caller's own Vault namespace through `vault.secret.set` / `vault.secret.delete`. |
+| vault.documents.read | Read encrypted private documents from the caller's own Vault namespace through `vault.document.get`. |
+| vault.documents.write | Create, replace, or delete encrypted private documents in the caller's own Vault namespace through `vault.document.set` / `vault.document.delete`. |
+| vault.access.request | Ask RemoteHand's host UI to create/unlock the Vault through `vault.request_access`. The plugin never receives the passphrase. |
+| credentials.use | **Deprecated v1 compatibility alias.** Legacy secret read by opaque reference. New plugins should use `vault.secrets.read` + `vault.secret.get`. |
+| credentials.store | **Deprecated v1 compatibility alias.** Legacy secret write by opaque reference. New plugins should use `vault.secrets.write` + `vault.secret.set`. |
 | storage.plugin | Read and write plugin-scoped persistent storage. |
 
 Contribution declarations (panels, sidebar, commands) are not permissions. They are metadata. A plugin that only contributes UI does not need a permission for that.
@@ -466,85 +472,137 @@ Example result:
 
 Interface ordering is deterministic by name. Plugins decide which interfaces or addresses are useful for their own UI; core does not apply plugin-specific filtering.
 
-### credentials.use
+### vault.request_access
 
-Requires: credentials.use.
+Requires: `vault.access.request`.
 
-Retrieve a specific credential by opaque reference. The plugin does not enumerate the vault - it must already know the reference (usually because it stored it itself, or because the user supplied it through the plugin own UI).
-
-~~~json
-{
- "type": "plugin.request",
- "requestId": 3,
- "method": "credentials.use",
- "params": { "credentialRef": "plugin:remotehand.example:profile-1:abc123" }
-}
-~~~
-
-Reply:
-
-~~~json
-{
- "type": "host.response",
- "requestId": 3,
- "ok": true,
- "result": { "secret": "..." },
- "error": ""
-}
-~~~
-
-On failure, ok is false and error explains why (vault locked, reference unknown, permission denied, and so on).
-
-### credentials.store
-
-Requires: credentials.store.
-
-Store a secret in the vault under the plugin namespace.
-
-~~~json
-{
- "type": "plugin.request",
- "requestId": 4,
- "method": "credentials.store",
- "params": { "credentialRef": "plugin:remotehand.example:profile-1:abc123", "secret": "..." }
-}
-~~~
-
-Reply:
-
-~~~json
-{
- "type": "host.response",
- "requestId": 4,
- "ok": true,
- "result": "plugin:remotehand.example:profile-1:abc123",
- "error": ""
-}
-~~~
-
-Rules:
-
-- The reference must begin with plugin: followed by your plugin id followed by a colon. This prevents a plugin from overwriting another plugin namespace or core RemoteHand credentials.
-- The plugin should store only the opaque reference in its own state. It should not persist the secret itself.
-
-### vault.unlock
-
-Requires: vault.unlock.
-
-Request that the host unlock the credential vault with a passphrase.
+Ask RemoteHand to present its host-owned Vault create/unlock UI when the Vault is not already unlocked.
 
 ~~~json
 {
  "type": "plugin.request",
  "requestId": 5,
- "method": "vault.unlock",
- "params": { "passphrase": "..." }
+ "method": "vault.request_access",
+ "params": { "reason": "Use the configured provider credential." }
 }
 ~~~
 
-The passphrase is used transiently by the host to unlock the vault and is not persisted by this API.
+The reason is bounded human-readable text shown by the host alongside the authenticated plugin identity. The plugin does not send, receive, or observe the Vault passphrase or derived key. The request returns only after the Vault is available, the user cancels, or the request times out.
 
-This is a sensitive permission. The plugin process and UI can observe the passphrase before it reaches the host. Only grant vault.unlock to plugins you trust with your vault passphrase.
+Successful result:
+
+~~~json
+{ "unlocked": true }
+~~~
+
+A raw plugin `vault.unlock` method is intentionally unsupported.
+
+### vault.secret.get
+
+Requires: `vault.secrets.read`.
+
+Read one secret from the caller's own Vault namespace.
+
+~~~json
+{
+ "type": "plugin.request",
+ "requestId": 6,
+ "method": "vault.secret.get",
+ "params": { "key": "providers/gemini/api-key" }
+}
+~~~
+
+The host derives the full reference as `plugin:<plugin-id>/<key>`. Plugins cannot supply another plugin id or a core namespace.
+
+Successful result:
+
+~~~json
+{ "secret": "..." }
+~~~
+
+Keys are 1-256 characters, use only ASCII letters/digits plus `/`, `.`, `-`, and `_`, and may not contain empty, `.`, or `..` path segments.
+
+### vault.secret.set and vault.secret.delete
+
+Requires: `vault.secrets.write`.
+
+Store or remove a secret in the caller's own Vault namespace.
+
+~~~json
+{
+ "type": "plugin.request",
+ "requestId": 7,
+ "method": "vault.secret.set",
+ "params": {
+  "key": "providers/gemini/api-key",
+  "secret": "..."
+ }
+}
+~~~
+
+Secrets must be non-empty and are capped at 64 KiB.
+
+Delete:
+
+~~~json
+{
+ "type": "plugin.request",
+ "requestId": 8,
+ "method": "vault.secret.delete",
+ "params": { "key": "providers/gemini/api-key" }
+}
+~~~
+
+Delete returns `{ "deleted": true }` when an entry existed, otherwise false.
+
+### vault.document.get
+
+Requires: `vault.documents.read`.
+
+Read one encrypted private document from the caller's own namespace.
+
+~~~json
+{
+ "type": "plugin.request",
+ "requestId": 9,
+ "method": "vault.document.get",
+ "params": { "key": "private/notebook" }
+}
+~~~
+
+Result:
+
+~~~json
+{ "value": "..." }
+~~~
+
+A missing document returns `value: null`.
+
+### vault.document.set and vault.document.delete
+
+Requires: `vault.documents.write`.
+
+Store or delete a private document in the caller's own namespace.
+
+~~~json
+{
+ "type": "plugin.request",
+ "requestId": 10,
+ "method": "vault.document.set",
+ "params": {
+  "key": "private/notebook",
+  "value": "..."
+ }
+}
+~~~
+
+Documents are capped at 16 MiB. Delete uses `vault.document.delete` with the same `{ "key": ... }` shape and returns a boolean `deleted` field.
+
+### Deprecated Plugin API v1 credential aliases
+
+`credentials.use` and `credentials.store` remain accepted only to preserve Plugin API v1 compatibility. They use the older colon-style reference form (`plugin:<plugin-id>:...`) and are logged as deprecated Vault actions.
+
+New plugins must use the `vault.*` APIs above. RemoteHand may remove these aliases only in an explicitly breaking Plugin API revision.
 
 ## UI contributions
 

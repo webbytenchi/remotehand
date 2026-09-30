@@ -13,6 +13,7 @@ const MAX_PLUGIN_COUNT: usize = 512;
 const MAX_STATE_BYTES: u64 = 1024 * 1024;
 const MAX_PLUGIN_STORAGE_ENTRY_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_PLUGIN_BYTES: u64 = 64 * 1024 * 1024;
+const DEPRECATED_V1_PERMISSIONS: &[&str] = &["credentials.use", "credentials.store"];
 const ALLOWED_PERMISSIONS: &[&str] = &[
     "network.connect",
     "network.inspect",
@@ -952,6 +953,32 @@ mod tests {
         assert!(validate_manifest(&manifest(
             "remotehand.test",
             &["network.connect", "storage.plugin"]
+        ))
+        .is_ok());
+    }
+
+    #[test]
+    fn accepts_vault_permissions_without_bumping_plugin_api_v1() {
+        assert_eq!(PLUGIN_API_VERSION, 1);
+        assert!(validate_manifest(&manifest(
+            "remotehand.test",
+            &[
+                "vault.secrets.read",
+                "vault.secrets.write",
+                "vault.documents.read",
+                "vault.documents.write",
+                "vault.access.request",
+            ],
+        ))
+        .is_ok());
+    }
+
+    #[test]
+    fn keeps_legacy_credential_permissions_for_v1_compatibility() {
+        assert_eq!(DEPRECATED_V1_PERMISSIONS, &["credentials.use", "credentials.store"]);
+        assert!(validate_manifest(&manifest(
+            "remotehand.test",
+            DEPRECATED_V1_PERMISSIONS,
         ))
         .is_ok());
     }

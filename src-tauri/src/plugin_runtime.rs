@@ -411,6 +411,18 @@ fn log_vault_audit(plugin_id: &str, method: &str, outcome: &str) {
     }
 }
 
+fn log_deprecated_vault_api(plugin_id: &str, method: &str) {
+    match method {
+        "credentials.use" => log::warn!(
+            "Plugin {plugin_id} used deprecated credentials.use; migrate to vault.secret.get"
+        ),
+        "credentials.store" => log::warn!(
+            "Plugin {plugin_id} used deprecated credentials.store; migrate to vault.secret.set"
+        ),
+        _ => {}
+    }
+}
+
 fn validate_plugin_credential_ref(plugin_id: &str, credential_ref: &str) -> Result<(), String> {
     let expected_prefix = format!("plugin:{plugin_id}:");
     if credential_ref.starts_with(&expected_prefix) {
@@ -449,6 +461,7 @@ fn validate_plugin_request(permissions: &[String], request: &PluginRequest) -> R
     }
     match request.method.as_str() {
         "credentials.use" => {
+            log_deprecated_vault_api(plugin_id, &request.method);
             if !permission_granted(permissions, "credentials.use") {
                 return Err("plugin lacks credentials.use permission".to_string());
             }
@@ -559,6 +572,7 @@ fn handle_plugin_request(
             Ok(serde_json::json!({ "secret": secret }))
         }
         "credentials.store" => {
+            log_deprecated_vault_api(plugin_id, &request.method);
             let params: CredentialStoreParams = serde_json::from_value(request.params.clone())
                 .map_err(|error| format!("invalid credentials.store params: {error}"))?;
             if params.secret.is_empty() {
@@ -1489,6 +1503,22 @@ mod tests {
         );
         assert!(plugin_vault_ref("remotehand.marielle-chat", "../notes").is_err());
         assert!(plugin_vault_ref("remotehand.marielle-chat", "other:plugin").is_err());
+    }
+
+    #[test]
+    fn keeps_legacy_vault_methods_inside_plugin_api_v1() {
+        for (method, permission) in [
+            ("credentials.use", "credentials.use"),
+            ("credentials.store", "credentials.store"),
+        ] {
+            let request = PluginRequest {
+                message_type: "plugin.request".to_string(),
+                request_id: 23,
+                method: method.to_string(),
+                params: serde_json::json!({}),
+            };
+            assert!(validate_plugin_request(&[permission.to_string()], &request).is_ok());
+        }
     }
 
     #[test]

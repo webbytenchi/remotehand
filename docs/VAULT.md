@@ -1,6 +1,6 @@
 # RemoteHand Vault v1.3.0 Design
 
-Status: Design baseline
+Status: Implementation baseline
 Target release: RemoteHand v1.3.0
 Repository: webbytenchi/remotehand
 
@@ -67,17 +67,25 @@ Plugins request narrow Vault operations through core APIs.
 
 The user controls the Vault unlock secret. The Vault must remain secure even if all other implementation details are public.
 
-## Cryptographic Direction
+## Cryptographic Profile
 
-The exact Rust crates and parameters must be chosen deliberately before implementation. Current preferred direction:
-- password-based key derivation: Argon2id;
-- authenticated encryption: XChaCha20-Poly1305 or another well-reviewed AEAD construction selected during implementation review;
-- unique cryptographically random Vault salt;
-- cryptographically random nonce per encrypted object/record as required by the chosen AEAD;
-- OS-backed cryptographic randomness only;
-- authenticated metadata where metadata affects security interpretation.
+Vault format v1 now uses the following fixed implementation profile:
+- KDF: Argon2id, version 0x13 / 19;
+- Argon2 memory: 64 MiB;
+- Argon2 iterations: 3;
+- Argon2 parallelism: 1;
+- random salt: 16 bytes from the OS-backed RNG;
+- derived key: 32 bytes;
+- AEAD: XChaCha20-Poly1305;
+- random nonce: 24 bytes per encrypted Vault write;
+- Vault identifier: 16 random bytes;
+- encrypted Vault file maximum: 128 MiB;
+- secret value maximum: 64 KiB;
+- private document maximum: 16 MiB.
 
-No custom cryptographic primitive or home-grown protocol should be introduced.
+The versioned envelope carries the format version, Vault identifier, KDF profile, cipher identifier, nonce, and ciphertext. Security-relevant header data is authenticated as AEAD associated data.
+
+Unsupported KDF parameters, cipher identifiers, format versions, malformed identifiers/nonces/salts, failed authentication, and bounded-I/O violations are rejected. No custom cryptographic primitive or home-grown cipher is used.
 
 ### Fixed Application Context
 
@@ -132,17 +140,22 @@ A plugin may access only its own namespace unless a separate, explicit future ca
 
 Namespace validation must be applied consistently to reads, writes, deletes, metadata queries, and any future list/search operations.
 
-## Plugin Permissions
+## Plugin Permissions and API Compatibility
 
-The plugin permission system must gate Vault capabilities explicitly.
+The finalized Plugin API v1 Vault permissions are:
+- `vault.secrets.read`;
+- `vault.secrets.write`;
+- `vault.documents.read`;
+- `vault.documents.write`;
+- `vault.access.request`.
 
-Current credential-related permissions should be reviewed rather than copied forward blindly.
+The corresponding host methods are `vault.secret.get`, `vault.secret.set`, `vault.secret.delete`, `vault.document.get`, `vault.document.set`, `vault.document.delete`, and `vault.request_access`.
 
-The v1.3.0 API should avoid exposing a raw vault.unlock method to plugins.
+Permission checks and caller-derived namespace checks are both required. Possessing a permission never grants cross-plugin or core-namespace access.
 
-Likely permission categories include secret read/use, secret write/store, private-document read, private-document write, and host unlock prompt request if needed.
+`vault.request_access` asks RemoteHand core to present the host-owned create/unlock UI. The plugin supplies only a bounded human-readable reason; it never receives or submits the passphrase or derived key. Raw plugin `vault.unlock` is unsupported.
 
-Permission checks and namespace checks are both required. Possessing a permission must not grant access outside the caller's authorized namespace.
+Plugin API remains version 1 for Vault v1.3.0 because these capabilities are additive. The older `credentials.use` and `credentials.store` methods remain temporarily accepted as deprecated v1 compatibility aliases. They are not the canonical API for new plugins. Removing them would be a breaking plugin-API change and is deferred to a future Plugin API v2 or other explicitly breaking revision.
 
 ## SFTP Integration
 
@@ -170,7 +183,7 @@ Future provider credentials should use the same Vault abstraction.
 
 ## Physical Storage Direction
 
-The initial implementation may use one versioned Vault container rather than one encrypted file per secret.
+The v1.3.0 implementation uses one versioned encrypted Vault container rather than one encrypted file per secret. The active file is `data/vault/vault.enc`; `vault.bak` is the encrypted last-known-good backup used by the recovery path.
 
 Conceptually:
 - metadata
@@ -206,9 +219,9 @@ The implementation must not simply delete the active Vault and hope a later rena
 
 ## Corruption and Tamper Handling
 
-Vault must distinguish between wrong unlock secret, unsupported format version, malformed header/metadata, failed authentication/tamper detection, truncated/corrupt storage, and ordinary I/O failures.
+Vault distinguishes structural/format problems (unsupported version/profile, malformed header/metadata, bounded-I/O failures) and ordinary I/O failures from authentication failure.
 
-Errors presented to users should avoid leaking secret information.
+Wrong passphrases and authenticated-ciphertext tampering intentionally converge on the same generic unlock/authentication failure path rather than revealing which condition occurred. Errors presented to users should avoid leaking secret information.
 
 Corrupt or unauthenticated data must never be treated as valid plaintext.
 
@@ -547,3 +560,25 @@ Remaining higher-level decisions/work include:
 - document that the decrypted Vault document remains in memory while the Vault is unlocked;
 - decide whether passphrase rotation belongs in v1.3.0 or a later release;
 - do not claim FIPS compliance for the current Argon2id + XChaCha20-Poly1305 profile.
+
+
+## Finalized v1.3.0 API Decision — 2026-10-01
+
+Plugin API remains **v1** for the Vault milestone.
+
+Rationale:
+- the new Vault permissions and host methods are additive;
+- existing non-Vault Plugin API v1 plugins remain compatible;
+- `credentials.use` and `credentials.store` are retained as deprecated aliases rather than removed;
+- raw plugin `vault.unlock` is rejected and is not part of the supported v1 API;
+- a future removal of the deprecated credential aliases should coincide with an explicitly breaking Plugin API revision.
+
+The parked VNC plugin currently carries the old credential permissions and a legacy `vault.unlock` declaration. It is not being migrated as part of the Vault v1.3.0 core milestone; its manifest/runtime must be updated before it is treated as compatible with the finalized Vault surface.
+
+### Accepted in-memory tradeoff
+
+While unlocked, the current implementation retains the decrypted logical Vault document in RemoteHand core memory together with the derived session key. Secret/document strings are zeroized where practical on replacement, deletion, lock, and drop, but the design does not claim protection against an attacker with arbitrary code execution in the trusted RemoteHand process while the Vault is unlocked.
+
+### Rollback limitation
+
+AEAD authenticates the contents and security-relevant metadata of each Vault file, but v1.3.0 does not provide monotonic anti-rollback state. An attacker able to replace both `vault.enc` and `vault.bak` with older, previously valid encrypted copies may roll the Vault back to that older authenticated state without forging ciphertext.
