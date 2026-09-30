@@ -37,6 +37,8 @@ const NONCE_BYTES: usize = 24;
 const KEY_BYTES: usize = 32;
 const MAX_VAULT_REF_BYTES: usize = 512;
 const MAX_VAULT_FILE_BYTES: u64 = 128 * 1024 * 1024;
+const MAX_SECRET_BYTES: usize = 64 * 1024;
+const MAX_DOCUMENT_BYTES: usize = 16 * 1024 * 1024;
 
 #[derive(Clone)]
 pub struct VaultState {
@@ -545,6 +547,23 @@ fn validate_core_ref(vault_ref: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn validate_secret_value(secret: &str) -> Result<(), String> {
+    if secret.is_empty() {
+        return Err("Vault secret is required".to_string());
+    }
+    if secret.len() > MAX_SECRET_BYTES {
+        return Err("Vault secret exceeds 64 KiB".to_string());
+    }
+    Ok(())
+}
+
+fn validate_document_value(document: &str) -> Result<(), String> {
+    if document.len() > MAX_DOCUMENT_BYTES {
+        return Err("Vault document exceeds 16 MiB".to_string());
+    }
+    Ok(())
+}
+
 pub(crate) fn get_secret(state: &VaultState, vault_ref: &str) -> Result<Option<String>, String> {
     validate_vault_ref(vault_ref)?;
     let mut guard = state
@@ -718,6 +737,7 @@ pub(crate) fn store_secret(
     secret: String,
 ) -> Result<(), String> {
     validate_vault_ref(&vault_ref)?;
+    validate_secret_value(&secret)?;
     let mut guard = state
         .unlocked
         .lock()
@@ -777,6 +797,7 @@ pub(crate) fn store_document(
     document: String,
 ) -> Result<(), String> {
     validate_vault_ref(&vault_ref)?;
+    validate_document_value(&document)?;
     let mut guard = state
         .unlocked
         .lock()
@@ -873,6 +894,16 @@ mod tests {
         let metadata = new_metadata();
         let key = derive_key(passphrase, &metadata.kdf).unwrap();
         encrypt_document(&key, &metadata, &sample_document()).unwrap()
+    }
+
+    #[test]
+    fn enforces_secret_and_document_limits() {
+        assert!(validate_secret_value("").is_err());
+        assert!(validate_secret_value(&"x".repeat(MAX_SECRET_BYTES)).is_ok());
+        assert!(validate_secret_value(&"x".repeat(MAX_SECRET_BYTES + 1)).is_err());
+
+        assert!(validate_document_value(&"x".repeat(MAX_DOCUMENT_BYTES)).is_ok());
+        assert!(validate_document_value(&"x".repeat(MAX_DOCUMENT_BYTES + 1)).is_err());
     }
 
     #[test]
