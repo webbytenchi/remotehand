@@ -1,3 +1,4 @@
+use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine as _};
 use crate::plugins::{PluginInfo, PLUGIN_API_VERSION};
 use serde::{Deserialize, Serialize};
 #[cfg(windows)]
@@ -259,6 +260,33 @@ struct VaultDocumentSetParams {
     key: String,
     value: String,
 }
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct VaultBlobBeginParams {
+    key: String,
+    size: u64,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct VaultBlobWriteParams {
+    key: String,
+    upload_id: String,
+    index: u32,
+    data: String,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct VaultBlobUploadParams {
+    key: String,
+    upload_id: String,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct VaultBlobReadParams {
+    key: String,
+    index: u32,
+}
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct VaultAccessRequestParams {
@@ -400,6 +428,13 @@ fn vault_audit_action(method: &str) -> Option<&'static str> {
         "vault.document.get" => Some("document.read"),
         "vault.document.set" => Some("document.write"),
         "vault.document.delete" => Some("document.delete"),
+        "vault.blob.begin" => Some("blob.begin"),
+        "vault.blob.write" => Some("blob.write"),
+        "vault.blob.commit" => Some("blob.commit"),
+        "vault.blob.abort" => Some("blob.abort"),
+        "vault.blob.info" => Some("blob.info"),
+        "vault.blob.read" => Some("blob.read"),
+        "vault.blob.delete" => Some("blob.delete"),
         "vault.request_access" => Some("access.request"),
         _ => None,
     }
@@ -493,6 +528,22 @@ fn validate_plugin_request(permissions: &[String], request: &PluginRequest) -> R
         "vault.document.set" | "vault.document.delete" => {
             if !permission_granted(permissions, "vault.documents.write") {
                 return Err("plugin lacks vault.documents.write permission".to_string());
+            }
+            Ok(())
+        }
+        "vault.blob.info" | "vault.blob.read" => {
+            if !permission_granted(permissions, "vault.blobs.read") {
+                return Err("plugin lacks vault.blobs.read permission".to_string());
+            }
+            Ok(())
+        }
+        "vault.blob.begin"
+        | "vault.blob.write"
+        | "vault.blob.commit"
+        | "vault.blob.abort"
+        | "vault.blob.delete" => {
+            if !permission_granted(permissions, "vault.blobs.write") {
+                return Err("plugin lacks vault.blobs.write permission".to_string());
             }
             Ok(())
         }
@@ -642,6 +693,105 @@ fn handle_plugin_request(
             let vault_ref = plugin_vault_ref(plugin_id, &params.key)?;
             let vault_state = app_handle.state::<crate::vault::VaultState>();
             let deleted = crate::vault::delete_document(&vault_state, &vault_ref)?;
+            log_vault_audit(plugin_id, &request.method, "allowed");
+            Ok(serde_json::json!({ "deleted": deleted }))
+        }
+        "vault.blob.begin" => {
+            let params: VaultBlobBeginParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid vault.blob.begin params: {error}"))?;
+            let vault_ref = plugin_vault_ref(plugin_id, &params.key)?;
+            let vault_state = app_handle.state::<crate::vault::VaultState>();
+            let (upload_id, chunk_size, chunks) =
+                crate::vault::begin_blob_upload(&vault_state, &vault_ref, params.size)?;
+            log_vault_audit(plugin_id, &request.method, "allowed");
+            Ok(serde_json::json!({
+                "uploadId": upload_id,
+                "chunkSize": chunk_size,
+                "chunks": chunks
+            }))
+        }
+        "vault.blob.write" => {
+            let params: VaultBlobWriteParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid vault.blob.write params: {error}"))?;
+            if params.data.len() > 2 * 1024 * 1024 {
+                return Err("Vault blob chunk encoding exceeds the supported limit".to_string());
+            }
+            let bytes = STANDARD_NO_PAD
+                .decode(params.data.as_bytes())
+                .map_err(|_| "Vault blob chunk data is invalid".to_string())?;
+            if bytes.len() > 1024 * 1024 {
+                return Err("Vault blob chunk exceeds 1 MiB".to_string());
+            }
+            let vault_ref = plugin_vault_ref(plugin_id, &params.key)?;
+            let vault_state = app_handle.state::<crate::vault::VaultState>();
+            let written = crate::vault::write_blob_chunk(
+                &vault_state,
+                &vault_ref,
+                &params.upload_id,
+                params.index,
+                &bytes,
+            )?;
+            log_vault_audit(plugin_id, &request.method, "allowed");
+            Ok(serde_json::json!({ "written": written }))
+        }
+        "vault.blob.commit" => {
+            let params: VaultBlobUploadParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid vault.blob.commit params: {error}"))?;
+            let vault_ref = plugin_vault_ref(plugin_id, &params.key)?;
+            let vault_state = app_handle.state::<crate::vault::VaultState>();
+            let info =
+                crate::vault::commit_blob_upload(&vault_state, &vault_ref, &params.upload_id)?;
+            log_vault_audit(plugin_id, &request.method, "allowed");
+            Ok(serde_json::json!({
+                "stored": true,
+                "size": info.size,
+                "chunkSize": info.chunk_size,
+                "chunks": info.chunks
+            }))
+        }
+        "vault.blob.abort" => {
+            let params: VaultBlobUploadParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid vault.blob.abort params: {error}"))?;
+            let vault_ref = plugin_vault_ref(plugin_id, &params.key)?;
+            let vault_state = app_handle.state::<crate::vault::VaultState>();
+            let aborted =
+                crate::vault::abort_blob_upload(&vault_state, &vault_ref, &params.upload_id)?;
+            log_vault_audit(plugin_id, &request.method, "allowed");
+            Ok(serde_json::json!({ "aborted": aborted }))
+        }
+        "vault.blob.info" => {
+            let params: VaultKeyParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid vault.blob.info params: {error}"))?;
+            let vault_ref = plugin_vault_ref(plugin_id, &params.key)?;
+            let vault_state = app_handle.state::<crate::vault::VaultState>();
+            let info = crate::vault::get_blob_info(&vault_state, &vault_ref)?;
+            log_vault_audit(plugin_id, &request.method, "allowed");
+            Ok(match info {
+                Some(info) => serde_json::json!({
+                    "exists": true,
+                    "size": info.size,
+                    "chunkSize": info.chunk_size,
+                    "chunks": info.chunks
+                }),
+                None => serde_json::json!({ "exists": false }),
+            })
+        }
+        "vault.blob.read" => {
+            let params: VaultBlobReadParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid vault.blob.read params: {error}"))?;
+            let vault_ref = plugin_vault_ref(plugin_id, &params.key)?;
+            let vault_state = app_handle.state::<crate::vault::VaultState>();
+            let bytes = crate::vault::read_blob_chunk(&vault_state, &vault_ref, params.index)?;
+            let data = STANDARD_NO_PAD.encode(bytes);
+            log_vault_audit(plugin_id, &request.method, "allowed");
+            Ok(serde_json::json!({ "index": params.index, "data": data }))
+        }
+        "vault.blob.delete" => {
+            let params: VaultKeyParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid vault.blob.delete params: {error}"))?;
+            let vault_ref = plugin_vault_ref(plugin_id, &params.key)?;
+            let vault_state = app_handle.state::<crate::vault::VaultState>();
+            let deleted = crate::vault::delete_blob(&vault_state, &vault_ref)?;
             log_vault_audit(plugin_id, &request.method, "allowed");
             Ok(serde_json::json!({ "deleted": deleted }))
         }
