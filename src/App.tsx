@@ -1672,6 +1672,44 @@ unlisten?.();
 };
 }, []);
 
+useEffect(() => {
+if (!isTauri()) return;
+let cancelled = false;
+let unlisten: (() => void) | undefined;
+void listen<VaultPromptRequest>("remotehand-vault-plugin-access-request", (event) => {
+const incoming = event.payload;
+const request: VaultPromptRequest = {
+...incoming,
+source: "plugin",
+reason: `Plugin ${incoming.pluginId ?? "unknown"} requests Vault access. ${incoming.reason}`,
+};
+if (vaultPromptRef.current) {
+void invoke("vault_resolve_plugin_access_request", {
+requestId: request.requestId,
+ok: false,
+error: "Another Vault unlock request is already active.",
+}).catch(() => undefined);
+return;
+}
+vaultPromptRef.current = request;
+setVaultPrompt(request);
+setVaultPromptPassphrase("");
+setVaultPromptPassphraseConfirm("");
+setVaultPromptError("");
+setVaultPromptBusy(false);
+void invoke("focus_main_window").catch((error) =>
+console.error("Failed to focus RemoteHand for plugin Vault access", error),
+);
+}).then((dispose) => {
+if (cancelled) dispose();
+else unlisten = dispose;
+});
+return () => {
+cancelled = true;
+unlisten?.();
+};
+}, []);
+
 const finishVaultPrompt = useCallback(async (ok: boolean, error?: string) => {
 const request = vaultPromptRef.current;
 if (!request) return;
@@ -1681,11 +1719,19 @@ setVaultPromptPassphrase("");
 setVaultPromptPassphraseConfirm("");
 setVaultPromptError("");
 setVaultPromptBusy(false);
+if (request.source === "plugin") {
+await invoke("vault_resolve_plugin_access_request", {
+requestId: request.requestId,
+ok,
+error: error ?? null,
+});
+} else {
 await emit(VAULT_PROMPT_RESULT_EVENT, {
 requestId: request.requestId,
 ok,
 ...(error ? { error } : {}),
 });
+}
 }, []);
 
 const confirmVaultPrompt = useCallback(async () => {
