@@ -783,6 +783,7 @@ export function PluginManager({
               position: "fixed",
               top: topbarOverlayAnchor.bottom + 6,
               right: Math.max(12, window.innerWidth - topbarOverlayAnchor.right),
+              zIndex: 2002,
               width: 310,
               maxHeight: "min(420px, 70vh)",
               overflowY: "auto",
