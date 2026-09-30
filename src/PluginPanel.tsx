@@ -388,6 +388,26 @@ return () => { cancelled = true; unlisten?.(); };
 }, [pluginId]);
 
 useEffect(() => {
+if (!isTauri() || !pluginId) return;
+let cancelled = false;
+let unlisten: (() => void) | undefined;
+void listen<{ exists: boolean; unlocked: boolean }>("remotehand-vault-status-changed", (tauriEvent) => {
+iframeRef.current?.contentWindow?.postMessage({
+type: "remotehand.host.event",
+event: "vault.status",
+payload: tauriEvent.payload,
+} satisfies PluginBridgeEvent, "*");
+}).then((dispose) => {
+if (cancelled) dispose();
+else unlisten = dispose;
+});
+return () => {
+cancelled = true;
+unlisten?.();
+};
+}, [pluginId]);
+
+useEffect(() => {
 if (!isTauri() || !pluginId || !panelId) return;
 let cancelled = false;
 let unlisten: (() => void) | undefined;
