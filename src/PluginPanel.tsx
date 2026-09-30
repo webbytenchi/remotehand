@@ -30,6 +30,9 @@ type PluginHostFunctionKeyMessage = {
 type: "remotehand.host.function-key";
 key: "F1";
 };
+type PluginStylesReadyMessage = {
+type: "remotehand.plugin.styles-ready";
+};
 type PluginBridgeResponse = {
 type: "remotehand.plugin.response";
 requestId: string;
@@ -197,6 +200,24 @@ lastFocusedElement = document.activeElement instanceof HTMLElement ? document.ac
 parent.postMessage({ type: "remotehand.host.function-key", key: "F1" }, "*");
 }
 }, true);
+let repairedStyleSheet = null;
+function repairStylesForPopout() {
+try {
+const styles = Array.from(document.querySelectorAll("style"));
+const css = styles.map((style) => style.textContent || "").join("\n");
+if (css && typeof CSSStyleSheet === "function") {
+if (!repairedStyleSheet || !document.adoptedStyleSheets.includes(repairedStyleSheet)) {
+const sheet = new CSSStyleSheet();
+sheet.replaceSync(css);
+document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+repairedStyleSheet = sheet;
+}
+}
+} catch (error) {
+console.error("RemoteHand plugin popout style repair failed", error);
+}
+parent.postMessage({ type: "remotehand.plugin.styles-ready" }, "*");
+}
 function applyAppearance(appearance) {
 if (!appearance || typeof appearance !== "object") return;
 const root = document.documentElement;
@@ -265,6 +286,7 @@ window.addEventListener("message", (event) => {
 const message = event.data;
 if (!message) return;
 if (message.type === "remotehand.appearance") { applyAppearance(message.appearance); return; }
+if (message.type === "remotehand.host.repair-styles") { repairStylesForPopout(); return; }
 if (message.type === "remotehand.host.restore-focus") {
 const target = lastFocusedElement;
 if (target && target.isConnected) {
@@ -337,11 +359,22 @@ iframeRef.current?.contentWindow?.postMessage({ type: "remotehand.appearance", a
 const postContext = (nextContext: PluginContext = contextRef.current) => {
 iframeRef.current?.contentWindow?.postMessage({ type: "remotehand.plugin.context", context: nextContext ?? {} }, "*");
 };
-const onMessage = (event: MessageEvent<PluginBridgeRequest | PluginHostFunctionKeyMessage | { type: "remotehand.plugin.ready" }>) => {
+const onMessage = (event: MessageEvent<PluginBridgeRequest | PluginHostFunctionKeyMessage | PluginStylesReadyMessage | { type: "remotehand.plugin.ready" }>) => {
 if (event.source !== iframeRef.current?.contentWindow) return;
 const message = event.data;
 if (!message) return;
-if (message.type === "remotehand.plugin.ready") { postAppearance(); postContext(); return; }
+if (message.type === "remotehand.plugin.ready") {
+postAppearance();
+postContext();
+if (api.location.type === "popout") {
+iframeRef.current?.contentWindow?.postMessage({ type: "remotehand.host.repair-styles" }, "*");
+}
+return;
+}
+if (message.type === "remotehand.plugin.styles-ready") {
+setPopoutStylesReady(true);
+return;
+}
 if (message.type === "remotehand.host.function-key") {
 if (message.key === "F1") window.dispatchEvent(new CustomEvent("remotehand-open-about"));
 return;
@@ -408,79 +441,22 @@ cancelled = true;
 unlisten?.();
 };
 }, [pluginId, panelId]);
-const repairedDocumentRef = useRef<Document | null>(null);
-const repairSheetRef = useRef<CSSStyleSheet | null>(null);
 const [popoutStylesReady, setPopoutStylesReady] = useState(api.location.type !== "popout");
 useLayoutEffect(() => {
-const markPopoutStylesReady = (doc: Document) => {
-const view = doc.defaultView;
-if (!view) return;
-// A constructable stylesheet is installed synchronously, but WebView2 can
-// still paint the moved iframe once before recalculating it. Keep the iframe
-// hidden through the next rendering opportunity, then reveal it only after
-// the repaired document has completed that style/layout cycle.
-view.requestAnimationFrame(() => {
-view.requestAnimationFrame(() => {
-if (iframeRef.current?.contentDocument !== doc || api.location.type !== "popout") return;
-setPopoutStylesReady(true);
-view.parent.dispatchEvent(new CustomEvent("remotehand-plugin-popout-ready"));
-});
-});
-};
-const repairPopoutStyles = () => {
 if (api.location.type !== "popout") {
 setPopoutStylesReady(true);
 return;
 }
-const doc = iframeRef.current?.contentDocument;
-if (!doc) return;
-const styles = Array.from(doc.querySelectorAll<HTMLStyleElement>("style"));
-if (styles.length === 0) {
-markPopoutStylesReady(doc);
-return;
-}
-try {
-if (repairedDocumentRef.current === doc) {
-const sheet = repairSheetRef.current;
-if (sheet && doc.adoptedStyleSheets.includes(sheet)) {
-markPopoutStylesReady(doc);
-return;
-}
-}
-const css = styles.map((style) => style.textContent ?? "").join("\n");
-if (!css) {
-markPopoutStylesReady(doc);
-return;
-}
-const view = doc.defaultView;
-const FrameCSSStyleSheet = view
-? Reflect.get(view, "CSSStyleSheet") as typeof CSSStyleSheet | undefined
-: undefined;
-if (!FrameCSSStyleSheet) return;
-const previousSheet = repairSheetRef.current;
-if (previousSheet && repairedDocumentRef.current === doc) {
-doc.adoptedStyleSheets = doc.adoptedStyleSheets.filter(
-(candidate) => candidate !== previousSheet
-);
-}
-const sheet = new FrameCSSStyleSheet();
-sheet.replaceSync(css);
-doc.adoptedStyleSheets = [...doc.adoptedStyleSheets, sheet];
-repairedDocumentRef.current = doc;
-repairSheetRef.current = sheet;
-markPopoutStylesReady(doc);
-} catch (error) {
-console.error("RemoteHand plugin popout style repair failed", error);
-}
+setPopoutStylesReady(false);
+const requestRepair = () => {
+iframeRef.current?.contentWindow?.postMessage({ type: "remotehand.host.repair-styles" }, "*");
 };
-if (api.location.type === "popout") setPopoutStylesReady(false);
-else setPopoutStylesReady(true);
-repairPopoutStyles();
-const timer = window.setInterval(repairPopoutStyles, 500);
+requestRepair();
+const timer = window.setInterval(requestRepair, 500);
 return () => window.clearInterval(timer);
 }, [api, html]);
 const content = useMemo(() => html ?? "", [html]);
 if (error) return <section className="plugin-panel-host plugin-panel-error"><strong>Plugin panel unavailable</strong><span>{error}</span></section>;
 if (!html) return <div className="plugin-panel-host plugin-panel-loading">Loading plugin panel…</div>;
-return <iframe ref={iframeRef} className="plugin-panel-frame" style={{ visibility: popoutStylesReady ? "visible" : "hidden" }} title={params?.title || pluginId} sandbox="allow-scripts allow-same-origin" allow="autoplay" srcDoc={content} />;
+return <iframe ref={iframeRef} className="plugin-panel-frame" style={{ visibility: popoutStylesReady ? "visible" : "hidden" }} title={params?.title || pluginId} sandbox="allow-scripts" allow="autoplay" srcDoc={content} />;
 }
