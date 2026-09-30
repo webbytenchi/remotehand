@@ -292,6 +292,7 @@ fn decrypt_document(
 fn sync_file(path: &Path) -> Result<(), String> {
     OpenOptions::new()
         .read(true)
+        .write(true)
         .open(path)
         .and_then(|file| file.sync_all())
         .map_err(|error| error.to_string())
