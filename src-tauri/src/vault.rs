@@ -19,7 +19,7 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 use zeroize::{Zeroize, Zeroizing};
 
 const VAULT_FORMAT_VERSION: u32 = 1;
@@ -60,7 +60,7 @@ struct UnlockedVault {
 }
 
 impl VaultState {
-    pub fn start_auto_lock_worker(&self) {
+    pub fn start_auto_lock_worker(&self, app: AppHandle) {
         let unlocked = self.unlocked.clone();
         let auto_lock_minutes = self.auto_lock_minutes.clone();
         thread::spawn(move || loop {
@@ -81,6 +81,15 @@ impl VaultState {
             if should_lock {
                 *guard = None;
                 log::info!("Vault auto-locked after inactivity");
+                if let Err(error) = app.emit(
+                    "remotehand-vault-status-changed",
+                    VaultStatus {
+                        exists: true,
+                        unlocked: false,
+                    },
+                ) {
+                    log::warn!("Failed to emit Vault auto-lock status: {error}");
+                }
             }
         });
     }
@@ -157,7 +166,7 @@ impl Drop for VaultDocument {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Copy, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VaultStatus {
     exists: bool,
@@ -557,7 +566,11 @@ pub fn vault_status<'a>(state: State<'a, VaultState>) -> Result<VaultStatus, Str
 }
 
 #[tauri::command]
-pub fn vault_initialize(state: State<'_, VaultState>, passphrase: String) -> Result<(), String> {
+pub fn vault_initialize(
+    app: AppHandle,
+    state: State<'_, VaultState>,
+    passphrase: String,
+) -> Result<(), String> {
     validate_passphrase(&passphrase)?;
     let path = vault_path()?;
     recover_interrupted_write(&path)?;
@@ -582,6 +595,13 @@ pub fn vault_initialize(state: State<'_, VaultState>, passphrase: String) -> Res
     });
 
     log::info!("Vault initialized");
+    let _ = app.emit(
+        "remotehand-vault-status-changed",
+        VaultStatus {
+            exists: true,
+            unlocked: true,
+        },
+    );
     Ok(())
 }
 
@@ -627,8 +647,20 @@ pub(crate) fn unlock_vault(state: &VaultState, passphrase: String) -> Result<(),
 }
 
 #[tauri::command]
-pub fn vault_unlock<'a>(state: State<'a, VaultState>, passphrase: String) -> Result<(), String> {
-    unlock_vault(state.inner(), passphrase)
+pub fn vault_unlock<'a>(
+    app: AppHandle,
+    state: State<'a, VaultState>,
+    passphrase: String,
+) -> Result<(), String> {
+    unlock_vault(state.inner(), passphrase)?;
+    let _ = app.emit(
+        "remotehand-vault-status-changed",
+        VaultStatus {
+            exists: true,
+            unlocked: true,
+        },
+    );
+    Ok(())
 }
 
 #[tauri::command]
@@ -644,12 +676,20 @@ pub fn vault_set_auto_lock<'a>(
 }
 
 #[tauri::command]
-pub fn vault_lock<'a>(state: State<'a, VaultState>) -> Result<(), String> {
+pub fn vault_lock<'a>(app: AppHandle, state: State<'a, VaultState>) -> Result<(), String> {
     *state
         .unlocked
         .lock()
         .map_err(|_| "vault state is unavailable".to_string())? = None;
     log::info!("Vault locked");
+    let exists = vault_path()?.exists();
+    let _ = app.emit(
+        "remotehand-vault-status-changed",
+        VaultStatus {
+            exists,
+            unlocked: false,
+        },
+    );
     Ok(())
 }
 

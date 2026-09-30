@@ -1478,6 +1478,23 @@ if (!settingsOpen || settingsTab !== "vault") return;
 void refreshVaultStatus();
 }, [refreshVaultStatus, settingsOpen, settingsTab]);
 
+useEffect(() => {
+if (!isTauri()) return;
+let cancelled = false;
+let unlisten: (() => void) | undefined;
+void listen<{ exists: boolean; unlocked: boolean }>("remotehand-vault-status-changed", (event) => {
+setVaultStatus(event.payload);
+setVaultStatusError("");
+}).then((dispose) => {
+if (cancelled) dispose();
+else unlisten = dispose;
+});
+return () => {
+cancelled = true;
+unlisten?.();
+};
+}, []);
+
 const applyGlobalShortcut = useCallback(async (enabled: boolean, shortcut: string) => {
 const trimmedShortcut = shortcut.trim();
 if (enabled && !trimmedShortcut) {
