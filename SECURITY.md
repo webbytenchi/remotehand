@@ -37,23 +37,27 @@ The native SFTP path uses `russh` and `russh-sftp`. Password credentials can be 
 
 Compatibility SFTP helpers also exist in the codebase and must preserve the same rule that secrets are resolved separately from saved profile JSON.
 
-## Portable Credential Vault Threat Model
+## Portable Vault Threat Model
 
-RemoteHand's portable vault protects persisted credentials when the application directory is copied, lost, backed up, or inspected while the vault is locked.
+RemoteHand Vault protects persisted credentials, API keys, and private Vault-backed documents when the application directory is copied, lost, backed up, or inspected while the Vault is locked.
 
-Vault data is stored separately from connection profiles at:
+The active encrypted Vault is stored at:
 
 ```text
-data/vault/credentials.enc
+data/vault/vault.enc
 ```
 
-The vault uses the established `age` file format with passphrase-based encryption rather than custom cryptographic primitives.
+The recovery path may retain an encrypted last-known-good `data/vault/vault.bak`. Temporary write state uses `vault.tmp` and is never treated as authenticated Vault plaintext.
 
-Connection profiles may contain only an opaque `credentialRef`; they must not contain the corresponding secret.
+Vault format v1 uses Argon2id for passphrase-based key derivation and XChaCha20-Poly1305 for authenticated encryption. The implementation uses reviewed RustCrypto crates rather than custom cryptographic primitives. The format, KDF/cipher identifiers, Vault identifier, parameters, nonce, and fixed RemoteHand context are treated as public implementation details; secrecy depends on the user's unlock secret and derived key material, not obscurity.
 
-The master passphrase and decrypted secrets exist in process memory only while the vault is unlocked. Locking the vault drops RemoteHand's in-memory unlocked vault state.
+The current fixed v1 KDF profile is Argon2id v0x13 with 64 MiB memory, 3 iterations, and parallelism 1. Vault writes use a fresh 16-byte salt for a new Vault identity and a fresh 24-byte XChaCha20 nonce for each encrypted write as defined by the implementation format.
 
-The vault does **not** protect secrets from a process, debugger, malware, or user that can inspect RemoteHand's memory while the vault is unlocked. It also cannot protect a passphrase captured by a compromised operating system or input environment.
+The user's passphrase is accepted only by host-owned RemoteHand UI. Plugins do not receive or submit the Vault passphrase and do not receive the derived key. Core retains the derived key and decrypted logical Vault state only while unlocked and zeroizes sensitive buffers where practical on replacement, deletion, lock, and drop.
+
+The Vault does **not** protect secrets from a process, debugger, malware, or user that can inspect or execute code inside the trusted RemoteHand process while the Vault is unlocked. It also cannot protect a passphrase captured by a compromised operating system or input environment.
+
+Vault v1 also does not provide monotonic anti-rollback state. An attacker who can replace both `vault.enc` and `vault.bak` with older, previously valid authenticated copies may roll the Vault back to that older state without forging ciphertext.
 
 ## Portable Data
 
@@ -86,6 +90,14 @@ Before adding or upgrading a security-sensitive dependency, review:
 - Transitive dependency risk
 - Whether a safer maintained alternative exists
 
+For release-readiness checks, audit the resolved Rust dependency graph rather than relying only on direct dependency versions:
+
+```powershell
+cargo audit --file .\src-tauri\Cargo.lock
+```
+
+If `cargo audit` is not installed, install the RustSec tool first with `cargo install cargo-audit --locked`, then rerun the command. A targeted manual advisory review does not replace a full lockfile audit.
+
 ## Reporting Vulnerabilities
 
 Until a dedicated private security-reporting channel is configured, avoid publishing exploitable details in a public issue. For private deployments of this repository, contact the repository owner directly.
@@ -116,11 +128,15 @@ UI isolation:
 - A plugin-specific Content-Security-Policy is injected into each panel, including connect-src none. Plugin UI cannot make direct network requests. The production desktop host preserves the inline-script policy needed by the current srcdoc panel-hosting implementation.
 - All panel to host communication flows through an injected bridge that the host validates.
 
-Credential handling:
+Vault handling:
 
-- credentials.use is preferred over direct vault access. A plugin requests a specific credentialRef and receives only that secret - not a vault export.
-- Plugin-created references must begin with plugin: followed by the plugin id followed by a colon. A plugin cannot overwrite another plugin namespace or core RemoteHand credentials.
-- vault.unlock is a separate, explicit, sensitive permission. A plugin that holds it can observe the passphrase before it reaches the host. Only grant it to trusted plugins.
+- New plugins use the scoped `vault.*` host APIs rather than raw Vault access.
+- Secret reads/writes require `vault.secrets.read` / `vault.secrets.write`; private-document reads/writes require `vault.documents.read` / `vault.documents.write`.
+- Plugin keys are caller-relative. Core derives the full namespace as `plugin:<authenticated-plugin-id>/<key>`, preventing a plugin from naming another plugin or a core namespace.
+- `vault.access.request` allows a plugin with `vault.access.request` permission to ask RemoteHand's host UI to create or unlock the Vault. The plugin supplies only a bounded reason and never receives or submits the passphrase.
+- A raw plugin `vault.unlock` API is intentionally unsupported.
+- `credentials.use` and `credentials.store` remain deprecated Plugin API v1 compatibility aliases. New plugins must not build new integrations on those aliases.
+- Audit records for plugin Vault actions contain plugin identity, fixed action category, and outcome only; they must not contain secret values, private document content, passphrases, derived keys, or Vault entry references.
 
 What the permission model does not do:
 
