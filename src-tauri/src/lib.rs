@@ -265,6 +265,8 @@ pub fn run() {
     let setup_page_loaded = page_loaded.clone();
     let startup_tray_state = startup_tray::StartupTrayState::default();
     let global_shortcut_state = global_shortcut::GlobalShortcutState::default();
+    let vault_state = vault::VaultState::default();
+    vault_state.start_auto_lock_worker();
     let start_hidden = startup_tray::should_minimize_at_startup();
     let popout_counter = Arc::new(AtomicU64::new(0));
 
@@ -285,7 +287,7 @@ pub fn run() {
         .manage(TerminalState::default())
         .manage(plugin_runtime::PluginRuntimeState::default())
         .manage(sftp_native::PersistentSftpState::default())
-        .manage(vault::VaultState::default())
+        .manage(vault_state.clone())
         .manage(startup_tray_state.clone())
         .manage(global_shortcut_state.clone())
         .plugin(tauri_plugin_autostart::Builder::new().args(["--autostart"]).build())
@@ -337,6 +339,7 @@ pub fn run() {
             vault::vault_initialize,
             vault::vault_unlock,
             vault::vault_lock,
+            vault::vault_set_auto_lock,
             vault::vault_store_secret,
             vault::vault_delete_secret,
             terminal::terminal_start,
@@ -437,6 +440,7 @@ pub fn run() {
             native_file_drop::install(&main_window).map_err(std::io::Error::other)?;
             startup_tray::install(&app.handle().clone(), &startup_tray_state).map_err(std::io::Error::other)?;
             let saved = storage::load_settings().map_err(std::io::Error::other)?;
+            vault_state.set_auto_lock_minutes(saved.vault_auto_lock_minutes);
             startup_tray_state.set_close_to_tray(saved.minimize_to_tray_on_close);
             startup_tray_state.set_show_in_tray(app.handle(), saved.show_in_system_tray).map_err(std::io::Error::other)?;
             app.handle()

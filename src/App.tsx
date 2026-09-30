@@ -67,6 +67,7 @@ minimizeToTrayOnClose: boolean;
 topbarAlignment: TopbarAlignment;
 globalShortcutEnabled: boolean;
 globalShortcut: string;
+vaultAutoLockMinutes: number;
 };
 type WorkspaceLayout = Parameters<DockviewApi["fromJSON"]>[0];
 const WORKSPACE_KEY = "remotehand.workspace";
@@ -91,6 +92,7 @@ minimizeToTrayOnClose: false,
 topbarAlignment: "center",
 globalShortcutEnabled: true,
 globalShortcut: "Ctrl+Shift+Space",
+vaultAutoLockMinutes: 15,
 };
 const UI_FONT_OPTIONS = ["Inter", "IBM Plex Sans", "Segoe UI", "System Default"] as const;
 const TERMINAL_FONT_OPTIONS = ["JetBrains Mono", "IBM Plex Mono", "Cascadia Mono", "Consolas", "System Monospace"] as const;
@@ -1327,6 +1329,13 @@ console.error("Failed to load startup preference", error);
 const nextSettings = { ...DEFAULT_SETTINGS, ...saved, startWithSystem };
 setSettings(nextSettings);
 setGlobalShortcutDraft(nextSettings.globalShortcut);
+if (isTauri()) {
+try {
+await invoke("vault_set_auto_lock", { minutes: nextSettings.vaultAutoLockMinutes });
+} catch (error) {
+console.error("Failed to configure Vault auto-lock", error);
+}
+}
 setSettingsLoaded(true);
 })
 .catch((error) => {
@@ -2366,6 +2375,28 @@ vaultStatus.unlocked ? (
 <div className="plugin-security-note">
 <strong>Security</strong>
 <span>The Vault passphrase is entered only in RemoteHand's host-owned prompt. Plugins never receive the passphrase or the Vault master key.</span>
+</div>
+<div className="settings-field">
+<label htmlFor="vault-auto-lock">Auto-lock after Vault inactivity</label>
+<select
+id="vault-auto-lock"
+value={settings.vaultAutoLockMinutes}
+disabled={vaultActionBusy}
+onChange={(event) => {
+const minutes = Number(event.target.value);
+setSettings((current) => ({ ...current, vaultAutoLockMinutes: minutes }));
+if (isTauri()) {
+void invoke("vault_set_auto_lock", { minutes }).catch((error) => setVaultStatusError(String(error)));
+}
+}}
+>
+<option value={5}>5 minutes</option>
+<option value={15}>15 minutes</option>
+<option value={30}>30 minutes</option>
+<option value={60}>60 minutes</option>
+<option value={0}>Never</option>
+</select>
+<small style={{ color: "#718094", lineHeight: 1.4 }}>Default: 15 minutes. The timer resets whenever protected Vault data is read or changed.</small>
 </div>
 {!vaultStatus?.exists ? (
 <div className="plugin-security-note">

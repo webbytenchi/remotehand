@@ -12,7 +12,12 @@ use std::{
     fs::OpenOptions,
     io::Write,
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Mutex,
+    },
+    thread,
+    time::{Duration, Instant},
 };
 use tauri::State;
 use zeroize::{Zeroize, Zeroizing};
@@ -32,15 +37,57 @@ const NONCE_BYTES: usize = 24;
 const KEY_BYTES: usize = 32;
 const MAX_VAULT_REF_BYTES: usize = 512;
 
-#[derive(Default)]
+#[derive(Clone)]
 pub struct VaultState {
-    unlocked: Mutex<Option<UnlockedVault>>,
+    unlocked: Arc<Mutex<Option<UnlockedVault>>>,
+    auto_lock_minutes: Arc<AtomicU64>,
+}
+
+impl Default for VaultState {
+    fn default() -> Self {
+        Self {
+            unlocked: Arc::new(Mutex::new(None)),
+            auto_lock_minutes: Arc::new(AtomicU64::new(15)),
+        }
+    }
 }
 
 struct UnlockedVault {
     key: Zeroizing<[u8; KEY_BYTES]>,
     metadata: VaultMetadata,
     document: VaultDocument,
+    last_activity: Instant,
+}
+
+impl VaultState {
+    pub fn start_auto_lock_worker(&self) {
+        let unlocked = self.unlocked.clone();
+        let auto_lock_minutes = self.auto_lock_minutes.clone();
+        thread::spawn(move || loop {
+            thread::sleep(Duration::from_secs(15));
+            let minutes = auto_lock_minutes.load(Ordering::Relaxed);
+            if minutes == 0 {
+                continue;
+            }
+            let timeout = Duration::from_secs(minutes.saturating_mul(60));
+            let mut guard = match unlocked.lock() {
+                Ok(guard) => guard,
+                Err(_) => continue,
+            };
+            let should_lock = guard
+                .as_ref()
+                .map(|vault| vault.last_activity.elapsed() >= timeout)
+                .unwrap_or(false);
+            if should_lock {
+                *guard = None;
+                log::info!("Vault auto-locked after inactivity");
+            }
+        });
+    }
+
+    pub fn set_auto_lock_minutes(&self, minutes: u64) {
+        self.auto_lock_minutes.store(minutes, Ordering::Relaxed);
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -472,25 +519,27 @@ fn validate_core_ref(vault_ref: &str) -> Result<(), String> {
 
 pub(crate) fn get_secret(state: &VaultState, vault_ref: &str) -> Result<Option<String>, String> {
     validate_vault_ref(vault_ref)?;
-    let guard = state
+    let mut guard = state
         .unlocked
         .lock()
         .map_err(|_| "vault state is unavailable".to_string())?;
     let vault = guard
-        .as_ref()
+        .as_mut()
         .ok_or_else(|| "vault is locked".to_string())?;
+    vault.last_activity = Instant::now();
     Ok(vault.document.secrets.get(vault_ref).cloned())
 }
 
 pub(crate) fn get_document(state: &VaultState, vault_ref: &str) -> Result<Option<String>, String> {
     validate_vault_ref(vault_ref)?;
-    let guard = state
+    let mut guard = state
         .unlocked
         .lock()
         .map_err(|_| "vault state is unavailable".to_string())?;
     let vault = guard
-        .as_ref()
+        .as_mut()
         .ok_or_else(|| "vault is locked".to_string())?;
+    vault.last_activity = Instant::now();
     Ok(vault.document.documents.get(vault_ref).cloned())
 }
 
@@ -529,6 +578,7 @@ pub fn vault_initialize(state: State<'_, VaultState>, passphrase: String) -> Res
         key,
         metadata,
         document,
+        last_activity: Instant::now(),
     });
 
     log::info!("Vault initialized");
@@ -569,6 +619,7 @@ pub(crate) fn unlock_vault(state: &VaultState, passphrase: String) -> Result<(),
         key,
         metadata,
         document,
+        last_activity: Instant::now(),
     });
 
     log::info!("Vault unlocked");
@@ -578,6 +629,18 @@ pub(crate) fn unlock_vault(state: &VaultState, passphrase: String) -> Result<(),
 #[tauri::command]
 pub fn vault_unlock<'a>(state: State<'a, VaultState>, passphrase: String) -> Result<(), String> {
     unlock_vault(state.inner(), passphrase)
+}
+
+#[tauri::command]
+pub fn vault_set_auto_lock<'a>(
+    state: State<'a, VaultState>,
+    minutes: u64,
+) -> Result<(), String> {
+    if !matches!(minutes, 0 | 5 | 15 | 30 | 60) {
+        return Err("unsupported Vault auto-lock interval".to_string());
+    }
+    state.set_auto_lock_minutes(minutes);
+    Ok(())
 }
 
 #[tauri::command]
@@ -618,6 +681,7 @@ pub(crate) fn store_secret(
     if let Some(secret) = previous.as_mut() {
         secret.zeroize();
     }
+    vault.last_activity = Instant::now();
     log::info!("Vault secret updated");
     Ok(())
 }
@@ -643,6 +707,7 @@ pub(crate) fn delete_secret(state: &VaultState, vault_ref: &str) -> Result<bool,
         return Err(error);
     }
     removed.zeroize();
+    vault.last_activity = Instant::now();
     log::info!("Vault secret deleted");
     Ok(true)
 }
@@ -678,6 +743,7 @@ pub(crate) fn store_document(
     if let Some(document) = previous.as_mut() {
         document.zeroize();
     }
+    vault.last_activity = Instant::now();
     log::info!("Vault document updated");
     Ok(())
 }
@@ -703,6 +769,7 @@ pub(crate) fn delete_document(state: &VaultState, vault_ref: &str) -> Result<boo
         return Err(error);
     }
     removed.zeroize();
+    vault.last_activity = Instant::now();
     log::info!("Vault document deleted");
     Ok(true)
 }
@@ -814,6 +881,15 @@ mod tests {
         assert!(!encrypted
             .windows(b"REMOTEHAND_TEST_SECRET_914".len())
             .any(|window| window == b"REMOTEHAND_TEST_SECRET_914"));
+    }
+
+    #[test]
+    fn supported_auto_lock_intervals_can_be_applied() {
+        for minutes in [0, 5, 15, 30, 60] {
+            let state = VaultState::default();
+            state.set_auto_lock_minutes(minutes);
+            assert_eq!(state.auto_lock_minutes.load(Ordering::Relaxed), minutes);
+        }
     }
 
     #[test]

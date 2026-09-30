@@ -19,6 +19,7 @@ pub struct Settings {
     pub topbar_alignment: String,
     pub global_shortcut_enabled: bool,
     pub global_shortcut: String,
+    pub vault_auto_lock_minutes: u64,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -39,6 +40,7 @@ impl Default for Settings {
             topbar_alignment: "center".to_string(),
             global_shortcut_enabled: true,
             global_shortcut: "Ctrl+Shift+Space".to_string(),
+            vault_auto_lock_minutes: 15,
         }
     }
 }
