@@ -127,6 +127,9 @@ fn final_path(master_key: &[u8; 32], vault_ref: &str) -> Result<PathBuf, String>
 }
 
 fn validate_size(size: u64) -> Result<(), String> {
+    if size == 0 {
+        return Err("Vault blob cannot be empty".to_string());
+    }
     if size > MAX_BLOB_BYTES {
         return Err("Vault blob exceeds the 4 GiB implementation limit".to_string());
     }
