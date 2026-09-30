@@ -1656,6 +1656,37 @@ mod tests {
     }
 
     #[test]
+    fn validates_vault_blob_permissions() {
+        let read = PluginRequest {
+            message_type: "plugin.request".to_string(),
+            request_id: 31,
+            method: "vault.blob.read".to_string(),
+            params: serde_json::json!({ "key": "attachment/a", "index": 0 }),
+        };
+        assert_eq!(
+            validate_plugin_request(&[], &read).unwrap_err(),
+            "plugin lacks vault.blobs.read permission"
+        );
+        assert!(validate_plugin_request(&["vault.blobs.read".to_string()], &read).is_ok());
+
+        let write = PluginRequest {
+            message_type: "plugin.request".to_string(),
+            request_id: 32,
+            method: "vault.blob.begin".to_string(),
+            params: serde_json::json!({ "key": "attachment/a", "size": 10 }),
+        };
+        assert_eq!(
+            validate_plugin_request(&[], &write).unwrap_err(),
+            "plugin lacks vault.blobs.write permission"
+        );
+        assert!(validate_plugin_request(&["vault.blobs.write".to_string()], &write).is_ok());
+        assert_eq!(
+            plugin_vault_ref("remotehand.notes", "attachment/a").unwrap(),
+            "plugin:remotehand.notes/attachment/a"
+        );
+    }
+
+    #[test]
     fn keeps_legacy_vault_methods_inside_plugin_api_v1() {
         for (method, permission) in [
             ("credentials.use", "credentials.use"),
