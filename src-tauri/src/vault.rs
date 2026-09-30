@@ -388,8 +388,20 @@ pub(crate) fn get_secret(state: &VaultState, vault_ref: &str) -> Result<Option<S
         .map_err(|_| "vault state is unavailable".to_string())?;
     let vault = guard
         .as_ref()
-        .ok_or_else(|| "credential vault is locked".to_string())?;
+        .ok_or_else(|| "vault is locked".to_string())?;
     Ok(vault.document.secrets.get(vault_ref).cloned())
+}
+
+pub(crate) fn get_document(state: &VaultState, vault_ref: &str) -> Result<Option<String>, String> {
+    validate_vault_ref(vault_ref)?;
+    let guard = state
+        .unlocked
+        .lock()
+        .map_err(|_| "vault state is unavailable".to_string())?;
+    let vault = guard
+        .as_ref()
+        .ok_or_else(|| "vault is locked".to_string())?;
+    Ok(vault.document.documents.get(vault_ref).cloned())
 }
 
 #[tauri::command]
@@ -475,7 +487,7 @@ pub(crate) fn store_secret(
         .map_err(|_| "vault state is unavailable".to_string())?;
     let vault = guard
         .as_mut()
-        .ok_or_else(|| "credential vault is locked".to_string())?;
+        .ok_or_else(|| "vault is locked".to_string())?;
 
     let mut previous = vault.document.secrets.insert(vault_ref.clone(), secret);
     if let Err(error) = save_document(&vault.key, &vault.metadata, &vault.document) {
@@ -495,7 +507,7 @@ pub(crate) fn store_secret(
     Ok(())
 }
 
-fn delete_secret(state: &VaultState, vault_ref: &str) -> Result<bool, String> {
+pub(crate) fn delete_secret(state: &VaultState, vault_ref: &str) -> Result<bool, String> {
     validate_vault_ref(vault_ref)?;
     let mut guard = state
         .unlocked
@@ -503,7 +515,7 @@ fn delete_secret(state: &VaultState, vault_ref: &str) -> Result<bool, String> {
         .map_err(|_| "vault state is unavailable".to_string())?;
     let vault = guard
         .as_mut()
-        .ok_or_else(|| "credential vault is locked".to_string())?;
+        .ok_or_else(|| "vault is locked".to_string())?;
 
     let Some(mut removed) = vault.document.secrets.remove(vault_ref) else {
         return Ok(false);
@@ -517,6 +529,66 @@ fn delete_secret(state: &VaultState, vault_ref: &str) -> Result<bool, String> {
     }
     removed.zeroize();
     log::info!("Vault secret deleted");
+    Ok(true)
+}
+
+pub(crate) fn store_document(
+    state: &VaultState,
+    vault_ref: String,
+    document: String,
+) -> Result<(), String> {
+    validate_vault_ref(&vault_ref)?;
+    let mut guard = state
+        .unlocked
+        .lock()
+        .map_err(|_| "vault state is unavailable".to_string())?;
+    let vault = guard
+        .as_mut()
+        .ok_or_else(|| "vault is locked".to_string())?;
+
+    let mut previous = vault
+        .document
+        .documents
+        .insert(vault_ref.clone(), document);
+    if let Err(error) = save_document(&vault.key, &vault.metadata, &vault.document) {
+        if let Some(mut failed) = vault.document.documents.remove(&vault_ref) {
+            failed.zeroize();
+        }
+        if let Some(previous) = previous.take() {
+            vault.document.documents.insert(vault_ref, previous);
+        }
+        return Err(error);
+    }
+
+    if let Some(document) = previous.as_mut() {
+        document.zeroize();
+    }
+    log::info!("Vault document updated");
+    Ok(())
+}
+
+pub(crate) fn delete_document(state: &VaultState, vault_ref: &str) -> Result<bool, String> {
+    validate_vault_ref(vault_ref)?;
+    let mut guard = state
+        .unlocked
+        .lock()
+        .map_err(|_| "vault state is unavailable".to_string())?;
+    let vault = guard
+        .as_mut()
+        .ok_or_else(|| "vault is locked".to_string())?;
+
+    let Some(mut removed) = vault.document.documents.remove(vault_ref) else {
+        return Ok(false);
+    };
+    if let Err(error) = save_document(&vault.key, &vault.metadata, &vault.document) {
+        vault
+            .document
+            .documents
+            .insert(vault_ref.to_string(), removed);
+        return Err(error);
+    }
+    removed.zeroize();
+    log::info!("Vault document deleted");
     Ok(true)
 }
 

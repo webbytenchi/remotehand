@@ -387,7 +387,7 @@ await invoke("vault_unlock", { passphrase: vaultPassphrase });
 await invoke("vault_initialize", { passphrase: vaultPassphrase });
 }
 }
-credentialRef = credentialRef ?? "connection:" + id;
+credentialRef = "core:sftp/" + id + "/password";
 await invoke("vault_store_secret", { credentialRef, secret: password });
 }
 const next: Connection = {

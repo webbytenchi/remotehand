@@ -244,8 +244,20 @@ struct CredentialStoreParams {
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct VaultUnlockParams {
-    passphrase: String,
+struct VaultKeyParams {
+    key: String,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct VaultSecretSetParams {
+    key: String,
+    secret: String,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct VaultDocumentSetParams {
+    key: String,
+    value: String,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -367,6 +379,30 @@ fn validate_plugin_credential_ref(plugin_id: &str, credential_ref: &str) -> Resu
         Err("plugin credential ref must use its own namespace".to_string())
     }
 }
+
+fn validate_plugin_vault_key(key: &str) -> Result<(), String> {
+    if key.is_empty() || key.len() > 256 {
+        return Err("plugin Vault key is invalid".to_string());
+    }
+    if !key
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'-' | b'_'))
+    {
+        return Err("plugin Vault key contains unsupported characters".to_string());
+    }
+    if key
+        .split('/')
+        .any(|segment| segment.is_empty() || segment == "." || segment == "..")
+    {
+        return Err("plugin Vault key contains an invalid path segment".to_string());
+    }
+    Ok(())
+}
+
+fn plugin_vault_ref(plugin_id: &str, key: &str) -> Result<String, String> {
+    validate_plugin_vault_key(key)?;
+    Ok(format!("plugin:{plugin_id}/{key}"))
+}
 fn validate_plugin_request(permissions: &[String], request: &PluginRequest) -> Result<(), String> {
     if request.message_type != "plugin.request" {
         return Err("invalid plugin request message type".to_string());
@@ -384,9 +420,27 @@ fn validate_plugin_request(permissions: &[String], request: &PluginRequest) -> R
             }
             Ok(())
         }
-        "vault.unlock" => {
-            if !permission_granted(permissions, "vault.unlock") {
-                return Err("plugin lacks vault.unlock permission".to_string());
+        "vault.secret.get" => {
+            if !permission_granted(permissions, "vault.secrets.read") {
+                return Err("plugin lacks vault.secrets.read permission".to_string());
+            }
+            Ok(())
+        }
+        "vault.secret.set" | "vault.secret.delete" => {
+            if !permission_granted(permissions, "vault.secrets.write") {
+                return Err("plugin lacks vault.secrets.write permission".to_string());
+            }
+            Ok(())
+        }
+        "vault.document.get" => {
+            if !permission_granted(permissions, "vault.documents.read") {
+                return Err("plugin lacks vault.documents.read permission".to_string());
+            }
+            Ok(())
+        }
+        "vault.document.set" | "vault.document.delete" => {
+            if !permission_granted(permissions, "vault.documents.write") {
+                return Err("plugin lacks vault.documents.write permission".to_string());
             }
             Ok(())
         }
@@ -448,6 +502,7 @@ fn handle_plugin_request(
         "credentials.use" => {
             let params: CredentialUseParams = serde_json::from_value(request.params.clone())
                 .map_err(|error| format!("invalid credentials.use params: {error}"))?;
+            validate_plugin_credential_ref(plugin_id, &params.credential_ref)?;
             let vault_state = app_handle.state::<crate::vault::VaultState>();
             let secret = crate::vault::get_secret(&vault_state, &params.credential_ref)?
                 .ok_or_else(|| "credential was not found".to_string())?;
@@ -464,12 +519,60 @@ fn handle_plugin_request(
             crate::vault::store_secret(&vault_state, params.credential_ref.clone(), params.secret)?;
             Ok(serde_json::json!({ "credentialRef": params.credential_ref }))
         }
-        "vault.unlock" => {
-            let params: VaultUnlockParams = serde_json::from_value(request.params.clone())
-                .map_err(|error| format!("invalid vault.unlock params: {error}"))?;
+        "vault.secret.get" => {
+            let params: VaultKeyParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid vault.secret.get params: {error}"))?;
+            let vault_ref = plugin_vault_ref(plugin_id, &params.key)?;
             let vault_state = app_handle.state::<crate::vault::VaultState>();
-            crate::vault::unlock_vault(vault_state.inner(), params.passphrase)?;
-            Ok(serde_json::json!({ "unlocked": true }))
+            let secret = crate::vault::get_secret(&vault_state, &vault_ref)?
+                .ok_or_else(|| "Vault secret was not found".to_string())?;
+            Ok(serde_json::json!({ "secret": secret }))
+        }
+        "vault.secret.set" => {
+            let params: VaultSecretSetParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid vault.secret.set params: {error}"))?;
+            if params.secret.is_empty() || params.secret.len() > 64 * 1024 {
+                return Err("Vault secret is empty or exceeds 64 KiB".to_string());
+            }
+            let vault_ref = plugin_vault_ref(plugin_id, &params.key)?;
+            let vault_state = app_handle.state::<crate::vault::VaultState>();
+            crate::vault::store_secret(&vault_state, vault_ref, params.secret)?;
+            Ok(serde_json::json!({ "stored": true }))
+        }
+        "vault.secret.delete" => {
+            let params: VaultKeyParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid vault.secret.delete params: {error}"))?;
+            let vault_ref = plugin_vault_ref(plugin_id, &params.key)?;
+            let vault_state = app_handle.state::<crate::vault::VaultState>();
+            let deleted = crate::vault::delete_secret(&vault_state, &vault_ref)?;
+            Ok(serde_json::json!({ "deleted": deleted }))
+        }
+        "vault.document.get" => {
+            let params: VaultKeyParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid vault.document.get params: {error}"))?;
+            let vault_ref = plugin_vault_ref(plugin_id, &params.key)?;
+            let vault_state = app_handle.state::<crate::vault::VaultState>();
+            let value = crate::vault::get_document(&vault_state, &vault_ref)?;
+            Ok(serde_json::json!({ "value": value }))
+        }
+        "vault.document.set" => {
+            let params: VaultDocumentSetParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid vault.document.set params: {error}"))?;
+            if params.value.len() > 16 * 1024 * 1024 {
+                return Err("Vault document exceeds 16 MiB".to_string());
+            }
+            let vault_ref = plugin_vault_ref(plugin_id, &params.key)?;
+            let vault_state = app_handle.state::<crate::vault::VaultState>();
+            crate::vault::store_document(&vault_state, vault_ref, params.value)?;
+            Ok(serde_json::json!({ "stored": true }))
+        }
+        "vault.document.delete" => {
+            let params: VaultKeyParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid vault.document.delete params: {error}"))?;
+            let vault_ref = plugin_vault_ref(plugin_id, &params.key)?;
+            let vault_state = app_handle.state::<crate::vault::VaultState>();
+            let deleted = crate::vault::delete_document(&vault_state, &vault_ref)?;
+            Ok(serde_json::json!({ "deleted": deleted }))
         }
         "storage.get" => {
             let params: StorageGetParams = serde_json::from_value(request.params.clone())
@@ -1221,16 +1324,43 @@ mod tests {
     }
 
     #[test]
-    fn validates_vault_unlock_permission() {
+    fn rejects_plugin_vault_unlock_api() {
         let request = PluginRequest {
             message_type: "plugin.request".to_string(),
             request_id: 13,
             method: "vault.unlock".to_string(),
             params: serde_json::json!({ "passphrase": "secret" }),
         };
-        let error = validate_plugin_request(&[], &request).unwrap_err();
-        assert_eq!(error, "plugin lacks vault.unlock permission");
-        assert!(validate_plugin_request(&["vault.unlock".to_string()], &request).is_ok());
+        assert_eq!(
+            validate_plugin_request(&[], &request).unwrap_err(),
+            "unsupported host API method: vault.unlock"
+        );
+    }
+
+    #[test]
+    fn validates_scoped_vault_permissions_and_keys() {
+        let request = PluginRequest {
+            message_type: "plugin.request".to_string(),
+            request_id: 15,
+            method: "vault.secret.get".to_string(),
+            params: serde_json::json!({ "key": "providers/gemini/api-key" }),
+        };
+        assert_eq!(
+            validate_plugin_request(&[], &request).unwrap_err(),
+            "plugin lacks vault.secrets.read permission"
+        );
+        assert!(validate_plugin_request(
+            &["vault.secrets.read".to_string()],
+            &request
+        )
+        .is_ok());
+
+        assert_eq!(
+            plugin_vault_ref("remotehand.marielle-chat", "providers/gemini/api-key").unwrap(),
+            "plugin:remotehand.marielle-chat/providers/gemini/api-key"
+        );
+        assert!(plugin_vault_ref("remotehand.marielle-chat", "../notes").is_err());
+        assert!(plugin_vault_ref("remotehand.marielle-chat", "other:plugin").is_err());
     }
 
     #[test]
