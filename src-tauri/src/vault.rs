@@ -647,11 +647,14 @@ pub fn vault_initialize(
     Ok(())
 }
 
-pub(crate) fn unlock_vault(state: &VaultState, passphrase: String) -> Result<(), String> {
+fn unlock_vault_from_path(
+    state: &VaultState,
+    path: &Path,
+    passphrase: String,
+) -> Result<(), String> {
     validate_passphrase(&passphrase)?;
-    let path = vault_path()?;
-    recover_interrupted_write(&path)?;
-    let encrypted = read_vault_file(&path)?;
+    recover_interrupted_write(path)?;
+    let encrypted = read_vault_file(path)?;
     let passphrase = Zeroizing::new(passphrase);
     let decrypted = decrypt_document(Zeroizing::new(passphrase.to_string()), &encrypted);
 
@@ -666,7 +669,7 @@ pub(crate) fn unlock_vault(state: &VaultState, passphrase: String) -> Result<(),
                 .map_err(|_| primary_error.clone())?;
             match decrypt_document(Zeroizing::new(passphrase.to_string()), &backup) {
                 Ok(value) => {
-                    restore_backup(&path)?;
+                    restore_backup(path)?;
                     value
                 }
                 Err(_) => return Err(primary_error),
@@ -686,6 +689,11 @@ pub(crate) fn unlock_vault(state: &VaultState, passphrase: String) -> Result<(),
 
     log::info!("Vault unlocked");
     Ok(())
+}
+
+pub(crate) fn unlock_vault(state: &VaultState, passphrase: String) -> Result<(), String> {
+    let path = vault_path()?;
+    unlock_vault_from_path(state, &path, passphrase)
 }
 
 #[tauri::command]
@@ -940,6 +948,55 @@ mod tests {
         assert_eq!(fs::read(&path).unwrap(), backup_bytes);
         assert!(backup_path.exists());
         assert!(!temporary_path.exists());
+    }
+
+    #[test]
+    fn unlock_restores_valid_backup_when_active_vault_is_corrupt() {
+        let dir = TestDir::new("unlock-backup-fallback");
+        let path = dir.vault_path();
+        let backup_path = path.with_extension("bak");
+        let passphrase = "backup recovery passphrase";
+        let backup_bytes = sample_encrypted(passphrase);
+
+        fs::write(&path, b"corrupt active vault").unwrap();
+        fs::write(&backup_path, &backup_bytes).unwrap();
+
+        let state = VaultState::default();
+        let result = unlock_vault_from_path(&state, &path, passphrase.to_string());
+
+        assert!(result.is_ok());
+        assert_eq!(fs::read(&path).unwrap(), backup_bytes);
+        let guard = state.unlocked.lock().unwrap();
+        let vault = guard.as_ref().expect("Vault should be unlocked");
+        assert_eq!(
+            vault.document
+                .secrets
+                .get("core:sftp/test/password")
+                .map(String::as_str),
+            Some("REMOTEHAND_TEST_SECRET_914")
+        );
+    }
+
+    #[test]
+    fn unlock_does_not_restore_backup_when_passphrase_is_wrong() {
+        let dir = TestDir::new("unlock-backup-wrong-passphrase");
+        let path = dir.vault_path();
+        let backup_path = path.with_extension("bak");
+        let original_active = b"corrupt active vault".to_vec();
+
+        fs::write(&path, &original_active).unwrap();
+        fs::write(&backup_path, sample_encrypted("correct backup passphrase")).unwrap();
+
+        let state = VaultState::default();
+        let result = unlock_vault_from_path(
+            &state,
+            &path,
+            "wrong backup passphrase".to_string(),
+        );
+
+        assert!(result.is_err());
+        assert_eq!(fs::read(&path).unwrap(), original_active);
+        assert!(state.unlocked.lock().unwrap().is_none());
     }
 
     #[test]
