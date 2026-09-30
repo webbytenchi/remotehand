@@ -20,6 +20,7 @@ import { AppModal } from "./AppModal";
 import { PluginManager } from "./PluginManager";
 import { PluginPanel, sendPluginPanelContext, type PluginPanelParams } from "./PluginPanel";
 import { remoteHandFunctionKeyDisposition } from "./functionKeys";
+import { shouldSuppressWebViewShortcut } from "./browserShortcuts";
 import {
   EMPTY_UI_CONTRIBUTION_LAYOUT,
   contributionOrderIndex,
@@ -1568,6 +1569,9 @@ setSettingsTab(tab);
 setSettingsOpen(true);
 };
 const onKeyDown = (event: KeyboardEvent) => {
+if (shouldSuppressWebViewShortcut(event.key, event)) {
+event.preventDefault();
+}
 const functionKeyDisposition = remoteHandFunctionKeyDisposition(event.key, event);
 if (functionKeyDisposition !== "none") {
 event.preventDefault();
