@@ -297,6 +297,7 @@ pub(crate) fn begin_upload(
 pub(crate) fn write_upload_chunk(
     master_key: &[u8; 32],
     vault_id: &str,
+    vault_ref: &str,
     upload_id: &str,
     index: u32,
     plaintext: &[u8],
@@ -311,6 +312,9 @@ pub(crate) fn write_upload_chunk(
     let session = guard
         .get_mut(upload_id)
         .ok_or_else(|| "Vault blob upload is not active".to_string())?;
+    if session.vault_ref != vault_ref {
+        return Err("Vault blob upload does not belong to this key".to_string());
+    }
 
     if index != session.next_index {
         return Err("Vault blob chunks must be written in order".to_string());
@@ -345,12 +349,21 @@ pub(crate) fn write_upload_chunk(
     Ok(session.written)
 }
 
-pub(crate) fn commit_upload(upload_id: &str) -> Result<BlobInfo, String> {
-    let session = uploads()
+pub(crate) fn commit_upload(vault_ref: &str, upload_id: &str) -> Result<BlobInfo, String> {
+    let mut guard = uploads()
         .lock()
-        .map_err(|_| "Vault blob upload state is unavailable".to_string())?
+        .map_err(|_| "Vault blob upload state is unavailable".to_string())?;
+    let matches = guard
+        .get(upload_id)
+        .map(|session| session.vault_ref == vault_ref)
+        .unwrap_or(false);
+    if !matches {
+        return Err("Vault blob upload does not belong to this key".to_string());
+    }
+    let session = guard
         .remove(upload_id)
         .ok_or_else(|| "Vault blob upload is not active".to_string())?;
+    drop(guard);
 
     if session.written != session.total_size
         || session.next_index != chunk_count(session.total_size)
@@ -383,14 +396,20 @@ pub(crate) fn commit_upload(upload_id: &str) -> Result<BlobInfo, String> {
     })
 }
 
-pub(crate) fn abort_upload(upload_id: &str) -> Result<bool, String> {
-    let Some(session) = uploads()
+pub(crate) fn abort_upload(vault_ref: &str, upload_id: &str) -> Result<bool, String> {
+    let mut guard = uploads()
         .lock()
-        .map_err(|_| "Vault blob upload state is unavailable".to_string())?
-        .remove(upload_id)
-    else {
+        .map_err(|_| "Vault blob upload state is unavailable".to_string())?;
+    let Some(existing) = guard.get(upload_id) else {
         return Ok(false);
     };
+    if existing.vault_ref != vault_ref {
+        return Err("Vault blob upload does not belong to this key".to_string());
+    }
+    let session = guard
+        .remove(upload_id)
+        .ok_or_else(|| "Vault blob upload is not active".to_string())?;
+    drop(guard);
     match fs::remove_file(&session.temp_path) {
         Ok(()) => Ok(true),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(true),
