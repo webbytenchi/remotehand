@@ -3,6 +3,10 @@ import { listen } from "@tauri-apps/api/event";
 import type { IDockviewPanelProps } from "dockview-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { REMOTEHAND_FUNCTION_KEYS } from "./functionKeys";
+import {
+REMOTEHAND_BROWSER_PRIMARY_KEYS,
+REMOTEHAND_BROWSER_PRIMARY_SHIFT_KEYS,
+} from "./browserShortcuts";
 export type PluginPanelParams = {
 pluginId: string;
 panelId: string;
@@ -140,12 +144,16 @@ function bridgeScript(pluginId: string, panelId: string) {
 const pluginIdJson = JSON.stringify(pluginId);
 const panelIdJson = JSON.stringify(panelId);
 const functionKeysJson = JSON.stringify(REMOTEHAND_FUNCTION_KEYS);
+const browserPrimaryKeysJson = JSON.stringify(REMOTEHAND_BROWSER_PRIMARY_KEYS);
+const browserPrimaryShiftKeysJson = JSON.stringify(REMOTEHAND_BROWSER_PRIMARY_SHIFT_KEYS);
 return `
 <script>
 (() => {
 const pluginId = ${pluginIdJson};
 const panelId = ${panelIdJson};
 const remoteHandFunctionKeys = new Set(${functionKeysJson});
+const remoteHandBrowserPrimaryKeys = new Set(${browserPrimaryKeysJson});
+const remoteHandBrowserPrimaryShiftKeys = new Set(${browserPrimaryShiftKeysJson});
 let lastFocusedElement = null;
 let sequence = 0;
 const pending = new Map();
@@ -158,7 +166,21 @@ document.addEventListener("contextmenu", (event) => {
 if (allowsNativeContextMenu(event.target)) return;
 event.preventDefault();
 }, true);
+function shouldSuppressBrowserShortcut(event) {
+const key = String(event.key || "").toLowerCase();
+const primary = event.ctrlKey || event.metaKey;
+if (primary && !event.altKey) {
+if (event.shiftKey && remoteHandBrowserPrimaryShiftKeys.has(key)) return true;
+if (remoteHandBrowserPrimaryKeys.has(key)) return true;
+}
+return event.altKey
+&& !event.ctrlKey
+&& !event.metaKey
+&& !event.shiftKey
+&& (key === "arrowleft" || key === "arrowright" || key === "home");
+}
 document.addEventListener("keydown", (event) => {
+if (shouldSuppressBrowserShortcut(event)) event.preventDefault();
 if (!remoteHandFunctionKeys.has(event.key)) return;
 const nativeAltF4 = event.key === "F4"
 && event.altKey
