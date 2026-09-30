@@ -85,6 +85,7 @@ impl VaultState {
                 .unwrap_or(false);
             if should_lock {
                 *guard = None;
+                crate::vault_blob::abort_all_uploads();
                 log::info!("Vault auto-locked after inactivity");
                 if let Err(error) = app.emit(
                     "remotehand-vault-status-changed",
@@ -1009,6 +1010,7 @@ pub fn vault_lock<'a>(app: AppHandle, state: State<'a, VaultState>) -> Result<()
         .unlocked
         .lock()
         .map_err(|_| "vault state is unavailable".to_string())? = None;
+    crate::vault_blob::abort_all_uploads();
     log::info!("Vault locked");
     let exists = vault_path()?.exists();
     let _ = app.emit(
