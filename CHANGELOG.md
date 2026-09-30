@@ -2,6 +2,24 @@
 
 All notable changes to RemoteHand are documented here.
 
+## `1.2.26` - 2026-09-30
+
+### Fixed
+
+- **Top-bar popup stacking.** Plugin top-bar popup menus now render above Dockview workspace splitters, preventing resize-divider lines from cutting through menus such as Network Identity.
+
+### Compatibility
+
+- Plugin API remains **v1**.
+- Existing top-bar contributions require no migration.
+- Workspace resizing behavior is unchanged.
+
+### Verification
+
+- Frontend tests passed with **17 tests and 0 failures**.
+- Production frontend build passed.
+- Manual Windows acceptance confirmed the Network Identity top-bar popup renders cleanly above workspace dividers with normal menu interaction preserved.
+
 ## `1.2.25` - 2026-09-30
 
 ### Improved
