@@ -364,8 +364,8 @@ fn decrypt_document(
     let key = derive_key(&passphrase, &metadata.kdf)?;
     passphrase.zeroize();
     let aad = authenticated_header(&metadata)?;
-    let cipher =
-        XChaCha20Poly1305::new_from_slice(&key[..]).map_err(|_| "vault key is invalid".to_string())?;
+    let cipher = XChaCha20Poly1305::new_from_slice(&key[..])
+        .map_err(|_| "vault key is invalid".to_string())?;
     let nonce_ref = <&XNonce>::try_from(&nonce[..])
         .map_err(|_| "vault nonce has an invalid length".to_string())?;
     let plaintext = Zeroizing::new(
@@ -409,7 +409,10 @@ fn replace_file(path: &Path, replacement: &Path, backup: Option<&Path>) -> Resul
     };
 
     fn wide(path: &Path) -> Vec<u16> {
-        path.as_os_str().encode_wide().chain(std::iter::once(0)).collect()
+        path.as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect()
     }
 
     let replaced = wide(path);
@@ -509,7 +512,8 @@ fn write_vault_bytes(path: &Path, encrypted: &[u8]) -> Result<(), String> {
             .write(true)
             .open(&temporary_path)
             .map_err(|error| error.to_string())?;
-        file.write_all(encrypted).map_err(|error| error.to_string())?;
+        file.write_all(encrypted)
+            .map_err(|error| error.to_string())?;
         file.sync_all().map_err(|error| error.to_string())?;
     }
 
@@ -642,10 +646,9 @@ fn validate_vault_ref(vault_ref: &str) -> Result<(), String> {
     if !(vault_ref.starts_with("core:") || vault_ref.starts_with("plugin:")) {
         return Err("vault reference must use a core or plugin namespace".to_string());
     }
-    if !vault_ref
-        .bytes()
-        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b':' | b'/' | b'.' | b'-' | b'_'))
-    {
+    if !vault_ref.bytes().all(|byte| {
+        byte.is_ascii_alphanumeric() || matches!(byte, b':' | b'/' | b'.' | b'-' | b'_')
+    }) {
         return Err("vault reference contains unsupported characters".to_string());
     }
     if vault_ref
@@ -779,8 +782,7 @@ fn unlock_vault_from_path(
             if !backup_path.exists() {
                 return Err(primary_error);
             }
-            let backup = read_vault_file(&backup_path)
-                .map_err(|_| primary_error.clone())?;
+            let backup = read_vault_file(&backup_path).map_err(|_| primary_error.clone())?;
             match decrypt_document(Zeroizing::new(passphrase.to_string()), &backup) {
                 Ok(value) => {
                     restore_backup(path)?;
@@ -828,10 +830,7 @@ pub fn vault_unlock<'a>(
 }
 
 #[tauri::command]
-pub fn vault_set_auto_lock<'a>(
-    state: State<'a, VaultState>,
-    minutes: u64,
-) -> Result<(), String> {
+pub fn vault_set_auto_lock<'a>(state: State<'a, VaultState>, minutes: u64) -> Result<(), String> {
     if !matches!(minutes, 0 | 5 | 15 | 30 | 60) {
         return Err("unsupported Vault auto-lock interval".to_string());
     }
@@ -932,10 +931,7 @@ pub(crate) fn store_document(
         .as_mut()
         .ok_or_else(|| "vault is locked".to_string())?;
 
-    let mut previous = vault
-        .document
-        .documents
-        .insert(vault_ref.clone(), document);
+    let mut previous = vault.document.documents.insert(vault_ref.clone(), document);
     if let Err(error) = save_document(&vault.key, &vault.metadata, &vault.document) {
         if let Some(mut failed) = vault.document.documents.remove(&vault_ref) {
             failed.zeroize();
@@ -1116,7 +1112,8 @@ mod tests {
         let guard = state.unlocked.lock().unwrap();
         let vault = guard.as_ref().expect("Vault should be unlocked");
         assert_eq!(
-            vault.document
+            vault
+                .document
                 .secrets
                 .get("core:sftp/test/password")
                 .map(String::as_str),
@@ -1135,11 +1132,7 @@ mod tests {
         fs::write(&backup_path, sample_encrypted("correct backup passphrase")).unwrap();
 
         let state = VaultState::default();
-        let result = unlock_vault_from_path(
-            &state,
-            &path,
-            "wrong backup passphrase".to_string(),
-        );
+        let result = unlock_vault_from_path(&state, &path, "wrong backup passphrase".to_string());
 
         assert!(result.is_err());
         assert_eq!(fs::read(&path).unwrap(), original_active);
@@ -1254,10 +1247,7 @@ mod tests {
     #[test]
     fn wrong_passphrase_cannot_decrypt_vault() {
         let encrypted = sample_encrypted("correct passphrase");
-        let result = decrypt_document(
-            Zeroizing::new("wrong passphrase".to_string()),
-            &encrypted,
-        );
+        let result = decrypt_document(Zeroizing::new("wrong passphrase".to_string()), &encrypted);
         assert!(result.is_err());
     }
 

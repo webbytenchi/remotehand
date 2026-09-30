@@ -6,8 +6,8 @@ mod plugins;
 mod sftp;
 mod sftp_native;
 mod sftp_path;
-mod storage;
 mod startup_tray;
+mod storage;
 mod terminal;
 mod vault;
 mod window_state;
@@ -251,7 +251,10 @@ fn open_external_url(url: String) -> Result<(), String> {
     #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
     return Err("opening external URLs is not supported on this platform".to_string());
 
-    command.arg(&url).spawn().map_err(|error| format!("failed to open external URL: {error}"))?;
+    command
+        .arg(&url)
+        .spawn()
+        .map_err(|error| format!("failed to open external URL: {error}"))?;
     Ok(())
 }
 
@@ -289,7 +292,11 @@ pub fn run() {
         .manage(vault_state.clone())
         .manage(startup_tray_state.clone())
         .manage(global_shortcut_state.clone())
-        .plugin(tauri_plugin_autostart::Builder::new().args(["--autostart"]).build())
+        .plugin(
+            tauri_plugin_autostart::Builder::new()
+                .args(["--autostart"])
+                .build(),
+        )
         .invoke_handler(tauri::generate_handler![
             storage::load_settings,
             storage::save_settings,
@@ -377,7 +384,10 @@ pub fn run() {
                     if let Err(error) = webview.window().show() {
                         log::error!("Failed to show main window: {error}");
                     }
-                    if let Some(tray_state) = webview.app_handle().try_state::<startup_tray::StartupTrayState>() {
+                    if let Some(tray_state) = webview
+                        .app_handle()
+                        .try_state::<startup_tray::StartupTrayState>()
+                    {
                         tray_state.sync_window_menu(&webview.app_handle());
                     }
                 }
@@ -425,7 +435,9 @@ pub fn run() {
                     match builder.build() {
                         Ok(window) => {
                             if let Err(error) = native_file_drop::install(&window) {
-                                log::warn!("Failed to install native file-drop bridge for popout: {error}");
+                                log::warn!(
+                                    "Failed to install native file-drop bridge for popout: {error}"
+                                );
                             }
                             tauri::webview::NewWindowResponse::Create { window }
                         }
@@ -438,12 +450,15 @@ pub fn run() {
                 .build()
                 .map_err(std::io::Error::other)?;
             native_file_drop::install(&main_window).map_err(std::io::Error::other)?;
-            startup_tray::install(&app.handle().clone(), &startup_tray_state).map_err(std::io::Error::other)?;
+            startup_tray::install(&app.handle().clone(), &startup_tray_state)
+                .map_err(std::io::Error::other)?;
             let saved = storage::load_settings().map_err(std::io::Error::other)?;
             vault_state.set_auto_lock_minutes(saved.vault_auto_lock_minutes);
             vault_state.start_auto_lock_worker(app.handle().clone());
             startup_tray_state.set_close_to_tray(saved.minimize_to_tray_on_close);
-            startup_tray_state.set_show_in_tray(app.handle(), saved.show_in_system_tray).map_err(std::io::Error::other)?;
+            startup_tray_state
+                .set_show_in_tray(app.handle(), saved.show_in_system_tray)
+                .map_err(std::io::Error::other)?;
             app.handle()
                 .plugin(logging::builder().map_err(std::io::Error::other)?.build())?;
             if let Err(error) = global_shortcut::configure(

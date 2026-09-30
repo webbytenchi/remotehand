@@ -1,5 +1,7 @@
 use crate::plugins::{PluginInfo, PLUGIN_API_VERSION};
 use serde::{Deserialize, Serialize};
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::{
     collections::BTreeMap,
     fs,
@@ -13,8 +15,6 @@ use std::{
     thread,
     time::Duration,
 };
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
 use tauri::{AppHandle, Emitter, Manager};
 const MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -313,45 +313,59 @@ struct PluginOpenPanelParams {
     #[serde(default)]
     context: serde_json::Value,
 }
-fn validate_file_open_params(params:&FileOpenParams)->Result<(),String>{
-    if params.filters.len()>8 {
+fn validate_file_open_params(params: &FileOpenParams) -> Result<(), String> {
+    if params.filters.len() > 8 {
         return Err("file.open has too many file filters".to_string());
     }
     for filter in &params.filters {
-        if filter.name.trim().is_empty() || filter.name.len()>64 || filter.extensions.is_empty() || filter.extensions.len()>32 {
+        if filter.name.trim().is_empty()
+            || filter.name.len() > 64
+            || filter.extensions.is_empty()
+            || filter.extensions.len() > 32
+        {
             return Err("file.open contains an invalid file filter".to_string());
         }
         for extension in &filter.extensions {
             if extension == "*" {
                 continue;
             }
-            if extension.is_empty() || extension.len()>16 || !extension.bytes().all(|b|b.is_ascii_alphanumeric()) {
+            if extension.is_empty()
+                || extension.len() > 16
+                || !extension.bytes().all(|b| b.is_ascii_alphanumeric())
+            {
                 return Err("file.open contains an invalid file extension".to_string());
             }
         }
     }
     Ok(())
 }
-fn validate_file_save_params(params:&FileSaveParams)->Result<(),String>{
-    if params.suggested_name.trim().is_empty() || params.suggested_name.len()>255 {
+fn validate_file_save_params(params: &FileSaveParams) -> Result<(), String> {
+    if params.suggested_name.trim().is_empty() || params.suggested_name.len() > 255 {
         return Err("file.save suggested name is missing or too long".to_string());
     }
-    let path=Path::new(&params.suggested_name);
-    if path.components().count()!=1 || path.is_absolute() {
+    let path = Path::new(&params.suggested_name);
+    if path.components().count() != 1 || path.is_absolute() {
         return Err("file.save suggested name must be a file name without a path".to_string());
     }
-    if params.content.len()>8*1024*1024 {
+    if params.content.len() > 8 * 1024 * 1024 {
         return Err("file.save content exceeds 8 MiB".to_string());
     }
-    if params.filters.len()>8 {
+    if params.filters.len() > 8 {
         return Err("file.save has too many file filters".to_string());
     }
     for filter in &params.filters {
-        if filter.name.trim().is_empty() || filter.name.len()>64 || filter.extensions.is_empty() || filter.extensions.len()>8 {
+        if filter.name.trim().is_empty()
+            || filter.name.len() > 64
+            || filter.extensions.is_empty()
+            || filter.extensions.len() > 8
+        {
             return Err("file.save contains an invalid file filter".to_string());
         }
         for extension in &filter.extensions {
-            if extension.is_empty() || extension.len()>16 || !extension.bytes().all(|b|b.is_ascii_alphanumeric()) {
+            if extension.is_empty()
+                || extension.len() > 16
+                || !extension.bytes().all(|b| b.is_ascii_alphanumeric())
+            {
                 return Err("file.save contains an invalid file extension".to_string());
             }
         }
@@ -618,8 +632,9 @@ fn handle_plugin_request(
             Ok(serde_json::json!({ "deleted": deleted }))
         }
         "vault.request_access" => {
-            let params: VaultAccessRequestParams = serde_json::from_value(request.params.clone())
-                .map_err(|error| format!("invalid vault.request_access params: {error}"))?;
+            let params: VaultAccessRequestParams =
+                serde_json::from_value(request.params.clone())
+                    .map_err(|error| format!("invalid vault.request_access params: {error}"))?;
             let vault_state = app_handle.state::<crate::vault::VaultState>();
             crate::vault::request_plugin_access(
                 app_handle,
@@ -664,10 +679,14 @@ fn handle_plugin_request(
                 dialog = dialog.set_parent(&window);
             }
             for filter in &params.filters {
-                let extensions=filter.extensions.iter().map(String::as_str).collect::<Vec<_>>();
-                dialog=dialog.add_filter(&filter.name,&extensions);
+                let extensions = filter
+                    .extensions
+                    .iter()
+                    .map(String::as_str)
+                    .collect::<Vec<_>>();
+                dialog = dialog.add_filter(&filter.name, &extensions);
             }
-            let Some(path)=dialog.pick_file() else {
+            let Some(path) = dialog.pick_file() else {
                 return Ok(serde_json::json!({"opened":false}));
             };
             Ok(serde_json::json!({"opened":true,"path":path.to_string_lossy()}))
@@ -681,10 +700,14 @@ fn handle_plugin_request(
                 dialog = dialog.set_parent(&window);
             }
             for filter in &params.filters {
-                let extensions=filter.extensions.iter().map(String::as_str).collect::<Vec<_>>();
-                dialog=dialog.add_filter(&filter.name,&extensions);
+                let extensions = filter
+                    .extensions
+                    .iter()
+                    .map(String::as_str)
+                    .collect::<Vec<_>>();
+                dialog = dialog.add_filter(&filter.name, &extensions);
             }
-            let Some(path)=dialog.save_file() else {
+            let Some(path) = dialog.save_file() else {
                 return Ok(serde_json::json!({"saved":false}));
             };
             fs::write(&path, params.content.as_bytes())
@@ -780,103 +803,123 @@ fn start_reader(
 ) {
     thread::spawn(move || {
         loop {
-        let payload = match read_frame(&mut stdout) {
-            Ok(payload) => payload,
-            Err(error) => {
-                fail_pending(&pending, error.clone());
-                log::warn!("Plugin runtime {plugin_id} reader stopped: {error}");
-                break;
-            }
-        };
-        let value: serde_json::Value = match serde_json::from_slice(&payload) {
-            Ok(value) => value,
-            Err(error) => {
-                log::warn!("Plugin runtime {plugin_id} sent invalid JSON: {error}");
-                continue;
-            }
-        };
-        let Some(message_type) = value.get("type").and_then(|value| value.as_str()) else {
-            log::warn!("Plugin runtime {plugin_id} sent a message without type");
-            continue;
-        };
-
-        match message_type {
-            "plugin.response" => {
-                let response: PluginResponse = match serde_json::from_value(value) {
-                    Ok(response) => response,
-                    Err(error) => {
-                        log::warn!("Plugin runtime {plugin_id} sent invalid response: {error}");
-                        continue;
-                    }
-                };
-                let sender = pending
-                    .lock()
-                    .ok()
-                    .and_then(|mut guard| guard.remove(&response.request_id));
-                if let Some(sender) = sender {
-                    let _ = sender.send(Ok(response));
-                } else {
-                    log::warn!(
-                        "Plugin runtime {plugin_id} returned unknown request id {}",
-                        response.request_id
-                    );
+            let payload = match read_frame(&mut stdout) {
+                Ok(payload) => payload,
+                Err(error) => {
+                    fail_pending(&pending, error.clone());
+                    log::warn!("Plugin runtime {plugin_id} reader stopped: {error}");
+                    break;
                 }
-            }
-            "plugin.event" => {
-                let event: PluginEvent = match serde_json::from_value(value) {
-                    Ok(event) => event,
-                    Err(error) => {
-                        log::warn!("Plugin runtime {plugin_id} sent invalid event: {error}");
-                        continue;
-                    }
-                };
-                if event.message_type != "plugin.event" || !valid_message_name(&event.event) {
-                    log::warn!("Plugin runtime {plugin_id} sent invalid event name");
+            };
+            let value: serde_json::Value = match serde_json::from_slice(&payload) {
+                Ok(value) => value,
+                Err(error) => {
+                    log::warn!("Plugin runtime {plugin_id} sent invalid JSON: {error}");
                     continue;
                 }
-                if event.event == "tray.update" {
-                    if !permission_granted(&permissions, "tray.contribute") {
-                        log::warn!("Plugin runtime {plugin_id} attempted tray.update without tray.contribute");
-                        continue;
-                    }
-                    if let Some(state) = app_handle.try_state::<crate::startup_tray::StartupTrayState>() {
-                        if let Err(error) = state.sync_plugin_trays(&app_handle, &plugin_id, event.payload.clone()) {
-                            log::warn!("Plugin runtime {plugin_id} tray.update rejected: {error}");
+            };
+            let Some(message_type) = value.get("type").and_then(|value| value.as_str()) else {
+                log::warn!("Plugin runtime {plugin_id} sent a message without type");
+                continue;
+            };
+
+            match message_type {
+                "plugin.response" => {
+                    let response: PluginResponse = match serde_json::from_value(value) {
+                        Ok(response) => response,
+                        Err(error) => {
+                            log::warn!("Plugin runtime {plugin_id} sent invalid response: {error}");
                             continue;
                         }
+                    };
+                    let sender = pending
+                        .lock()
+                        .ok()
+                        .and_then(|mut guard| guard.remove(&response.request_id));
+                    if let Some(sender) = sender {
+                        let _ = sender.send(Ok(response));
+                    } else {
+                        log::warn!(
+                            "Plugin runtime {plugin_id} returned unknown request id {}",
+                            response.request_id
+                        );
                     }
-                } else if event.event == "notification.show" {
-                    if !permission_granted(&permissions, "notifications.show") {
-                        log::warn!("Plugin runtime {plugin_id} attempted notification.show without notifications.show");
-                        continue;
-                    }
-                    if let Some(state) = app_handle.try_state::<crate::startup_tray::StartupTrayState>() {
-                        if let Err(error) = state.show_plugin_notification(&app_handle, &plugin_id, event.payload.clone()) {
-                            log::warn!("Plugin runtime {plugin_id} notification.show rejected: {error}");
+                }
+                "plugin.event" => {
+                    let event: PluginEvent = match serde_json::from_value(value) {
+                        Ok(event) => event,
+                        Err(error) => {
+                            log::warn!("Plugin runtime {plugin_id} sent invalid event: {error}");
                             continue;
                         }
-                    }
-                }
-                let envelope = PluginEventEnvelope {
-                    plugin_id: plugin_id.clone(),
-                    event: event.event,
-                    payload: event.payload,
-                };
-                if let Err(error) = app_handle.emit("remotehand-plugin-event", envelope) {
-                    log::warn!("Failed to emit plugin event for {plugin_id}: {error}");
-                }
-            }
-            "plugin.request" => {
-                let request: PluginRequest = match serde_json::from_value(value) {
-                    Ok(request) => request,
-                    Err(error) => {
-                        log::warn!("Plugin runtime {plugin_id} sent invalid host request: {error}");
+                    };
+                    if event.message_type != "plugin.event" || !valid_message_name(&event.event) {
+                        log::warn!("Plugin runtime {plugin_id} sent invalid event name");
                         continue;
                     }
-                };
-                let request_id = request.request_id;
-                let response =
-                    match handle_plugin_request(&app_handle, &plugin_id, &permissions, &request) {
+                    if event.event == "tray.update" {
+                        if !permission_granted(&permissions, "tray.contribute") {
+                            log::warn!("Plugin runtime {plugin_id} attempted tray.update without tray.contribute");
+                            continue;
+                        }
+                        if let Some(state) =
+                            app_handle.try_state::<crate::startup_tray::StartupTrayState>()
+                        {
+                            if let Err(error) = state.sync_plugin_trays(
+                                &app_handle,
+                                &plugin_id,
+                                event.payload.clone(),
+                            ) {
+                                log::warn!(
+                                    "Plugin runtime {plugin_id} tray.update rejected: {error}"
+                                );
+                                continue;
+                            }
+                        }
+                    } else if event.event == "notification.show" {
+                        if !permission_granted(&permissions, "notifications.show") {
+                            log::warn!("Plugin runtime {plugin_id} attempted notification.show without notifications.show");
+                            continue;
+                        }
+                        if let Some(state) =
+                            app_handle.try_state::<crate::startup_tray::StartupTrayState>()
+                        {
+                            if let Err(error) = state.show_plugin_notification(
+                                &app_handle,
+                                &plugin_id,
+                                event.payload.clone(),
+                            ) {
+                                log::warn!("Plugin runtime {plugin_id} notification.show rejected: {error}");
+                                continue;
+                            }
+                        }
+                    }
+                    let envelope = PluginEventEnvelope {
+                        plugin_id: plugin_id.clone(),
+                        event: event.event,
+                        payload: event.payload,
+                    };
+                    if let Err(error) = app_handle.emit("remotehand-plugin-event", envelope) {
+                        log::warn!("Failed to emit plugin event for {plugin_id}: {error}");
+                    }
+                }
+                "plugin.request" => {
+                    let request: PluginRequest = match serde_json::from_value(value) {
+                        Ok(request) => request,
+                        Err(error) => {
+                            log::warn!(
+                                "Plugin runtime {plugin_id} sent invalid host request: {error}"
+                            );
+                            continue;
+                        }
+                    };
+                    let request_id = request.request_id;
+                    let response = match handle_plugin_request(
+                        &app_handle,
+                        &plugin_id,
+                        &permissions,
+                        &request,
+                    ) {
                         Ok(result) => HostResponse {
                             message_type: "host.response",
                             request_id,
@@ -892,20 +935,20 @@ fn start_reader(
                             error,
                         },
                     };
-                let write_result = stdin
-                    .lock()
-                    .map_err(|_| "plugin stdin lock poisoned".to_string())
-                    .and_then(|mut writer| write_frame(&mut *writer, &response));
-                if let Err(error) = write_result {
-                    fail_pending(&pending, error.clone());
-                    log::warn!("Plugin runtime {plugin_id} host response failed: {error}");
-                    break;
+                    let write_result = stdin
+                        .lock()
+                        .map_err(|_| "plugin stdin lock poisoned".to_string())
+                        .and_then(|mut writer| write_frame(&mut *writer, &response));
+                    if let Err(error) = write_result {
+                        fail_pending(&pending, error.clone());
+                        log::warn!("Plugin runtime {plugin_id} host response failed: {error}");
+                        break;
+                    }
+                }
+                other => {
+                    log::warn!("Plugin runtime {plugin_id} sent unexpected message type {other}");
                 }
             }
-            other => {
-                log::warn!("Plugin runtime {plugin_id} sent unexpected message type {other}");
-            }
-        }
         }
 
         if !stopping.load(Ordering::SeqCst) {
@@ -949,22 +992,22 @@ impl PluginRuntimeState {
             .ok_or_else(|| "plugin runtime app handle is unavailable".to_string())?;
         let (plugin_root, entrypoint) = resolve_entrypoint(plugin)?;
 
- let mut command = Command::new(&entrypoint);
- command
- .current_dir(&plugin_root)
- .stdin(Stdio::piped())
- .stdout(Stdio::piped())
- .stderr(Stdio::null())
- .env("REMOTEHAND_PLUGIN_ID", &plugin.manifest.id)
- .env(
- "REMOTEHAND_PLUGIN_API_VERSION",
- PLUGIN_API_VERSION.to_string(),
- );
-#[cfg(windows)]
- command.creation_flags(0x08000000);
- let mut child = command
- .spawn()
- .map_err(|error| format!("failed to launch plugin runtime: {error}"))?;
+        let mut command = Command::new(&entrypoint);
+        command
+            .current_dir(&plugin_root)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .env("REMOTEHAND_PLUGIN_ID", &plugin.manifest.id)
+            .env(
+                "REMOTEHAND_PLUGIN_API_VERSION",
+                PLUGIN_API_VERSION.to_string(),
+            );
+        #[cfg(windows)]
+        command.creation_flags(0x08000000);
+        let mut child = command
+            .spawn()
+            .map_err(|error| format!("failed to launch plugin runtime: {error}"))?;
 
         let mut stdin = child
             .stdin
@@ -1112,7 +1155,8 @@ impl PluginRuntimeState {
         fail_pending(&session.pending, "plugin runtime stopped".to_string());
         if let Ok(slot) = self.app_handle.lock() {
             if let Some(app_handle) = slot.as_ref() {
-                if let Some(state) = app_handle.try_state::<crate::startup_tray::StartupTrayState>() {
+                if let Some(state) = app_handle.try_state::<crate::startup_tray::StartupTrayState>()
+                {
                     state.hide_plugin_trays(app_handle, id);
                 }
             }
@@ -1274,8 +1318,11 @@ mod tests {
             params: serde_json::json!({ "filters": [{ "name": "Text", "extensions": ["txt", "md"] }] }),
         };
         assert!(validate_plugin_request(&["files.open".to_string()], &request).is_ok());
-        assert_eq!(validate_plugin_request(&[], &request).unwrap_err(),"plugin lacks files.open permission");
-        let params:FileOpenParams=serde_json::from_value(request.params.clone()).unwrap();
+        assert_eq!(
+            validate_plugin_request(&[], &request).unwrap_err(),
+            "plugin lacks files.open permission"
+        );
+        let params: FileOpenParams = serde_json::from_value(request.params.clone()).unwrap();
         assert!(validate_file_open_params(&params).is_ok());
     }
 
@@ -1288,10 +1335,17 @@ mod tests {
             params: serde_json::json!({ "suggestedName": "report.csv", "content": "a,b\n1,2", "filters": [{ "name": "CSV", "extensions": ["csv"] }] }),
         };
         assert!(validate_plugin_request(&["files.save".to_string()], &request).is_ok());
-        assert_eq!(validate_plugin_request(&[], &request).unwrap_err(),"plugin lacks files.save permission");
-        let params:FileSaveParams=serde_json::from_value(request.params.clone()).unwrap();
+        assert_eq!(
+            validate_plugin_request(&[], &request).unwrap_err(),
+            "plugin lacks files.save permission"
+        );
+        let params: FileSaveParams = serde_json::from_value(request.params.clone()).unwrap();
         assert!(validate_file_save_params(&params).is_ok());
-        let invalid=FileSaveParams{suggested_name:"../report.csv".into(),content:String::new(),filters:Vec::new()};
+        let invalid = FileSaveParams {
+            suggested_name: "../report.csv".into(),
+            content: String::new(),
+            filters: Vec::new(),
+        };
         assert!(validate_file_save_params(&invalid).is_err());
     }
 
@@ -1311,10 +1365,8 @@ mod tests {
             assert!(validate_plugin_request(&["plugins.open".to_string()], &request).is_ok());
         }
 
-        let available: PluginAvailableParams = serde_json::from_value(
-            serde_json::json!({ "pluginId": "remotehand.editor" })
-        )
-        .unwrap();
+        let available: PluginAvailableParams =
+            serde_json::from_value(serde_json::json!({ "pluginId": "remotehand.editor" })).unwrap();
         assert_eq!(available.plugin_id, "remotehand.editor");
 
         let valid: PluginOpenPanelParams = serde_json::from_value(serde_json::json!({
@@ -1360,8 +1412,14 @@ mod tests {
 
     #[test]
     fn validates_notification_permission_name() {
-        assert!(permission_granted(&["notifications.show".to_string()], "notifications.show"));
-        assert!(!permission_granted(&["tray.contribute".to_string()], "notifications.show"));
+        assert!(permission_granted(
+            &["notifications.show".to_string()],
+            "notifications.show"
+        ));
+        assert!(!permission_granted(
+            &["tray.contribute".to_string()],
+            "notifications.show"
+        ));
     }
 
     #[test]
@@ -1391,11 +1449,7 @@ mod tests {
             validate_plugin_request(&[], &request).unwrap_err(),
             "plugin lacks vault.access.request permission"
         );
-        assert!(validate_plugin_request(
-            &["vault.access.request".to_string()],
-            &request
-        )
-        .is_ok());
+        assert!(validate_plugin_request(&["vault.access.request".to_string()], &request).is_ok());
         let params: VaultAccessRequestParams =
             serde_json::from_value(request.params.clone()).unwrap();
         assert_eq!(params.reason, "Use the configured provider credential.");
@@ -1427,11 +1481,7 @@ mod tests {
             validate_plugin_request(&[], &request).unwrap_err(),
             "plugin lacks vault.secrets.read permission"
         );
-        assert!(validate_plugin_request(
-            &["vault.secrets.read".to_string()],
-            &request
-        )
-        .is_ok());
+        assert!(validate_plugin_request(&["vault.secrets.read".to_string()], &request).is_ok());
 
         assert_eq!(
             plugin_vault_ref("remotehand.marielle-chat", "providers/gemini/api-key").unwrap(),
@@ -1444,8 +1494,14 @@ mod tests {
     #[test]
     fn maps_vault_audit_actions_without_secret_references() {
         assert_eq!(vault_audit_action("vault.secret.get"), Some("secret.read"));
-        assert_eq!(vault_audit_action("vault.document.set"), Some("document.write"));
-        assert_eq!(vault_audit_action("vault.request_access"), Some("access.request"));
+        assert_eq!(
+            vault_audit_action("vault.document.set"),
+            Some("document.write")
+        );
+        assert_eq!(
+            vault_audit_action("vault.request_access"),
+            Some("access.request")
+        );
         assert_eq!(vault_audit_action("storage.get"), None);
     }
 

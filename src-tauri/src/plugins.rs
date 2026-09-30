@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
-use tauri::Manager;
 use std::{
     collections::{BTreeMap, BTreeSet},
     env, fs,
     path::{Component, Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
+use tauri::Manager;
 use zip::ZipArchive;
 pub const PLUGIN_API_VERSION: u32 = 1;
 const MAX_PLUGIN_FILES: usize = 2048;
@@ -541,7 +541,6 @@ fn install_from_directory(source: &Path) -> Result<PluginInfo, String> {
     })
 }
 
-
 fn safe_archive_entry_path(name: &str) -> Result<PathBuf, String> {
     if name.is_empty() || name.contains('\0') {
         return Err("plugin ZIP contains an invalid path".to_string());
@@ -567,8 +566,8 @@ fn install_from_zip(source: &Path) -> Result<PluginInfo, String> {
     }
 
     let file = fs::File::open(source).map_err(|error| error.to_string())?;
-    let mut archive = ZipArchive::new(file)
-        .map_err(|error| format!("invalid plugin ZIP: {error}"))?;
+    let mut archive =
+        ZipArchive::new(file).map_err(|error| format!("invalid plugin ZIP: {error}"))?;
     if archive.len() > MAX_PLUGIN_FILES {
         return Err(format!(
             "plugin ZIP contains more than {MAX_PLUGIN_FILES} entries"
@@ -618,9 +617,7 @@ fn install_from_zip(source: &Path) -> Result<PluginInfo, String> {
     }
 
     if !has_root_manifest {
-        return Err(
-            "plugin ZIP must contain plugin.json at the archive root".to_string()
-        );
+        return Err("plugin ZIP must contain plugin.json at the archive root".to_string());
     }
 
     let nonce = SystemTime::now()
@@ -647,10 +644,8 @@ fn install_from_zip(source: &Path) -> Result<PluginInfo, String> {
             if let Some(parent) = destination.parent() {
                 fs::create_dir_all(parent).map_err(|error| error.to_string())?;
             }
-            let mut output = fs::File::create(&destination)
-                .map_err(|error| error.to_string())?;
-            std::io::copy(&mut entry, &mut output)
-                .map_err(|error| error.to_string())?;
+            let mut output = fs::File::create(&destination).map_err(|error| error.to_string())?;
+            std::io::copy(&mut entry, &mut output).map_err(|error| error.to_string())?;
         }
         Ok(())
     })();
@@ -758,7 +753,12 @@ pub(crate) fn plugin_has_permission(id: &str, permission: &str) -> Result<bool, 
         return Err("unsupported plugin permission".to_string());
     }
     let plugin = require_installed(id)?;
-    Ok(plugin.enabled && plugin.manifest.permissions.iter().any(|value| value == permission))
+    Ok(plugin.enabled
+        && plugin
+            .manifest
+            .permissions
+            .iter()
+            .any(|value| value == permission))
 }
 
 pub(crate) fn plugin_available(id: &str) -> Result<bool, String> {
@@ -958,11 +958,7 @@ mod tests {
 
     #[test]
     fn accepts_plugins_open_permission() {
-        assert!(validate_manifest(&manifest(
-            "remotehand.test",
-            &["plugins.open"]
-        ))
-        .is_ok());
+        assert!(validate_manifest(&manifest("remotehand.test", &["plugins.open"])).is_ok());
     }
 
     #[test]
