@@ -718,6 +718,7 @@ const [settingsOpen, setSettingsOpen] = useState(false);
 const [vaultPrompt, setVaultPrompt] = useState<VaultPromptRequest | null>(null);
 const vaultPromptRef = useRef<VaultPromptRequest | null>(null);
 const [vaultPromptPassphrase, setVaultPromptPassphrase] = useState("");
+const [vaultPromptPassphraseConfirm, setVaultPromptPassphraseConfirm] = useState("");
 const [vaultPromptError, setVaultPromptError] = useState("");
 const [vaultPromptBusy, setVaultPromptBusy] = useState(false);
 const [settingsTab, setSettingsTab] = useState<"appearance" | "layout" | "startup" | "vault" | "plugins" | "about" | "papa">("appearance");
@@ -1655,6 +1656,7 @@ return;
 vaultPromptRef.current = request;
 setVaultPrompt(request);
 setVaultPromptPassphrase("");
+setVaultPromptPassphraseConfirm("");
 setVaultPromptError("");
 setVaultPromptBusy(false);
 void invoke("focus_main_window").catch((error) =>
@@ -1676,6 +1678,7 @@ if (!request) return;
 vaultPromptRef.current = null;
 setVaultPrompt(null);
 setVaultPromptPassphrase("");
+setVaultPromptPassphraseConfirm("");
 setVaultPromptError("");
 setVaultPromptBusy(false);
 await emit(VAULT_PROMPT_RESULT_EVENT, {
@@ -1692,6 +1695,10 @@ if (!vaultPromptPassphrase) {
 setVaultPromptError("Enter the Vault passphrase.");
 return;
 }
+if (request.create && vaultPromptPassphrase !== vaultPromptPassphraseConfirm) {
+setVaultPromptError("Vault passphrases do not match.");
+return;
+}
 setVaultPromptBusy(true);
 setVaultPromptError("");
 try {
@@ -1705,7 +1712,7 @@ await finishVaultPrompt(true);
 setVaultPromptError(String(error));
 setVaultPromptBusy(false);
 }
-}, [finishVaultPrompt, vaultPromptBusy, vaultPromptPassphrase]);
+}, [finishVaultPrompt, vaultPromptBusy, vaultPromptPassphrase, vaultPromptPassphraseConfirm]);
 
 const cancelVaultPrompt = useCallback(() => {
 if (vaultPromptBusy) return;
@@ -2196,6 +2203,21 @@ autoFocus
 disabled={vaultPromptBusy}
 />
 </label>
+{vaultPrompt?.create ? (
+<label>
+<span>Confirm Vault passphrase</span>
+<input
+type="password"
+value={vaultPromptPassphraseConfirm}
+onChange={(event) => setVaultPromptPassphraseConfirm(event.target.value)}
+onKeyDown={(event) => {
+if (event.key === "Enter") void confirmVaultPrompt();
+}}
+autoComplete="new-password"
+disabled={vaultPromptBusy}
+/>
+</label>
+) : null}
 {vaultPromptError ? <div className="vault-prompt-error">{vaultPromptError}</div> : null}
 </div>
 </AppModal>
