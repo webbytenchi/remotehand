@@ -10,7 +10,7 @@ use std::{
     collections::BTreeMap,
     env, fs,
     fs::OpenOptions,
-    io::Write,
+    io::{Read, Write},
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -214,12 +214,22 @@ fn validate_vault_file_size(size: u64) -> Result<(), String> {
 }
 
 fn read_vault_file(path: &Path) -> Result<Vec<u8>, String> {
-    let metadata = fs::metadata(path).map_err(|_| "vault not found".to_string())?;
+    let file = OpenOptions::new()
+        .read(true)
+        .open(path)
+        .map_err(|_| "vault not found".to_string())?;
+    let metadata = file.metadata().map_err(|error| error.to_string())?;
     if !metadata.is_file() {
         return Err("vault path is not a regular file".to_string());
     }
     validate_vault_file_size(metadata.len())?;
-    fs::read(path).map_err(|error| error.to_string())
+
+    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    file.take(MAX_VAULT_FILE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| error.to_string())?;
+    validate_vault_file_size(bytes.len() as u64)?;
+    Ok(bytes)
 }
 
 fn new_metadata() -> VaultMetadata {
@@ -1058,6 +1068,22 @@ mod tests {
 
         assert!(validate_document_value(&"x".repeat(MAX_DOCUMENT_BYTES)).is_ok());
         assert!(validate_document_value(&"x".repeat(MAX_DOCUMENT_BYTES + 1)).is_err());
+    }
+
+    #[test]
+    fn bounded_reader_rejects_oversized_vault_file() {
+        let dir = TestDir::new("oversized-read");
+        let path = dir.vault_path();
+        let file = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&path)
+            .unwrap();
+        file.set_len(MAX_VAULT_FILE_BYTES + 1).unwrap();
+
+        let result = read_vault_file(&path);
+
+        assert!(result.is_err());
     }
 
     #[test]
