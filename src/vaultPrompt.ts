@@ -8,6 +8,8 @@ export type VaultPromptRequest = {
 requestId: string;
 reason: string;
 create: boolean;
+source?: "frontend" | "plugin";
+pluginId?: string;
 };
 
 export type VaultPromptResult = {
