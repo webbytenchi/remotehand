@@ -5,6 +5,7 @@
 - Plugin API v1 blob permissions `vault.blobs.read` and `vault.blobs.write`.
 - Chunked `vault.blob.*` upload/read/delete methods for payloads larger than the document API.
 - Vault status events forwarded to plugin panels so decrypted plugin UI can redact immediately on lock.
+- Serialize each plugin runtime request/response lifetime so a second panel call cannot overtake a nested host API response and desynchronize Plugin API v1 framing.
 
 ### Security
 - Blob filenames are opaque keyed identifiers rather than logical plugin keys.
