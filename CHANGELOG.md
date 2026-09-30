@@ -1,3 +1,17 @@
+## Unreleased
+
+### Added
+- Generic encrypted Vault blob storage for plugin-owned binary data.
+- Plugin API v1 blob permissions `vault.blobs.read` and `vault.blobs.write`.
+- Chunked `vault.blob.*` upload/read/delete methods for payloads larger than the document API.
+- Vault status events forwarded to plugin panels so decrypted plugin UI can redact immediately on lock.
+
+### Security
+- Blob filenames are opaque keyed identifiers rather than logical plugin keys.
+- Blob encryption uses domain-separated per-blob keys with XChaCha20-Poly1305 authenticated 1 MiB chunks.
+- Blob AAD binds Vault ID, caller-scoped Vault reference, chunk index, total size, and format context.
+- Incomplete uploads remain temporary and are aborted on Vault lock.
+
 # Changelog
 
 All notable changes to RemoteHand are documented here.
