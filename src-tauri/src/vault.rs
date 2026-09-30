@@ -932,6 +932,25 @@ mod tests {
     }
 
     #[test]
+    fn second_write_replaces_active_and_preserves_previous_backup() {
+        let dir = TestDir::new("replace-with-backup");
+        let path = dir.vault_path();
+        let backup_path = path.with_extension("bak");
+        let first = sample_encrypted("first write passphrase");
+        let second = sample_encrypted("second write passphrase");
+
+        write_vault_bytes(&path, &first).unwrap();
+        assert_eq!(fs::read(&path).unwrap(), first);
+        assert!(!backup_path.exists());
+
+        write_vault_bytes(&path, &second).unwrap();
+
+        assert_eq!(fs::read(&path).unwrap(), second);
+        assert_eq!(fs::read(&backup_path).unwrap(), first);
+        assert!(!path.with_extension("tmp").exists());
+    }
+
+    #[test]
     fn recovery_restores_backup_when_active_vault_is_missing() {
         let dir = TestDir::new("restore-backup");
         let path = dir.vault_path();
