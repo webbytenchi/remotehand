@@ -1045,6 +1045,21 @@ mod tests {
     }
 
     #[test]
+    fn recovery_discards_temp_when_no_active_or_backup_exists() {
+        let dir = TestDir::new("discard-orphan-temp");
+        let path = dir.vault_path();
+        let temporary_path = path.with_extension("tmp");
+
+        fs::write(&temporary_path, b"unfinished temporary data").unwrap();
+
+        recover_interrupted_write(&path).unwrap();
+
+        assert!(!path.exists());
+        assert!(!path.with_extension("bak").exists());
+        assert!(!temporary_path.exists());
+    }
+
+    #[test]
     fn recovery_discards_stale_temp_when_active_vault_exists() {
         let dir = TestDir::new("discard-stale-temp");
         let path = dir.vault_path();
