@@ -630,3 +630,31 @@ The production broker was factored so the host event/UI wrapper and the pending-
 - resolving the host prompt as cancelled resumes the waiting plugin request with the expected cancellation error and removes the pending request.
 
 This intentionally avoids adding a throwaway plugin or starting Marielle Chat implementation early. The UI event wiring itself remains exercised by the existing host prompt implementation and can receive a final manual smoke test before merge if desired.
+
+
+## Encrypted Blob Storage
+
+Post-v1.3.0 core adds generic encrypted binary blob storage for plugin-owned attachments and future large private payloads.
+
+Blob storage is physically separate from the monolithic `data/vault/vault.enc` document. Each logical blob key is converted to an opaque keyed filename, so plugin IDs and logical blob keys are not written directly into filesystem names.
+
+Each blob uses:
+
+- a domain-separated per-blob key derived with HMAC-SHA256 from the unlocked Vault master key;
+- XChaCha20-Poly1305 per 1 MiB chunk with a fresh 24-byte random nonce;
+- authenticated associated data binding Vault ID, caller-scoped Vault reference, chunk index, total size, and format context;
+- an authenticated fixed header containing only format version, chunk size, and total payload size.
+
+Writes are sequential and staged in a temporary file. A blob becomes visible only when every declared byte is present and the temporary file is synced and renamed to its final opaque path. Active uploads are aborted when Vault locks. Stale temporary upload files are cleaned on the next blob-storage initialization.
+
+Blob keys are immutable in the initial API; replacement is delete + create/new key. This avoids non-atomic overwrite semantics.
+
+Current implementation bounds:
+
+- 1 MiB plaintext per chunk;
+- 4 GiB maximum blob payload;
+- Plugin API framing remains 16 MiB, with blob chunks base64-encoded inside bounded requests/responses.
+
+These are core implementation/resource constraints, not product-level Notes attachment defaults.
+
+The initial blob design intentionally does not add passphrase rotation. Because blob path/key derivation is tied to the current Vault master key, any future passphrase-rotation feature must include a coordinated blob rekey/migration design.
