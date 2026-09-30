@@ -290,9 +290,11 @@ fn encrypt_document(
     let nonce = random_bytes::<NONCE_BYTES>();
     let cipher =
         XChaCha20Poly1305::new_from_slice(key).map_err(|_| "vault key is invalid".to_string())?;
+    let nonce_ref = <&XNonce>::try_from(&nonce[..])
+        .map_err(|_| "vault nonce has an invalid length".to_string())?;
     let ciphertext = cipher
         .encrypt(
-            XNonce::from_slice(&nonce),
+            nonce_ref,
             Payload {
                 msg: &plaintext,
                 aad: &aad,
@@ -343,10 +345,12 @@ fn decrypt_document(
     let aad = authenticated_header(&metadata)?;
     let cipher =
         XChaCha20Poly1305::new_from_slice(&key[..]).map_err(|_| "vault key is invalid".to_string())?;
+    let nonce_ref = <&XNonce>::try_from(&nonce[..])
+        .map_err(|_| "vault nonce has an invalid length".to_string())?;
     let plaintext = Zeroizing::new(
         cipher
             .decrypt(
-                XNonce::from_slice(&nonce),
+                nonce_ref,
                 Payload {
                     msg: &ciphertext,
                     aad: &aad,
