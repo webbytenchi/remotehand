@@ -541,16 +541,75 @@ fn save_document(
     write_vault_bytes(&vault_path()?, &encrypted)
 }
 
+fn register_plugin_access_request(
+    state: &VaultState,
+    plugin_id: &str,
+    reason: &str,
+    create: bool,
+) -> Result<
+    (
+        PluginVaultAccessRequest,
+        mpsc::Receiver<Result<(), String>>,
+    ),
+    String,
+> {
+    if reason.trim().is_empty() || reason.len() > 256 {
+        return Err("Vault access reason is missing or too long".to_string());
+    }
+
+    let request_id = encode_bytes(&random_bytes::<16>());
+    let (sender, receiver) = mpsc::channel();
+    state
+        .pending_plugin_access
+        .lock()
+        .map_err(|_| "Vault access request state is unavailable".to_string())?
+        .insert(request_id.clone(), sender);
+
+    Ok((
+        PluginVaultAccessRequest {
+            request_id,
+            plugin_id: plugin_id.to_string(),
+            reason: reason.trim().to_string(),
+            create,
+        },
+        receiver,
+    ))
+}
+
+fn resolve_plugin_access_request(
+    state: &VaultState,
+    request_id: &str,
+    ok: bool,
+    error: Option<String>,
+) -> Result<(), String> {
+    if request_id.is_empty() || request_id.len() > 128 {
+        return Err("invalid Vault access request id".to_string());
+    }
+    let sender = state
+        .pending_plugin_access
+        .lock()
+        .map_err(|_| "Vault access request state is unavailable".to_string())?
+        .remove(request_id)
+        .ok_or_else(|| "Vault access request is no longer active".to_string())?;
+
+    let result = if ok {
+        Ok(())
+    } else {
+        Err(error
+            .filter(|value| !value.is_empty() && value.len() <= 256)
+            .unwrap_or_else(|| "Vault access was cancelled".to_string()))
+    };
+    sender
+        .send(result)
+        .map_err(|_| "Vault access requester is no longer available".to_string())
+}
+
 pub(crate) fn request_plugin_access(
     app: &AppHandle,
     state: &VaultState,
     plugin_id: &str,
     reason: &str,
 ) -> Result<(), String> {
-    if reason.trim().is_empty() || reason.len() > 256 {
-        return Err("Vault access reason is missing or too long".to_string());
-    }
-
     if state
         .unlocked
         .lock()
@@ -562,20 +621,9 @@ pub(crate) fn request_plugin_access(
 
     let path = vault_path()?;
     recover_interrupted_write(&path)?;
-    let request_id = encode_bytes(&random_bytes::<16>());
-    let (sender, receiver) = mpsc::channel();
-    state
-        .pending_plugin_access
-        .lock()
-        .map_err(|_| "Vault access request state is unavailable".to_string())?
-        .insert(request_id.clone(), sender);
-
-    let request = PluginVaultAccessRequest {
-        request_id: request_id.clone(),
-        plugin_id: plugin_id.to_string(),
-        reason: reason.trim().to_string(),
-        create: !path.exists(),
-    };
+    let (request, receiver) =
+        register_plugin_access_request(state, plugin_id, reason, !path.exists())?;
+    let request_id = request.request_id.clone();
 
     if let Err(error) = app.emit("remotehand-vault-plugin-access-request", request) {
         if let Ok(mut pending) = state.pending_plugin_access.lock() {
@@ -610,26 +658,7 @@ pub fn vault_resolve_plugin_access_request<'a>(
     ok: bool,
     error: Option<String>,
 ) -> Result<(), String> {
-    if request_id.is_empty() || request_id.len() > 128 {
-        return Err("invalid Vault access request id".to_string());
-    }
-    let sender = state
-        .pending_plugin_access
-        .lock()
-        .map_err(|_| "Vault access request state is unavailable".to_string())?
-        .remove(&request_id)
-        .ok_or_else(|| "Vault access request is no longer active".to_string())?;
-
-    let result = if ok {
-        Ok(())
-    } else {
-        Err(error
-            .filter(|value| !value.is_empty() && value.len() <= 256)
-            .unwrap_or_else(|| "Vault access was cancelled".to_string()))
-    };
-    sender
-        .send(result)
-        .map_err(|_| "Vault access requester is no longer available".to_string())
+    resolve_plugin_access_request(state.inner(), &request_id, ok, error)
 }
 
 fn validate_passphrase(passphrase: &str) -> Result<(), String> {
@@ -1168,6 +1197,55 @@ mod tests {
 
         assert_eq!(fs::read(&path).unwrap(), active_bytes);
         assert!(!temporary_path.exists());
+    }
+
+    #[test]
+    fn plugin_access_broker_resumes_after_host_unlock_success() {
+        let state = VaultState::default();
+        let (request, receiver) = register_plugin_access_request(
+            &state,
+            "remotehand.test",
+            "Use the configured provider credential.",
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(request.plugin_id, "remotehand.test");
+        assert_eq!(
+            request.reason,
+            "Use the configured provider credential."
+        );
+        assert!(!request.create);
+
+        resolve_plugin_access_request(&state, &request.request_id, true, None).unwrap();
+
+        assert_eq!(
+            receiver.recv_timeout(Duration::from_secs(1)).unwrap(),
+            Ok(())
+        );
+        assert!(state.pending_plugin_access.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn plugin_access_broker_returns_host_cancel_to_waiting_plugin() {
+        let state = VaultState::default();
+        let (request, receiver) = register_plugin_access_request(
+            &state,
+            "remotehand.test",
+            "Store the provider credential.",
+            true,
+        )
+        .unwrap();
+
+        assert!(request.create);
+
+        resolve_plugin_access_request(&state, &request.request_id, false, None).unwrap();
+
+        assert_eq!(
+            receiver.recv_timeout(Duration::from_secs(1)).unwrap(),
+            Err("Vault access was cancelled".to_string())
+        );
+        assert!(state.pending_plugin_access.lock().unwrap().is_empty());
     }
 
     #[test]

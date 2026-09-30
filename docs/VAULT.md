@@ -618,3 +618,15 @@ Dependency tracing shows the `unic-*` warnings arrive through `tauri-utils -> ur
 RUSTSEC-2024-0429 affects `glib::VariantStrIter` iterator implementations in `glib >=0.15,<0.20` and is patched in `glib >=0.20`. The current GTK3/Tauri dependency graph resolves `glib 0.18.5`, so the warning remains tracked rather than silently ignored. This is an upstream/platform dependency issue and must be reconsidered for Linux release readiness or when the Tauri/GTK dependency graph can move to a patched `glib` line.
 
 The unmaintained warnings likewise remain tracked. They do not have direct patched releases within their current package lines and should be eliminated through future upstream dependency migrations rather than ad-hoc Vault-specific replacements.
+
+
+## Test-Only Plugin Access Broker Acceptance — 2026-10-01
+
+The final Vault broker acceptance uses RemoteHand's own test suite rather than a disposable plugin repository.
+
+The production broker was factored so the host event/UI wrapper and the pending-request broker share the same registration/resolution path. Test-only coverage now verifies:
+- a plugin access request is registered with authenticated plugin identity, bounded reason text, and create/unlock intent;
+- resolving the host prompt as successful resumes the waiting plugin request with success and removes the pending request;
+- resolving the host prompt as cancelled resumes the waiting plugin request with the expected cancellation error and removes the pending request.
+
+This intentionally avoids adding a throwaway plugin or starting Marielle Chat implementation early. The UI event wiring itself remains exercised by the existing host prompt implementation and can receive a final manual smoke test before merge if desired.
