@@ -201,3 +201,28 @@ pub fn clear_workspace() -> Result<(), String> {
     }
     Ok(())
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn saved_connection_serialization_never_contains_password_material() {
+        let connection = SavedConnection {
+            id: "server-1".to_string(),
+            name: "Server 1".to_string(),
+            host: "192.0.2.10".to_string(),
+            port: 22,
+            user: "admin".to_string(),
+            credential_ref: Some("core:sftp/server-1/password".to_string()),
+        };
+
+        let serialized = serde_json::to_string(&connection).unwrap();
+
+        assert!(serialized.contains(""credentialRef""));
+        assert!(serialized.contains("core:sftp/server-1/password"));
+        assert!(!serialized.to_ascii_lowercase().contains(""password""));
+        assert!(!serialized.to_ascii_lowercase().contains(""secret""));
+    }
+}

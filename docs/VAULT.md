@@ -582,3 +582,20 @@ While unlocked, the current implementation retains the decrypted logical Vault d
 ### Rollback limitation
 
 AEAD authenticates the contents and security-relevant metadata of each Vault file, but v1.3.0 does not provide monotonic anti-rollback state. An attacker able to replace both `vault.enc` and `vault.bak` with older, previously valid encrypted copies may roll the Vault back to that older authenticated state without forging ciphertext.
+
+
+## Security Readiness Checkpoint — 2026-10-01
+
+A release-readiness review of the Vault integration now includes the following controls:
+
+- host/core Vault logging was inspected for passphrase, secret, credential-reference, and Vault-reference leakage; current Vault security logs use fixed event text, authenticated plugin identity, fixed action categories, and outcomes rather than secret values or entry references;
+- saved SFTP connection state contains an opaque `credentialRef` only; an automated serialization regression test rejects the introduction of JSON fields named `password` or `secret`;
+- `SECURITY.md` has been updated from the obsolete age/`credentials.enc`/plugin-`vault.unlock` description to the implemented Argon2id + XChaCha20-Poly1305 `vault.enc` model and host-owned plugin access request flow;
+- the resolved lockfile currently contains `russh 0.62.2`, `russh-cryptovec 0.62.0`, `zip 2.4.2`, `argon2 0.5.3` for Vault plus another transitive Argon2 version, and `chacha20poly1305 0.11.0`;
+- targeted RustSec review confirmed the known 2026 `russh` allocation advisory is patched from `russh >=0.60.3`, while RemoteHand resolves 0.62.2;
+- targeted RustSec review confirmed the known `zip` extraction advisory is patched from `zip >=2.3.0`, while RemoteHand resolves 2.4.2;
+- RustSec notes the historical ChaCha20 counter-overflow advisory does not affect users of the `chacha20poly1305` crate.
+
+This targeted review is not a substitute for scanning the complete dependency graph. Before merge/release acceptance, run `cargo audit` against `src-tauri/Cargo.lock` and resolve or explicitly evaluate any reported advisory.
+
+The final manual acceptance slice should also exercise the plugin-owned `vault.request_access` flow end to end: locked Vault -> plugin request -> host-owned prompt -> unlock -> plugin request resumes successfully, plus user cancellation returning an error without exposing the passphrase to the plugin.
