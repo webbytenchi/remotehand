@@ -2,7 +2,7 @@ use chacha20poly1305::{
     aead::{Aead, KeyInit, Payload},
     XChaCha20Poly1305, XNonce,
 };
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use rand_core::{OsRng, RngCore};
 use serde::Serialize;
 use sha2::Sha256;
@@ -70,7 +70,7 @@ fn random_hex(bytes: usize) -> String {
 }
 
 fn hmac_bytes(key: &[u8], parts: &[&[u8]]) -> Result<[u8; 32], String> {
-    let mut mac = <HmacSha256 as Mac>::new_from_slice(key)
+    let mut mac = HmacSha256::new_from_slice(key)
         .map_err(|_| "failed to initialize Vault blob key derivation".to_string())?;
     for part in parts {
         mac.update(part);
