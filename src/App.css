@@ -2604,3 +2604,61 @@ background: transparent;
 .sftp-download-destination:hover {
   opacity: 0.8;
 }
+
+/* Host-owned Vault prompt */
+.app-modal:has(.vault-prompt) {
+  width: min(460px, 100%);
+}
+.vault-prompt {
+  display: grid;
+  gap: 12px;
+}
+.vault-prompt p {
+  margin: 0;
+  color: #c8d1dc;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.vault-prompt .vault-prompt-note {
+  color: #7f8ca0;
+  font-size: 12px;
+}
+.vault-prompt label {
+  display: grid;
+  gap: 7px;
+  color: #aeb8c6;
+  font-size: 12px;
+  font-weight: 600;
+}
+.vault-prompt input {
+  width: 100%;
+  border: 1px solid #2b3747;
+  border-radius: 7px;
+  background: #0d141d;
+  color: #d2dae5;
+  padding: 9px 10px;
+  outline: none;
+}
+.vault-prompt input:focus {
+  border-color: var(--accent);
+}
+.vault-prompt-error {
+  border: 1px solid #7c3d44;
+  border-radius: 7px;
+  background: rgb(124 61 68 / 0.14);
+  color: #efb1b1;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+html[data-theme="light"] .vault-prompt p {
+  color: #29313d;
+}
+html[data-theme="light"] .vault-prompt .vault-prompt-note,
+html[data-theme="light"] .vault-prompt label {
+  color: #647184;
+}
+html[data-theme="light"] .vault-prompt input {
+  border-color: #c7ced8;
+  background: #ffffff;
+  color: #29313d;
+}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
-import { listen } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import {
 DockviewDefaultTab,
 DockviewReact,
@@ -21,6 +21,12 @@ import { PluginManager } from "./PluginManager";
 import { PluginPanel, sendPluginPanelContext, type PluginPanelParams } from "./PluginPanel";
 import { remoteHandFunctionKeyDisposition } from "./functionKeys";
 import { shouldSuppressWebViewShortcut } from "./browserShortcuts";
+import {
+VAULT_PROMPT_REQUEST_EVENT,
+VAULT_PROMPT_RESULT_EVENT,
+requestVaultAccess,
+type VaultPromptRequest,
+} from "./vaultPrompt";
 import {
   EMPTY_UI_CONTRIBUTION_LAYOUT,
   contributionOrderIndex,
@@ -305,7 +311,6 @@ const [host, setHost] = useState("");
 const [port, setPort] = useState("22");
 const [user, setUser] = useState("");
 const [password, setPassword] = useState("");
-const [vaultPassphrase, setVaultPassphrase] = useState("");
 const [saving, setSaving] = useState(false);
 const [pendingRemove, setPendingRemove] = useState<Connection | null>(null);
 const [notice, setNotice] = useState<{ title: string; message: string } | null>(null);
@@ -338,7 +343,6 @@ setHost("");
 setPort("22");
 setUser("");
 setPassword("");
-setVaultPassphrase("");
 setShowForm(false);
 };
 const editConnection = (connection: Connection) => {
@@ -348,7 +352,6 @@ setHost(connection.host);
 setPort(String(connection.port));
 setUser(connection.user);
 setPassword("");
-setVaultPassphrase("");
 setShowForm(true);
 };
 const saveConnection = async () => {
@@ -374,19 +377,7 @@ if (password) {
 if (!isTauri()) {
 throw new Error("Password storage is available in the RemoteHand desktop app.");
 }
-const status = await invoke<{ exists: boolean; unlocked: boolean }>("vault_status");
-if (!status.unlocked) {
-if (!vaultPassphrase) {
-throw new Error(status.exists
-? "Vault passphrase is required to unlock the credential vault."
-: "Vault passphrase is required to create the credential vault.");
-}
-if (status.exists) {
-await invoke("vault_unlock", { passphrase: vaultPassphrase });
-} else {
-await invoke("vault_initialize", { passphrase: vaultPassphrase });
-}
-}
+await requestVaultAccess("Save the password for " + trimmedName + ".");
 credentialRef = "core:sftp/" + id + "/password";
 await invoke("vault_store_secret", { credentialRef, secret: password });
 }
@@ -464,7 +455,6 @@ setShowForm(true);
 <label><span>Port</span><input value={port} onChange={(event) => setPort(event.target.value)} inputMode="numeric" placeholder="22" /></label>
 <label><span>User</span><input value={user} onChange={(event) => setUser(event.target.value)} placeholder="username" /></label>
 <label><span>Password (optional)</span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder={editingId ? "Leave blank to keep current password" : "Saved securely in the credential vault"} autoComplete="new-password" /></label>
-{password ? <label><span>Vault passphrase</span><input type="password" value={vaultPassphrase} onChange={(event) => setVaultPassphrase(event.target.value)} placeholder="Required if the vault is locked or new" autoComplete="current-password" /></label> : null}
 <button type="button" className="primary-button" onClick={() => void saveConnection()} disabled={saving}>
 {saving ? "Saving…" : editingId ? "Save changes" : "Save connection"}
 </button>
@@ -723,6 +713,11 @@ const [globalShortcutCapturing, setGlobalShortcutCapturing] = useState(false);
 const [globalShortcutError, setGlobalShortcutError] = useState("");
 const [globalShortcutApplying, setGlobalShortcutApplying] = useState(false);
 const [settingsOpen, setSettingsOpen] = useState(false);
+const [vaultPrompt, setVaultPrompt] = useState<VaultPromptRequest | null>(null);
+const vaultPromptRef = useRef<VaultPromptRequest | null>(null);
+const [vaultPromptPassphrase, setVaultPromptPassphrase] = useState("");
+const [vaultPromptError, setVaultPromptError] = useState("");
+const [vaultPromptBusy, setVaultPromptBusy] = useState(false);
 const [settingsTab, setSettingsTab] = useState<"appearance" | "layout" | "startup" | "plugins" | "about" | "papa">("appearance");
 const closeSettings = useCallback(() => {
 setGlobalShortcutDraft(settings.globalShortcut);
@@ -1569,6 +1564,80 @@ return () => window.clearTimeout(timer);
 useEffect(() => {
 if (!isTauri()) return;
 let cancelled = false;
+let unlisten: (() => void) | undefined;
+void listen<VaultPromptRequest>(VAULT_PROMPT_REQUEST_EVENT, (event) => {
+const request = event.payload;
+if (vaultPromptRef.current) {
+void emit(VAULT_PROMPT_RESULT_EVENT, {
+requestId: request.requestId,
+ok: false,
+error: "Another Vault unlock request is already active.",
+});
+return;
+}
+vaultPromptRef.current = request;
+setVaultPrompt(request);
+setVaultPromptPassphrase("");
+setVaultPromptError("");
+setVaultPromptBusy(false);
+void invoke("focus_main_window").catch((error) =>
+console.error("Failed to focus RemoteHand for Vault unlock", error),
+);
+}).then((dispose) => {
+if (cancelled) dispose();
+else unlisten = dispose;
+});
+return () => {
+cancelled = true;
+unlisten?.();
+};
+}, []);
+
+const finishVaultPrompt = useCallback(async (ok: boolean, error?: string) => {
+const request = vaultPromptRef.current;
+if (!request) return;
+vaultPromptRef.current = null;
+setVaultPrompt(null);
+setVaultPromptPassphrase("");
+setVaultPromptError("");
+setVaultPromptBusy(false);
+await emit(VAULT_PROMPT_RESULT_EVENT, {
+requestId: request.requestId,
+ok,
+...(error ? { error } : {}),
+});
+}, []);
+
+const confirmVaultPrompt = useCallback(async () => {
+const request = vaultPromptRef.current;
+if (!request || vaultPromptBusy) return;
+if (!vaultPromptPassphrase) {
+setVaultPromptError("Enter the Vault passphrase.");
+return;
+}
+setVaultPromptBusy(true);
+setVaultPromptError("");
+try {
+if (request.create) {
+await invoke("vault_initialize", { passphrase: vaultPromptPassphrase });
+} else {
+await invoke("vault_unlock", { passphrase: vaultPromptPassphrase });
+}
+await finishVaultPrompt(true);
+} catch (error) {
+setVaultPromptError(String(error));
+setVaultPromptBusy(false);
+}
+}, [finishVaultPrompt, vaultPromptBusy, vaultPromptPassphrase]);
+
+const cancelVaultPrompt = useCallback(() => {
+if (vaultPromptBusy) return;
+void finishVaultPrompt(false, "Vault access was cancelled.");
+}, [finishVaultPrompt, vaultPromptBusy]);
+
+useEffect(() => {
+if (!isTauri()) return;
+let cancelled = false;
 const disposables: Array<() => void> = [];
 const bind = (eventName: string, handler: () => void) => {
 void listen(eventName, handler).then((dispose) => {
@@ -2017,6 +2086,42 @@ const plugin = plugins.find((item) => item.manifest.id === pluginId);
 if (plugin) openPluginPanel(plugin, panelId, context);
 }}
 />
+<AppModal
+open={vaultPrompt !== null}
+title={vaultPrompt?.create ? "Create RemoteHand Vault" : "Unlock RemoteHand Vault"}
+className="vault-prompt-modal"
+confirmLabel={vaultPromptBusy ? (vaultPrompt?.create ? "Creating…" : "Unlocking…") : (vaultPrompt?.create ? "Create Vault" : "Unlock")}
+cancelLabel="Cancel"
+onConfirm={() => { void confirmVaultPrompt(); }}
+onCancel={cancelVaultPrompt}
+focusActions={false}
+restoreFocus
+elevated
+>
+<div className="vault-prompt">
+<p>{vaultPrompt?.reason}</p>
+{vaultPrompt?.create ? (
+<p className="vault-prompt-note">Choose a passphrase for this RemoteHand Vault. RemoteHand does not store the passphrase and cannot recover it for you.</p>
+) : (
+<p className="vault-prompt-note">Enter your RemoteHand Vault passphrase to continue.</p>
+)}
+<label>
+<span>Vault passphrase</span>
+<input
+type="password"
+value={vaultPromptPassphrase}
+onChange={(event) => setVaultPromptPassphrase(event.target.value)}
+onKeyDown={(event) => {
+if (event.key === "Enter") void confirmVaultPrompt();
+}}
+autoComplete={vaultPrompt?.create ? "new-password" : "current-password"}
+autoFocus
+disabled={vaultPromptBusy}
+/>
+</label>
+{vaultPromptError ? <div className="vault-prompt-error">{vaultPromptError}</div> : null}
+</div>
+</AppModal>
 <AppModal
 open={settingsOpen}
 title="Settings"

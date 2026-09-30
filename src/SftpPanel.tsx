@@ -4,6 +4,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { IDockviewPanelProps } from "dockview-react";
 import { AppModal } from "./AppModal";
+import { requestVaultAccess } from "./vaultPrompt";
 type SftpConnection = {
 host: string;
 port: number;
@@ -105,9 +106,6 @@ const [requestedPath, setRequestedPath] = useState(".");
 const [loading, setLoading] = useState(false);
 const [pathInput, setPathInput] = useState(".");
 const [error, setError] = useState("");
-const [needsVaultUnlock, setNeedsVaultUnlock] = useState(false);
-const [vaultPassphrase, setVaultPassphrase] = useState("");
-const [unlocking, setUnlocking] = useState(false);
 const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
 const [lastSelectedPath, setLastSelectedPath] = useState<string | null>(null);
 const [transferState, setTransferState] = useState<TransferState>("idle");
@@ -132,6 +130,9 @@ return;
 setLoading(true);
 setError("");
 try {
+if (connection.credentialRef) {
+await requestVaultAccess("Access the saved credential for " + connection.name + ".");
+}
 const next = await invoke<SftpListing>(
 useNativeSftp ? "sftp_native_list" : "sftp_list",
 {
@@ -148,36 +149,14 @@ setRequestedPath(next.path);
 setPathInput(next.path);
 setSelectedPaths([]);
 setLastSelectedPath(null);
-setNeedsVaultUnlock(false);
 } catch (reason) {
-const message = String(reason);
-if (connection.credentialRef && message.includes("credential vault is locked")) {
-setNeedsVaultUnlock(true);
-setError("Credential vault is locked. Enter the vault passphrase to continue.");
-} else {
-setError(message);
-}
+setError(String(reason));
 } finally {
 setLoading(false);
 }
 },
 [connection, nativeSessionId, useNativeSftp],
 );
-const unlockVault = useCallback(async () => {
-if (!vaultPassphrase || unlocking) return;
-setUnlocking(true);
-setError("");
-try {
-await invoke("vault_unlock", { passphrase: vaultPassphrase });
-setVaultPassphrase("");
-setNeedsVaultUnlock(false);
-await loadPath(requestedPath);
-} catch (reason) {
-setError(String(reason));
-} finally {
-setUnlocking(false);
-}
-}, [loadPath, requestedPath, unlocking, vaultPassphrase]);
 useEffect(() => {
 void loadPath(".");
 }, [loadPath]);
@@ -264,7 +243,7 @@ setTransferStatus("");
 setError("");
 }
 async function chooseUploadFiles() {
-if (!listing || needsVaultUnlock || transferring || loading) return;
+if (!listing || transferring || loading) return;
 setError("");
 try {
 const uploadPaths = await invoke<string[]>("sftp_pick_upload_files");
@@ -432,7 +411,7 @@ setModalValue("");
 setModalError("");
 }
 function createFolder() {
-if (!listing || needsVaultUnlock || transferring || loading) return;
+if (!listing || transferring || loading) return;
 setModalValue("");
 setModalError("");
 setActionModal("new-folder");
@@ -675,7 +654,7 @@ const deleteDescription = selectedEntries.length === 1
 : String(selectedEntries.length) + " selected items";
 
 return (
-<section className={"panel-content sftp-panel" + (needsVaultUnlock ? " sftp-panel-unlock" : "")}>
+<section className="panel-content sftp-panel">
 <div className="sftp-heading">
 <div>
 <h2>{connection.name}</h2>
@@ -684,12 +663,12 @@ return (
 </span>
 </div>
 </div>
-{listing && !needsVaultUnlock ? (
+{listing ? (
 <div className="sftp-action-toolbar" role="toolbar" aria-label="SFTP file actions">
 <button className="sftp-icon-action" type="button" title="Parent" aria-label="Parent" onClick={() => void loadPath(parentPath(currentPath))} disabled={!canGoUp || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m0 0 6-6m-6 6 6 6"/></svg></button>
 <button className="sftp-icon-action" type="button" title="Refresh" aria-label="Refresh" onClick={() => void loadPath(currentPath)} disabled={loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5M4 18v-5h5M6.2 9a7 7 0 0 1 11.5-2.3L20 11M4 13l2.3 4.3A7 7 0 0 0 17.8 15"/></svg></button>
 <span className="sftp-toolbar-separator" aria-hidden="true" />
-<button className="sftp-icon-action" type="button" title="Upload" aria-label="Upload" onClick={() => void chooseUploadFiles()} disabled={!listing || needsVaultUnlock || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0-5 5m5-5 5 5M5 20h14"/></svg></button>
+<button className="sftp-icon-action" type="button" title="Upload" aria-label="Upload" onClick={() => void chooseUploadFiles()} disabled={!listing || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0-5 5m5-5 5 5M5 20h14"/></svg></button>
 <button className="sftp-icon-action" type="button" title="Download" aria-label="Download" onClick={() => void downloadFiles()} disabled={selectedEntries.length === 0 || loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12m0 0 5-5m-5 5-5-5M5 20h14"/></svg></button>
 <span className="sftp-toolbar-separator" aria-hidden="true" />
 <button className="sftp-icon-action" type="button" title="New Folder" aria-label="New Folder" onClick={() => void createFolder()} disabled={loading || transferring}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3zM12 12v5m-2.5-2.5h5"/></svg></button>
@@ -769,7 +748,7 @@ aria-valuenow={Math.round(progressPercent)}
 );
 })() : null}
 
-{listing && !needsVaultUnlock ? (
+{listing ? (
 <input
 className="sftp-path"
 type="text"
@@ -786,32 +765,6 @@ title="Type a remote path and press Enter"
 />
 ) : null}
 
-{needsVaultUnlock ? (
-<div className="sftp-unlock">
-<label>
-<span>Vault passphrase</span>
-<input
-type="password"
-value={vaultPassphrase}
-onChange={(event) => setVaultPassphrase(event.target.value)}
-onKeyDown={(event) => {
-if (event.key === "Enter") void unlockVault();
-}}
-autoComplete="current-password"
-autoFocus
-/>
-</label>
-<button
-type="button"
-              className="sftp-unlock-button"
-onClick={() => void unlockVault()}
-disabled={!vaultPassphrase || unlocking}
->
-{unlocking ? "Unlocking…" : "Unlock"}
-</button>
-</div>
-) : null}
-
 {error ? (
 <div className="sftp-error sftp-message">
 <span>{error}</span>
@@ -824,7 +777,7 @@ disabled={!vaultPassphrase || unlocking}
 
 {loading ? <div className="sftp-state">Loading remote directory…</div> : null}
 
-{!loading && !error && !needsVaultUnlock && !unlocking ? (
+{!loading && !error ? (
 <div className="sftp-list" role="table" aria-label="Remote files">
 <div className="sftp-row sftp-row-header" role="row">
 <label className="sftp-checkbox-cell" title="Select all items"><input type="checkbox" checked={Boolean(listing?.entries.length) && selectedPaths.length === listing?.entries.length} onChange={toggleAllEntries} disabled={transferring || !listing?.entries.length} aria-label="Select all remote items"/></label>
@@ -880,7 +833,7 @@ aria-label="Dismiss transfer status"
 </div>
 ) : null}
 
-{selectedEntries.length > 0 && listing && !needsVaultUnlock ? (
+{selectedEntries.length > 0 && listing ? (
 <div className="sftp-selected-summary">
 <span>Selected remote items</span>
 <strong>
