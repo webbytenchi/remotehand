@@ -14,7 +14,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicU64, Ordering},
-        Arc, Mutex,
+        mpsc, Arc, Mutex,
     },
     thread,
     time::{Duration, Instant},
@@ -44,6 +44,7 @@ const MAX_DOCUMENT_BYTES: usize = 16 * 1024 * 1024;
 pub struct VaultState {
     unlocked: Arc<Mutex<Option<UnlockedVault>>>,
     auto_lock_minutes: Arc<AtomicU64>,
+    pending_plugin_access: Arc<Mutex<BTreeMap<String, mpsc::Sender<Result<(), String>>>>>,
 }
 
 impl Default for VaultState {
@@ -51,6 +52,7 @@ impl Default for VaultState {
         Self {
             unlocked: Arc::new(Mutex::new(None)),
             auto_lock_minutes: Arc::new(AtomicU64::new(15)),
+            pending_plugin_access: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 }
@@ -174,6 +176,15 @@ impl Drop for VaultDocument {
 pub struct VaultStatus {
     exists: bool,
     unlocked: bool,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PluginVaultAccessRequest {
+    request_id: String,
+    plugin_id: String,
+    reason: String,
+    create: bool,
 }
 
 fn vault_path() -> Result<PathBuf, String> {
@@ -524,6 +535,97 @@ fn save_document(
 ) -> Result<(), String> {
     let encrypted = encrypt_document(key, metadata, document)?;
     write_vault_bytes(&vault_path()?, &encrypted)
+}
+
+pub(crate) fn request_plugin_access(
+    app: &AppHandle,
+    state: &VaultState,
+    plugin_id: &str,
+    reason: &str,
+) -> Result<(), String> {
+    if reason.trim().is_empty() || reason.len() > 256 {
+        return Err("Vault access reason is missing or too long".to_string());
+    }
+
+    if state
+        .unlocked
+        .lock()
+        .map_err(|_| "vault state is unavailable".to_string())?
+        .is_some()
+    {
+        return Ok(());
+    }
+
+    let path = vault_path()?;
+    recover_interrupted_write(&path)?;
+    let request_id = encode_bytes(&random_bytes::<16>());
+    let (sender, receiver) = mpsc::channel();
+    state
+        .pending_plugin_access
+        .lock()
+        .map_err(|_| "Vault access request state is unavailable".to_string())?
+        .insert(request_id.clone(), sender);
+
+    let request = PluginVaultAccessRequest {
+        request_id: request_id.clone(),
+        plugin_id: plugin_id.to_string(),
+        reason: reason.trim().to_string(),
+        create: !path.exists(),
+    };
+
+    if let Err(error) = app.emit("remotehand-vault-plugin-access-request", request) {
+        if let Ok(mut pending) = state.pending_plugin_access.lock() {
+            pending.remove(&request_id);
+        }
+        return Err(format!("failed to request Vault access: {error}"));
+    }
+
+    log::info!("Vault audit: plugin access requested for {plugin_id}");
+    match receiver.recv_timeout(Duration::from_secs(300)) {
+        Ok(result) => result,
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            if let Ok(mut pending) = state.pending_plugin_access.lock() {
+                pending.remove(&request_id);
+            }
+            log::warn!("Vault audit: plugin access request timed out for {plugin_id}");
+            Err("Vault access request timed out".to_string())
+        }
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            if let Ok(mut pending) = state.pending_plugin_access.lock() {
+                pending.remove(&request_id);
+            }
+            Err("Vault access request was interrupted".to_string())
+        }
+    }
+}
+
+#[tauri::command]
+pub fn vault_resolve_plugin_access_request<'a>(
+    state: State<'a, VaultState>,
+    request_id: String,
+    ok: bool,
+    error: Option<String>,
+) -> Result<(), String> {
+    if request_id.is_empty() || request_id.len() > 128 {
+        return Err("invalid Vault access request id".to_string());
+    }
+    let sender = state
+        .pending_plugin_access
+        .lock()
+        .map_err(|_| "Vault access request state is unavailable".to_string())?
+        .remove(&request_id)
+        .ok_or_else(|| "Vault access request is no longer active".to_string())?;
+
+    let result = if ok {
+        Ok(())
+    } else {
+        Err(error
+            .filter(|value| !value.is_empty() && value.len() <= 256)
+            .unwrap_or_else(|| "Vault access was cancelled".to_string()))
+    };
+    sender
+        .send(result)
+        .map_err(|_| "Vault access requester is no longer available".to_string())
 }
 
 fn validate_passphrase(passphrase: &str) -> Result<(), String> {
@@ -1073,6 +1175,14 @@ mod tests {
 
         assert_eq!(fs::read(&path).unwrap(), active_bytes);
         assert!(!temporary_path.exists());
+    }
+
+    #[test]
+    fn plugin_access_request_ids_and_reasons_are_bounded() {
+        assert!("reason".len() <= 256);
+        let request_id = encode_bytes(&random_bytes::<16>());
+        assert!(!request_id.is_empty());
+        assert!(request_id.len() <= 128);
     }
 
     #[test]
