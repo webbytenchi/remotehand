@@ -461,7 +461,6 @@ fn validate_plugin_request(permissions: &[String], request: &PluginRequest) -> R
     }
     match request.method.as_str() {
         "credentials.use" => {
-            log_deprecated_vault_api(plugin_id, &request.method);
             if !permission_granted(permissions, "credentials.use") {
                 return Err("plugin lacks credentials.use permission".to_string());
             }
@@ -562,6 +561,7 @@ fn handle_plugin_request(
     }
     match request.method.as_str() {
         "credentials.use" => {
+            log_deprecated_vault_api(plugin_id, &request.method);
             let params: CredentialUseParams = serde_json::from_value(request.params.clone())
                 .map_err(|error| format!("invalid credentials.use params: {error}"))?;
             validate_plugin_credential_ref(plugin_id, &params.credential_ref)?;
