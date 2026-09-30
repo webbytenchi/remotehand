@@ -718,7 +718,10 @@ const vaultPromptRef = useRef<VaultPromptRequest | null>(null);
 const [vaultPromptPassphrase, setVaultPromptPassphrase] = useState("");
 const [vaultPromptError, setVaultPromptError] = useState("");
 const [vaultPromptBusy, setVaultPromptBusy] = useState(false);
-const [settingsTab, setSettingsTab] = useState<"appearance" | "layout" | "startup" | "plugins" | "about" | "papa">("appearance");
+const [settingsTab, setSettingsTab] = useState<"appearance" | "layout" | "startup" | "vault" | "plugins" | "about" | "papa">("appearance");
+const [vaultStatus, setVaultStatus] = useState<{ exists: boolean; unlocked: boolean } | null>(null);
+const [vaultStatusError, setVaultStatusError] = useState("");
+const [vaultActionBusy, setVaultActionBusy] = useState(false);
 const closeSettings = useCallback(() => {
 setGlobalShortcutDraft(settings.globalShortcut);
 setGlobalShortcutCapturing(false);
@@ -1417,6 +1420,54 @@ setGlobalShortcutDraft(parts.join("+"));
 setGlobalShortcutCapturing(false);
 setGlobalShortcutError("");
 }, [settings.globalShortcut]);
+
+const refreshVaultStatus = useCallback(async () => {
+if (!isTauri()) {
+setVaultStatus({ exists: false, unlocked: false });
+setVaultStatusError("");
+return;
+}
+try {
+const status = await invoke<{ exists: boolean; unlocked: boolean }>("vault_status");
+setVaultStatus(status);
+setVaultStatusError("");
+} catch (error) {
+setVaultStatusError(String(error));
+}
+}, []);
+
+const unlockVaultFromSettings = useCallback(async () => {
+if (vaultActionBusy) return;
+setVaultActionBusy(true);
+setVaultStatusError("");
+try {
+await requestVaultAccess("Unlock the RemoteHand Vault from Settings.");
+await refreshVaultStatus();
+} catch (error) {
+setVaultStatusError(String(error));
+} finally {
+setVaultActionBusy(false);
+}
+}, [refreshVaultStatus, vaultActionBusy]);
+
+const lockVaultFromSettings = useCallback(async () => {
+if (!isTauri() || vaultActionBusy) return;
+setVaultActionBusy(true);
+setVaultStatusError("");
+try {
+await invoke("vault_lock");
+await refreshVaultStatus();
+} catch (error) {
+setVaultStatusError(String(error));
+} finally {
+setVaultActionBusy(false);
+}
+}, [refreshVaultStatus, vaultActionBusy]);
+
+useEffect(() => {
+if (!settingsOpen || settingsTab !== "vault") return;
+void refreshVaultStatus();
+}, [refreshVaultStatus, settingsOpen, settingsTab]);
 
 const applyGlobalShortcut = useCallback(async (enabled: boolean, shortcut: string) => {
 const trimmedShortcut = shortcut.trim();
@@ -2136,6 +2187,7 @@ tabs={<div className="settings-tabs" role="tablist" aria-label="Settings section
 <button type="button" role="tab" aria-selected={settingsTab === "appearance"} className={settingsTab === "appearance" ? "active" : ""} onClick={() => setSettingsTab("appearance")}>Appearance</button>
 <button type="button" role="tab" aria-selected={settingsTab === "layout"} className={settingsTab === "layout" ? "active" : ""} onClick={() => setSettingsTab("layout")}>Interface</button>
 <button type="button" role="tab" aria-selected={settingsTab === "startup"} className={settingsTab === "startup" ? "active" : ""} onClick={() => setSettingsTab("startup")}>Startup &amp; Tray</button>
+<button type="button" role="tab" aria-selected={settingsTab === "vault"} className={settingsTab === "vault" ? "active" : ""} onClick={() => setSettingsTab("vault")}>Vault</button>
 <button type="button" role="tab" aria-selected={settingsTab === "plugins"} className={settingsTab === "plugins" ? "active" : ""} onClick={() => setSettingsTab("plugins")}>Plugins</button>
 <button type="button" role="tab" aria-selected={settingsTab === "about"} className={settingsTab === "about" ? "active" : ""} onClick={() => setSettingsTab("about")}>About</button>
 {papaTabUnlocked ? <span className="papa-tab-reveal"><button type="button" role="tab" aria-selected={settingsTab === "papa"} className={settingsTab === "papa" ? "active" : ""} onClick={() => { setSettingsTab("papa"); startPapaAudio(); }}>Papa</button>{papaConfettiActive ? <span className="papa-heart-confetti" aria-hidden="true">{Array.from({ length: 10 }, (_, index) => <span key={index}>♥</span>)}</span> : null}</span> : null}
@@ -2283,6 +2335,45 @@ onClick={() => void applyGlobalShortcut(settings.globalShortcutEnabled, globalSh
 </div>
 <small style={{ color: "#718094", lineHeight: 1.4 }}>Click the field, then press the shortcut you want. Press Esc to cancel. Default: Ctrl + Shift + Space.</small>
 {globalShortcutError ? <small style={{ color: "var(--danger, #e25b5b)", lineHeight: 1.4 }}>{globalShortcutError}</small> : null}
+</div>
+</div>
+) : settingsTab === "vault" ? (
+<div className="settings-tab-content">
+<div className="settings-section-heading">
+<strong>RemoteHand Vault</strong>
+<span>Manage the core-owned encrypted Vault used by RemoteHand and authorized plugins.</span>
+</div>
+<div style={{ display: "grid", gap: 12, marginTop: 14 }}>
+<div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 12, alignItems: "center", padding: "12px 13px", border: "1px solid var(--border)", borderRadius: 8 }}>
+<div style={{ display: "grid", gap: 4 }}>
+<strong>Status</strong>
+<span className="app-modal-muted">
+{vaultStatus === null ? "Checking Vault status…" : !vaultStatus.exists ? "Not initialized" : vaultStatus.unlocked ? "Unlocked" : "Locked"}
+</span>
+</div>
+{vaultStatus?.exists ? (
+vaultStatus.unlocked ? (
+<button type="button" className="settings-reset" disabled={vaultActionBusy} onClick={() => void lockVaultFromSettings()}>
+{vaultActionBusy ? "Locking…" : "Lock Vault"}
+</button>
+) : (
+<button type="button" className="settings-reset" disabled={vaultActionBusy} onClick={() => void unlockVaultFromSettings()}>
+{vaultActionBusy ? "Unlocking…" : "Unlock Vault"}
+</button>
+)
+) : null}
+</div>
+<div className="plugin-security-note">
+<strong>Security</strong>
+<span>The Vault passphrase is entered only in RemoteHand's host-owned prompt. Plugins never receive the passphrase or the Vault master key.</span>
+</div>
+{!vaultStatus?.exists ? (
+<div className="plugin-security-note">
+<strong>Initialization</strong>
+<span>The Vault is created automatically the first time RemoteHand needs to save protected data.</span>
+</div>
+) : null}
+{vaultStatusError ? <div className="plugin-error">{vaultStatusError}</div> : null}
 </div>
 </div>
 ) : settingsTab === "layout" ? (
