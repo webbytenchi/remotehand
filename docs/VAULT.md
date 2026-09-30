@@ -599,3 +599,22 @@ A release-readiness review of the Vault integration now includes the following c
 This targeted review is not a substitute for scanning the complete dependency graph. Before merge/release acceptance, run `cargo audit` against `src-tauri/Cargo.lock` and resolve or explicitly evaluate any reported advisory.
 
 The final manual acceptance slice should also exercise the plugin-owned `vault.request_access` flow end to end: locked Vault -> plugin request -> host-owned prompt -> unlock -> plugin request resumes successfully, plus user cancellation returning an error without exposing the passphrase to the plugin.
+
+
+### Full Lockfile Audit Result — 2026-10-01
+
+The first full `cargo audit --file .\src-tauri\Cargo.lock` run completed against 658 resolved crate dependencies and reported **no vulnerability failures**. It reported seven allowed warnings:
+
+- `proc-macro-error 1.0.4`: unmaintained;
+- `unic-char-property 0.9.0`: unmaintained;
+- `unic-char-range 0.9.0`: unmaintained;
+- `unic-common 0.9.0`: unmaintained;
+- `unic-ucd-ident 0.9.0`: unmaintained;
+- `unic-ucd-version 0.9.0`: unmaintained;
+- `glib 0.18.5`: RustSec unsoundness warning RUSTSEC-2024-0429.
+
+Dependency tracing shows the `unic-*` warnings arrive through `tauri-utils -> urlpattern`. The `proc-macro-error` and `glib` warnings arrive through the GTK/Tauri desktop dependency graph (including GTK3-related dependencies used for non-Windows desktop targets), not through the Vault cryptography stack.
+
+RUSTSEC-2024-0429 affects `glib::VariantStrIter` iterator implementations in `glib >=0.15,<0.20` and is patched in `glib >=0.20`. The current GTK3/Tauri dependency graph resolves `glib 0.18.5`, so the warning remains tracked rather than silently ignored. This is an upstream/platform dependency issue and must be reconsidered for Linux release readiness or when the Tauri/GTK dependency graph can move to a patched `glib` line.
+
+The unmaintained warnings likewise remain tracked. They do not have direct patched releases within their current package lines and should be eliminated through future upstream dependency migrations rather than ad-hoc Vault-specific replacements.

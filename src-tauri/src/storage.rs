@@ -219,10 +219,14 @@ mod tests {
         };
 
         let serialized = serde_json::to_string(&connection).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&serialized).unwrap();
+        let object = value.as_object().unwrap();
 
-        assert!(serialized.contains(""credentialRef""));
-        assert!(serialized.contains("core:sftp/server-1/password"));
-        assert!(!serialized.to_ascii_lowercase().contains(""password""));
-        assert!(!serialized.to_ascii_lowercase().contains(""secret""));
+        assert_eq!(
+            object.get("credentialRef").and_then(serde_json::Value::as_str),
+            Some("core:sftp/server-1/password")
+        );
+        assert!(!object.contains_key("password"));
+        assert!(!object.contains_key("secret"));
     }
 }
