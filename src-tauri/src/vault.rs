@@ -289,11 +289,108 @@ fn decrypt_document(
     Ok((metadata, key, document))
 }
 
+fn sync_file(path: &Path) -> Result<(), String> {
+    OpenOptions::new()
+        .read(true)
+        .open(path)
+        .and_then(|file| file.sync_all())
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(windows)]
+fn replace_file(path: &Path, replacement: &Path, backup: Option<&Path>) -> Result<(), String> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::{
+        core::PCWSTR,
+        Win32::Storage::FileSystem::{ReplaceFileW, REPLACE_FILE_FLAGS},
+    };
+
+    fn wide(path: &Path) -> Vec<u16> {
+        path.as_os_str().encode_wide().chain(std::iter::once(0)).collect()
+    }
+
+    let replaced = wide(path);
+    let replacement = wide(replacement);
+    let backup_wide = backup.map(wide);
+    let backup_ptr = backup_wide
+        .as_ref()
+        .map(|value| PCWSTR(value.as_ptr()))
+        .unwrap_or(PCWSTR::null());
+
+    unsafe {
+        ReplaceFileW(
+            PCWSTR(replaced.as_ptr()),
+            PCWSTR(replacement.as_ptr()),
+            backup_ptr,
+            REPLACE_FILE_FLAGS(0),
+            None,
+            None,
+        )
+    }
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(windows))]
+fn replace_file(path: &Path, replacement: &Path, backup: Option<&Path>) -> Result<(), String> {
+    if let Some(backup) = backup {
+        if backup.exists() {
+            fs::remove_file(backup).map_err(|error| error.to_string())?;
+        }
+        fs::copy(path, backup).map_err(|error| error.to_string())?;
+        sync_file(backup)?;
+    }
+    fs::rename(replacement, path).map_err(|error| error.to_string())
+}
+
+fn restore_backup(path: &Path) -> Result<bool, String> {
+    let backup_path = path.with_extension("bak");
+    if !backup_path.exists() {
+        return Ok(false);
+    }
+    let recovery_path = path.with_extension("recover.tmp");
+    if recovery_path.exists() {
+        fs::remove_file(&recovery_path).map_err(|error| error.to_string())?;
+    }
+    fs::copy(&backup_path, &recovery_path).map_err(|error| error.to_string())?;
+    sync_file(&recovery_path)?;
+
+    if path.exists() {
+        replace_file(path, &recovery_path, None)?;
+    } else {
+        fs::rename(&recovery_path, path).map_err(|error| error.to_string())?;
+    }
+    log::warn!("Vault restored from last-known-good backup");
+    Ok(true)
+}
+
+fn recover_interrupted_write(path: &Path) -> Result<(), String> {
+    let temporary_path = path.with_extension("tmp");
+    if path.exists() {
+        if temporary_path.exists() {
+            fs::remove_file(&temporary_path).map_err(|error| error.to_string())?;
+        }
+        return Ok(());
+    }
+
+    if restore_backup(path)? {
+        if temporary_path.exists() {
+            fs::remove_file(&temporary_path).map_err(|error| error.to_string())?;
+        }
+        return Ok(());
+    }
+
+    if temporary_path.exists() {
+        fs::remove_file(&temporary_path).map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
 fn write_vault_bytes(path: &Path, encrypted: &[u8]) -> Result<(), String> {
     let parent = path
         .parent()
         .ok_or_else(|| "failed to resolve vault directory".to_string())?;
     fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    recover_interrupted_write(path)?;
 
     let temporary_path = path.with_extension("tmp");
     let backup_path = path.with_extension("bak");
@@ -312,19 +409,17 @@ fn write_vault_bytes(path: &Path, encrypted: &[u8]) -> Result<(), String> {
     }
 
     if !path.exists() {
-        return fs::rename(&temporary_path, path).map_err(|error| error.to_string());
+        fs::rename(&temporary_path, path).map_err(|error| error.to_string())?;
+        sync_file(path)?;
+        return Ok(());
     }
 
     if backup_path.exists() {
         fs::remove_file(&backup_path).map_err(|error| error.to_string())?;
     }
-    fs::rename(path, &backup_path).map_err(|error| error.to_string())?;
-    if let Err(error) = fs::rename(&temporary_path, path) {
-        let _ = fs::rename(&backup_path, path);
-        let _ = fs::remove_file(&temporary_path);
-        return Err(error.to_string());
-    }
-    fs::remove_file(&backup_path).map_err(|error| error.to_string())?;
+    replace_file(path, &temporary_path, Some(&backup_path))?;
+    sync_file(path)?;
+    sync_file(&backup_path)?;
     Ok(())
 }
 
@@ -400,7 +495,9 @@ pub(crate) fn get_document(state: &VaultState, vault_ref: &str) -> Result<Option
 
 #[tauri::command]
 pub fn vault_status<'a>(state: State<'a, VaultState>) -> Result<VaultStatus, String> {
-    let exists = vault_path()?.exists();
+    let path = vault_path()?;
+    recover_interrupted_write(&path)?;
+    let exists = path.exists();
     let unlocked = state
         .unlocked
         .lock()
@@ -413,6 +510,7 @@ pub fn vault_status<'a>(state: State<'a, VaultState>) -> Result<VaultStatus, Str
 pub fn vault_initialize(state: State<'_, VaultState>, passphrase: String) -> Result<(), String> {
     validate_passphrase(&passphrase)?;
     let path = vault_path()?;
+    recover_interrupted_write(&path)?;
     if path.exists() {
         return Err("vault already exists".to_string());
     }
@@ -438,8 +536,30 @@ pub fn vault_initialize(state: State<'_, VaultState>, passphrase: String) -> Res
 
 pub(crate) fn unlock_vault(state: &VaultState, passphrase: String) -> Result<(), String> {
     validate_passphrase(&passphrase)?;
-    let encrypted = fs::read(vault_path()?).map_err(|_| "vault not found".to_string())?;
-    let (metadata, key, document) = decrypt_document(Zeroizing::new(passphrase), &encrypted)?;
+    let path = vault_path()?;
+    recover_interrupted_write(&path)?;
+    let encrypted = fs::read(&path).map_err(|_| "vault not found".to_string())?;
+    let passphrase = Zeroizing::new(passphrase);
+    let decrypted = decrypt_document(Zeroizing::new(passphrase.to_string()), &encrypted);
+
+    let (metadata, key, document) = match decrypted {
+        Ok(value) => value,
+        Err(primary_error) => {
+            let backup_path = path.with_extension("bak");
+            if !backup_path.exists() {
+                return Err(primary_error);
+            }
+            let backup = fs::read(&backup_path)
+                .map_err(|_| primary_error.clone())?;
+            match decrypt_document(Zeroizing::new(passphrase.to_string()), &backup) {
+                Ok(value) => {
+                    restore_backup(&path)?;
+                    value
+                }
+                Err(_) => return Err(primary_error),
+            }
+        }
+    };
 
     *state
         .unlocked
