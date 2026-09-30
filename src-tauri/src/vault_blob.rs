@@ -23,6 +23,7 @@ const NONCE_BYTES: usize = 24;
 const TAG_BYTES: usize = 16;
 const HEADER_BYTES: u64 = 8 + 4 + 4 + 8;
 const MAX_BLOB_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+const MAX_ACTIVE_UPLOADS: usize = 64;
 const CONTEXT: &str = "RemoteHand Vault Blob v1";
 
 type HmacSha256 = Hmac<Sha256>;
@@ -270,6 +271,15 @@ pub(crate) fn begin_upload(
     let destination = final_path(master_key, vault_ref)?;
     if destination.exists() {
         return Err("Vault blob already exists; delete it before replacing it".to_string());
+    }
+
+    {
+        let guard = uploads()
+            .lock()
+            .map_err(|_| "Vault blob upload state is unavailable".to_string())?;
+        if guard.len() >= MAX_ACTIVE_UPLOADS {
+            return Err("too many Vault blob uploads are active".to_string());
+        }
     }
 
     let upload_id = random_hex(16);
