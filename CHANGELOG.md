@@ -2,6 +2,38 @@
 
 All notable changes to RemoteHand are documented here.
 
+## `1.3.0` - 2026-10-01
+
+### Added
+
+- **RemoteHand Vault.** Core now provides encrypted, portable storage for credentials, API keys, and private plugin documents.
+- **Host-owned Vault unlock.** Vault creation and unlock stay inside RemoteHand UI; plugins can request access without receiving the Vault passphrase or master/session key.
+- **Scoped plugin Vault API.** Plugin API v1 gains namespace-scoped secret/document read and write permissions plus a host-owned Vault access request capability.
+- **Vault Settings controls.** Settings shows Vault status, manual Lock/Unlock controls, and configurable inactivity auto-lock.
+- **Recovery safeguards.** Encrypted last-known-good backup recovery and interrupted-write cleanup protect against incomplete Vault replacement.
+
+### Security
+
+- Vault uses Argon2id for passphrase-based key derivation and XChaCha20-Poly1305 authenticated encryption.
+- Plugin Vault access is permission-gated and caller-namespace scoped.
+- Vault file parsing, secret values, private documents, identifiers, and plugin access reasons are bounded.
+- Security-relevant Vault logging avoids secret values, private document content, passphrases, master/session keys, and Vault entry references.
+- Saved SFTP connection JSON retains only an opaque credential reference; passwords remain Vault-backed.
+- The Rust dependency lockfile was reviewed with RustSec `cargo audit`; no vulnerability failures were reported, with tracked upstream maintenance/unsoundness warnings documented in the Vault security notes.
+
+### Compatibility
+
+- Plugin API remains **v1**.
+- `credentials.use` and `credentials.store` remain accepted as deprecated v1 compatibility aliases.
+- Raw plugin `vault.unlock` is not supported; plugins use the host-owned `vault.request_access` flow instead.
+- Existing pre-v1.3 SFTP Vault data is intentionally not migrated.
+
+### Verification
+
+- Rust tests passed with **68 tests and 0 failures** on the completed Vault feature branch.
+- Production frontend build passed.
+- Vault recovery, tamper rejection, wrong-passphrase handling, size limits, namespace rules, auto-lock behavior, saved-connection serialization, and plugin access broker success/cancel paths are covered by automated tests.
+
 ## `1.2.26` - 2026-09-30
 
 ### Fixed
