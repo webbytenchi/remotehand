@@ -10,6 +10,7 @@ mod startup_tray;
 mod storage;
 mod terminal;
 mod vault;
+mod vault_blob;
 mod window_state;
 use std::sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
