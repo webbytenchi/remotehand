@@ -497,6 +497,19 @@ Successful result:
 
 A raw plugin `vault.unlock` method is intentionally unsupported.
 
+### vault.status host event
+
+RemoteHand forwards Vault lock-state changes to plugin panels as a host event:
+
+~~~javascript
+window.remotehand.onEvent("vault.status", (status) => {
+  // status.exists: whether a Vault has been initialized
+  // status.unlocked: whether protected data is currently available
+});
+~~~
+
+This is a notification only; it does not grant Vault access and does not expose passphrases, keys, or private data. Plugins displaying decrypted Vault-backed content should immediately redact that content when `status.unlocked` becomes false.
+
 ### vault.secret.get
 
 Requires: `vault.secrets.read`.
