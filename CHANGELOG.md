@@ -1,5 +1,7 @@
 ## Unreleased
 
+## `1.3.1` - 2026-10-01
+
 ### Added
 - Generic encrypted Vault blob storage for plugin-owned binary data.
 - Plugin API v1 blob permissions `vault.blobs.read` and `vault.blobs.write`.
