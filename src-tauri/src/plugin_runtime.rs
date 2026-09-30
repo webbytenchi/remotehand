@@ -30,6 +30,7 @@ struct PluginSession {
     pending: Arc<Mutex<BTreeMap<u64, mpsc::Sender<Result<PluginResponse, String>>>>>,
     next_request_id: u64,
     stopping: Arc<AtomicBool>,
+    call_lock: Arc<Mutex<()>>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1216,6 +1217,7 @@ impl PluginRuntimeState {
                 pending,
                 next_request_id: 1,
                 stopping,
+                call_lock: Arc::new(Mutex::new(())),
             },
         );
         log::info!("Plugin runtime {} started", plugin.manifest.id);
@@ -1231,6 +1233,21 @@ impl PluginRuntimeState {
         if !valid_message_name(method) {
             return Err("invalid plugin method".to_string());
         }
+
+        let call_lock = {
+            let sessions = self
+                .sessions
+                .lock()
+                .map_err(|_poison| "plugin runtime lock poisoned".to_string())?;
+            sessions
+                .get(id)
+                .ok_or_else(|| "plugin runtime is not running".to_string())?
+                .call_lock
+                .clone()
+        };
+        let _call_guard = call_lock
+            .lock()
+            .map_err(|_| "plugin call lock poisoned".to_string())?;
 
         let receiver = {
             let mut sessions = self
