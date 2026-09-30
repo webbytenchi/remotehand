@@ -474,3 +474,76 @@ Still open:
 - do not claim FIPS compliance.
 
 The core threat-model limitation remains: Vault cannot protect secrets from an attacker with arbitrary code execution inside the trusted RemoteHand process while the Vault is unlocked.
+
+
+## Implementation Checkpoint — 2026-10-01
+
+This checkpoint supersedes the earlier remaining-work notes where they differ.
+
+### Recovery and Bounded I/O
+
+The recovery/read/write hardening slice is now implemented:
+- dedicated filesystem tests cover stale temporary-file cleanup when the active Vault exists;
+- orphan temporary files are discarded when neither active nor backup exists;
+- a missing active Vault is restored from a valid encrypted backup;
+- unlock falls back to a valid backup when the active Vault is corrupt and the same passphrase authenticates the backup;
+- a wrong passphrase does not cause the backup to replace the active file;
+- successful second writes replace the active Vault and preserve the previous active ciphertext as `vault.bak`;
+- oversized writes are rejected before touching disk;
+- Vault reads use a single open file handle, inspect metadata on that handle, read through a `MAX_VAULT_FILE_BYTES + 1` limiter, and validate the resulting length again.
+
+The maximum encrypted Vault file size remains 128 MiB.
+
+### Host-Owned Plugin Access Requests
+
+Plugins now have a dedicated capability for requesting host-owned Vault access:
+- manifest permission: `vault.access.request`;
+- host API method: `vault.request_access`;
+- request parameters contain only a bounded human-readable reason;
+- the host supplies the authenticated plugin identity separately;
+- RemoteHand core emits a host UI request and waits for the host-owned prompt result;
+- the plugin never receives or submits the Vault passphrase;
+- the plugin never receives the derived/master key;
+- concurrent prompts are rejected rather than silently stacked;
+- plugin access requests time out instead of blocking indefinitely;
+- successful completion means the Vault is unlocked before the plugin request returns.
+
+The host UI identifies the requesting plugin before showing the plugin-provided reason. First-time Vault creation now requires entering the passphrase twice and matching both values.
+
+A raw plugin `vault.unlock` API remains rejected.
+
+### Audit-Safe Plugin Boundaries
+
+Plugin Vault operations now produce security-relevant audit log entries using only:
+- authenticated plugin ID;
+- a fixed action category such as `secret.read`, `secret.write`, `document.read`, `document.write`, or `access.request`;
+- an outcome such as allowed or denied.
+
+Secret values, document contents, Vault keys, passphrases, and Vault entry references are intentionally not included in these audit records.
+
+The older `credentials.use` / `credentials.store` paths remain temporarily supported and are explicitly labeled as legacy actions in audit output. Their final deprecation/removal decision is still pending.
+
+### Frontend Prompt Robustness
+
+The frontend Vault request helper no longer uses an async Promise executor. Listener setup is completed before the request event is emitted, and cleanup runs deterministically after success or failure.
+
+First-time Vault creation now includes a confirmation field so an accidental passphrase typo cannot silently create a Vault that the user cannot reopen.
+
+### Current Validation Target
+
+The last accepted checkpoint before this batch was:
+- Rust tests: 59 passed, 0 failed;
+- production frontend build: passed.
+
+This batch adds plugin-access permission tests and audit-action tests. Run the full Rust suite and production frontend build before marking this checkpoint accepted.
+
+### Still Open
+
+Remaining higher-level decisions/work include:
+- decide the final deprecation/removal path for legacy `credentials.use` and `credentials.store`;
+- decide whether plugin API v1 remains appropriate once the Vault API is finalized;
+- broaden audit coverage if persistent audit storage or enterprise export is desired later;
+- document the rollback limitation for an attacker able to replace both active and backup with older authenticated ciphertext;
+- document that the decrypted Vault document remains in memory while the Vault is unlocked;
+- decide whether passphrase rotation belongs in v1.3.0 or a later release;
+- do not claim FIPS compliance for the current Argon2id + XChaCha20-Poly1305 profile.
