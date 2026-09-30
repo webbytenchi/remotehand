@@ -348,3 +348,129 @@ RemoteHand public/stable remains v1.2.25.
 v1.2.26 is a prepared/tagged checkpoint and remains intentionally unpublished unless explicitly approved.
 
 Vault is the planned architectural milestone for RemoteHand v1.3.0.
+
+## Implementation Checkpoint — 2026-09-30
+
+The Vault is now actively implemented on branch `emma/vault-v1.3.0`. This section records the implemented/accepted state and supersedes older wording in this document that describes the crypto profile, lock behavior, or file format as merely provisional.
+
+### Current Branch State
+
+- Current remote feature-branch tip: `d128a99` (`Lock updated Vault AEAD dependency`).
+- RemoteHand version metadata is still `1.2.26` on the feature branch.
+- Public/stable RemoteHand remains v1.2.25.
+- Prepared/tagged v1.2.26 remains intentionally unpublished.
+- Vault remains targeted for v1.3.0; do not tag or publish the feature branch.
+
+### Implemented Cryptographic Profile
+
+Current implementation uses:
+- Argon2id via `argon2 = 0.5.3`;
+- Argon2 version 19;
+- 64 MiB memory;
+- 3 iterations;
+- parallelism 1;
+- 16-byte cryptographically random salt;
+- XChaCha20-Poly1305 via `chacha20poly1305 = 0.11.0`;
+- 24-byte random nonce per Vault encryption;
+- 32-byte derived key;
+- 16-byte random Vault identifier;
+- OS-backed randomness;
+- authenticated header/AAD including format version, Vault ID, KDF profile, cipher identifier, and the fixed RemoteHand context string.
+
+`ILoveYouAndami-Papa` remains public/non-secret context only. Security does not rely on hiding it.
+
+RemoteHand declares Rust 1.85. The AEAD 0.11 upgrade was tested successfully. Argon2 remains on the stable 0.5.3 line rather than moving to a release candidate.
+
+### Current File Format and Limits
+
+The current implementation uses:
+- format version 1;
+- Vault document version 1;
+- portable path `data/vault/vault.enc`;
+- one encrypted document containing logical `secrets` and `documents` maps;
+- max Vault reference length 512 bytes;
+- max Vault file size 128 MiB before full parsing;
+- secret values: non-empty, max 64 KiB;
+- document values: max 16 MiB.
+
+The Vault path must be a regular file. Zero-length Vault files are rejected. Vault IDs must decode to exactly 16 bytes.
+
+### Key Lifecycle and Locking
+
+The user passphrase is used to derive the key and is not retained as the unlocked-state credential. The unlocked state retains the derived key plus the decrypted Vault document.
+
+Implemented controls:
+- locked by default after application restart;
+- host-owned unlock prompt;
+- explicit Lock Vault / Unlock Vault controls in Settings -> Vault;
+- configurable core-owned auto-lock after Vault inactivity;
+- supported intervals: 5, 15, 30, 60 minutes, or Never;
+- default: 15 minutes;
+- Vault activity means protected Vault data was read or changed;
+- live status events update Settings immediately when the core locks/unlocks.
+
+Papa manually accepted restart-lock, host unlock, manual lock/unlock, and 5-minute auto-lock behavior.
+
+### Namespace and Plugin Boundary
+
+Current scoped plugin Vault APIs remain:
+- `vault.secret.get` gated by `vault.secrets.read`;
+- `vault.secret.set/delete` gated by `vault.secrets.write`;
+- `vault.document.get` gated by `vault.documents.read`;
+- `vault.document.set/delete` gated by `vault.documents.write`.
+
+Plugin-facing keys are caller-relative and core constructs `plugin:<plugin-id>/<key>`. Plugins cannot use a raw Vault unlock API. Plugins never receive the user's Vault passphrase or the Vault master key.
+
+A future plugin-safe host-prompt request mechanism is still required for Marielle Chat and Notes so a locked Vault can trigger host-owned unlock UX without giving plugins passphrase handling.
+
+### Windows Persistence / Backup
+
+Current write strategy:
+1. serialize/encrypt to a temporary file;
+2. write and sync temporary bytes;
+3. first Vault creation renames the temporary file into place and syncs the active file;
+4. subsequent Windows writes use `ReplaceFileW` with `vault.bak` as last-known-good backup;
+5. active and backup files are synced;
+6. startup/status/unlock recovery removes stale temp files and can restore backup if the active file is missing;
+7. if primary decrypt/authentication fails but the same passphrase successfully decrypts the backup, the backup is restored and used.
+
+A Windows bug discovered during manual acceptance caused `Access is denied (os error 5)` because the post-rename durability helper reopened the file read-only before `sync_all`. It was fixed by reopening with read+write access. The original failed UI operation had already created a valid Vault, which was confirmed when the same passphrase later unlocked it.
+
+Recovery is improved but is not yet considered fully validated. Dedicated filesystem recovery tests are the next planned slice.
+
+### Validation and Acceptance
+
+Latest observed automated validation:
+- Rust tests: 51 passed, 0 failed.
+- AEAD 0.11 migration compiles cleanly with no deprecated `XNonce::from_slice` warnings.
+- Earlier production frontend builds passed after Vault Settings and auto-lock changes.
+- Cargo.lock was updated, reviewed, committed, and pushed.
+
+Manual acceptance completed:
+- host-owned Create RemoteHand Vault prompt;
+- connection password saved through Vault;
+- restart returns Vault to locked state;
+- correct passphrase unlocks and allows subsequent credential save;
+- Settings status and manual Lock/Unlock;
+- 5-minute core auto-lock;
+- live Settings status transition from Unlocked to Locked without reopening the dialog.
+
+### Important Remaining Work
+
+Next planned implementation slice:
+- dedicated recovery-path filesystem tests covering stale temp files, missing active file with valid backup, backup restoration, interrupted writes, and failure behavior.
+
+Still open:
+- add passphrase confirmation on first Vault creation;
+- clean up the frontend `requestVaultAccess` Promise/listener implementation;
+- define plugin-safe host unlock-prompt request semantics for Marielle Chat/Notes;
+- decide legacy `credentials.use/store` deprecation and API-version implications;
+- add systematic audit events without secret content;
+- review backup rotation so failure after deleting an older `.bak` cannot unnecessarily reduce recovery options;
+- document the rollback limitation for an attacker who can replace both active and backup with older authenticated ciphertext;
+- document the whole decrypted Vault document being held in memory while unlocked;
+- decide whether passphrase rotation belongs in v1.3.0 or a later release;
+- add broader corruption/recovery/adversarial tests;
+- do not claim FIPS compliance.
+
+The core threat-model limitation remains: Vault cannot protect secrets from an attacker with arbitrary code execution inside the trusted RemoteHand process while the Vault is unlocked.
