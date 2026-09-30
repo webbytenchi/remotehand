@@ -183,15 +183,9 @@ fn derive_key(passphrase: &str, kdf: &KdfConfig) -> Result<Zeroizing<[u8; KEY_BY
     .map_err(|_| "vault KDF parameters are invalid".to_string())?;
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
 
-    let mut password_material =
-        Zeroizing::new(Vec::with_capacity(VAULT_CONTEXT.len() + 1 + passphrase.len()));
-    password_material.extend_from_slice(VAULT_CONTEXT.as_bytes());
-    password_material.push(0);
-    password_material.extend_from_slice(passphrase.as_bytes());
-
     let mut key = Zeroizing::new([0u8; KEY_BYTES]);
     argon2
-        .hash_password_into(&password_material, &salt, &mut key[..])
+        .hash_password_into(passphrase.as_bytes(), &salt, &mut key[..])
         .map_err(|_| "failed to derive vault key".to_string())?;
     Ok(key)
 }
