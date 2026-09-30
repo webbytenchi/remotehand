@@ -74,7 +74,10 @@ fn hmac_bytes(key: &[u8], parts: &[&[u8]]) -> Result<[u8; 32], String> {
     for part in parts {
         mac.update(part);
     }
-    Ok(mac.finalize().into_bytes().into())
+    let bytes = mac.finalize().into_bytes();
+    let mut output = [0u8; 32];
+    output.copy_from_slice(&bytes);
+    Ok(output)
 }
 
 fn blob_key(master_key: &[u8; 32], vault_ref: &str) -> Result<Zeroizing<[u8; 32]>, String> {
@@ -385,6 +388,7 @@ pub(crate) fn commit_upload(vault_ref: &str, upload_id: &str) -> Result<BlobInfo
     fs::rename(&session.temp_path, &session.final_path).map_err(|error| error.to_string())?;
     OpenOptions::new()
         .read(true)
+        .write(true)
         .open(&session.final_path)
         .and_then(|file| file.sync_all())
         .map_err(|error| error.to_string())?;
@@ -414,6 +418,17 @@ pub(crate) fn abort_upload(vault_ref: &str, upload_id: &str) -> Result<bool, Str
         Ok(()) => Ok(true),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(true),
         Err(error) => Err(error.to_string()),
+    }
+}
+
+
+pub(crate) fn abort_all_uploads() {
+    let sessions = match uploads().lock() {
+        Ok(mut guard) => std::mem::take(&mut *guard),
+        Err(_) => return,
+    };
+    for session in sessions.into_values() {
+        let _ = fs::remove_file(session.temp_path);
     }
 }
 
