@@ -36,6 +36,7 @@ const VAULT_ID_BYTES: usize = 16;
 const NONCE_BYTES: usize = 24;
 const KEY_BYTES: usize = 32;
 const MAX_VAULT_REF_BYTES: usize = 512;
+const MAX_VAULT_FILE_BYTES: u64 = 128 * 1024 * 1024;
 
 #[derive(Clone)]
 pub struct VaultState {
@@ -200,6 +201,25 @@ fn decode_fixed<const N: usize>(value: &str, label: &str) -> Result<[u8; N], Str
         .map_err(|_| format!("vault {label} has an invalid length"))
 }
 
+fn validate_vault_file_size(size: u64) -> Result<(), String> {
+    if size == 0 {
+        return Err("vault file is empty".to_string());
+    }
+    if size > MAX_VAULT_FILE_BYTES {
+        return Err("vault file exceeds the supported size limit".to_string());
+    }
+    Ok(())
+}
+
+fn read_vault_file(path: &Path) -> Result<Vec<u8>, String> {
+    let metadata = fs::metadata(path).map_err(|_| "vault not found".to_string())?;
+    if !metadata.is_file() {
+        return Err("vault path is not a regular file".to_string());
+    }
+    validate_vault_file_size(metadata.len())?;
+    fs::read(path).map_err(|error| error.to_string())
+}
+
 fn new_metadata() -> VaultMetadata {
     VaultMetadata {
         vault_id: encode_bytes(&random_bytes::<VAULT_ID_BYTES>()),
@@ -293,6 +313,7 @@ fn decrypt_document(
     mut passphrase: Zeroizing<String>,
     encrypted: &[u8],
 ) -> Result<(VaultMetadata, Zeroizing<[u8; KEY_BYTES]>, VaultDocument), String> {
+    validate_vault_file_size(encrypted.len() as u64)?;
     let envelope: VaultEnvelope =
         serde_json::from_slice(encrypted).map_err(|_| "vault file is invalid".to_string())?;
     if envelope.format_version != VAULT_FORMAT_VERSION {
@@ -309,13 +330,11 @@ fn decrypt_document(
     let ciphertext = STANDARD_NO_PAD
         .decode(&envelope.ciphertext)
         .map_err(|_| "vault ciphertext is invalid".to_string())?;
+    let _ = decode_fixed::<VAULT_ID_BYTES>(&envelope.vault_id, "identifier")?;
     let metadata = VaultMetadata {
         vault_id: envelope.vault_id,
         kdf: envelope.kdf,
     };
-    if metadata.vault_id.is_empty() {
-        return Err("vault identifier is invalid".to_string());
-    }
 
     let key = derive_key(&passphrase, &metadata.kdf)?;
     passphrase.zeroize();
@@ -609,7 +628,7 @@ pub(crate) fn unlock_vault(state: &VaultState, passphrase: String) -> Result<(),
     validate_passphrase(&passphrase)?;
     let path = vault_path()?;
     recover_interrupted_write(&path)?;
-    let encrypted = fs::read(&path).map_err(|_| "vault not found".to_string())?;
+    let encrypted = read_vault_file(&path)?;
     let passphrase = Zeroizing::new(passphrase);
     let decrypted = decrypt_document(Zeroizing::new(passphrase.to_string()), &encrypted);
 
@@ -620,7 +639,7 @@ pub(crate) fn unlock_vault(state: &VaultState, passphrase: String) -> Result<(),
             if !backup_path.exists() {
                 return Err(primary_error);
             }
-            let backup = fs::read(&backup_path)
+            let backup = read_vault_file(&backup_path)
                 .map_err(|_| primary_error.clone())?;
             match decrypt_document(Zeroizing::new(passphrase.to_string()), &backup) {
                 Ok(value) => {
@@ -854,6 +873,27 @@ mod tests {
         let metadata = new_metadata();
         let key = derive_key(passphrase, &metadata.kdf).unwrap();
         encrypt_document(&key, &metadata, &sample_document()).unwrap()
+    }
+
+    #[test]
+    fn rejects_invalid_vault_file_sizes() {
+        assert!(validate_vault_file_size(0).is_err());
+        assert!(validate_vault_file_size(MAX_VAULT_FILE_BYTES).is_ok());
+        assert!(validate_vault_file_size(MAX_VAULT_FILE_BYTES + 1).is_err());
+    }
+
+    #[test]
+    fn rejects_invalid_vault_identifier_length() {
+        let encrypted = sample_encrypted("identifier test passphrase");
+        let mut envelope: VaultEnvelope = serde_json::from_slice(&encrypted).unwrap();
+        envelope.vault_id = encode_bytes(b"short");
+        let malformed = serde_json::to_vec(&envelope).unwrap();
+
+        let result = decrypt_document(
+            Zeroizing::new("identifier test passphrase".to_string()),
+            &malformed,
+        );
+        assert!(result.is_err());
     }
 
     #[test]
