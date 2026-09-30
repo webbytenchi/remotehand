@@ -20,6 +20,7 @@ import { AppModal } from "./AppModal";
 import { PluginManager } from "./PluginManager";
 import { PluginPanel, sendPluginPanelContext, type PluginPanelParams } from "./PluginPanel";
 import { remoteHandFunctionKeyDisposition } from "./functionKeys";
+import { shouldSuppressWebViewShortcut } from "./browserShortcuts";
 import {
   EMPTY_UI_CONTRIBUTION_LAYOUT,
   contributionOrderIndex,
@@ -143,6 +144,7 @@ type RemoteHandPopoutWindow = Window & {
 __REMOTEHAND_NATIVE_WINDOW_LABEL__?: string;
 };
 const tabDragAssistDocuments = new Set<Document>();
+const shortcutOwnershipDocuments = new Set<Document>();
 let tabDragWindowAssistArmed = false;
 const dragIframePointerEvents = new Map<HTMLIFrameElement, string>();
 
@@ -188,6 +190,23 @@ if (!wasArmed) return;
 void invoke("release_drag_target_windows").catch((error) => {
 console.error("Failed to release RemoteHand drag window stacking", error);
 });
+}
+
+function installWebViewShortcutOwnership(targetDocument: Document) {
+if (shortcutOwnershipDocuments.has(targetDocument) || !isTauri()) return;
+shortcutOwnershipDocuments.add(targetDocument);
+
+const onKeyDown = (event: KeyboardEvent) => {
+if (shouldSuppressWebViewShortcut(event.key, event)) {
+event.preventDefault();
+}
+};
+const unload = () => {
+shortcutOwnershipDocuments.delete(targetDocument);
+targetDocument.removeEventListener("keydown", onKeyDown, true);
+};
+targetDocument.addEventListener("keydown", onKeyDown, true);
+targetDocument.defaultView?.addEventListener("beforeunload", unload, { once: true });
 }
 
 function installTabDragWindowAssist(targetDocument: Document) {
@@ -678,6 +697,7 @@ return <LegacyPluginSidebarIcon icon={icon} />;
 
 function App() {
 useEffect(() => {
+installWebViewShortcutOwnership(document);
 installTabDragWindowAssist(document);
 }, []);
 const [connections, setConnections] = useState(initialConnections);
@@ -1670,6 +1690,7 @@ count: event.api.getPopouts().length,
 window: popout.window,
 };
 const targetDocument = popout.window.document;
+installWebViewShortcutOwnership(targetDocument);
 installTabDragWindowAssist(targetDocument);
 const root = targetDocument.documentElement;
 const source = document.documentElement;

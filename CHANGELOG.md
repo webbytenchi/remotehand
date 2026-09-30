@@ -2,6 +2,27 @@
 
 All notable changes to RemoteHand are documented here.
 
+## `1.2.25` - 2026-09-30
+
+### Improved
+
+- **WebView shortcut ownership.** RemoteHand now suppresses browser-only keyboard behaviors such as Find, Reload/Hard Reload, Save Page, Open, Print, View Source, address-bar focus, zoom, browser history navigation, tab/window commands, and common developer-tools accelerators in the main window, popouts, and plugin panels.
+- **Plugin shortcut compatibility.** Suppressing the WebView default does not stop keyboard-event propagation, so plugins can continue to implement intentional shortcuts such as Editor Ctrl+F, Ctrl+S, and plain F5 without exposing Chromium/WebView2 behavior.
+
+### Compatibility
+
+- Plugin API remains **v1**.
+- Normal editing shortcuts such as Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+A, Ctrl+Z, and Ctrl+Y remain available.
+- Existing function-key ownership behavior remains unchanged.
+
+### Verification
+
+- Frontend tests passed with **17 tests and 0 failures**.
+- Production frontend build passed.
+- Rust tests passed with **43 tests and 0 failures**.
+- Optimized Windows Tauri release build passed.
+- Manual Windows acceptance confirmed browser shortcut suppression in a normal plugin panel and preserved Editor-owned Ctrl+F, Ctrl+S, and F5 behavior.
+
 ## `1.2.24` - 2026-09-30
 
 ### Fixed
