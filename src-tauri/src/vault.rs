@@ -740,6 +740,142 @@ pub(crate) fn get_document(state: &VaultState, vault_ref: &str) -> Result<Option
     Ok(vault.document.documents.get(vault_ref).cloned())
 }
 
+
+pub(crate) fn begin_blob_upload(
+    state: &VaultState,
+    vault_ref: &str,
+    total_size: u64,
+) -> Result<(String, u32, u32), String> {
+    validate_vault_ref(vault_ref)?;
+    let mut guard = state
+        .unlocked
+        .lock()
+        .map_err(|_| "vault state is unavailable".to_string())?;
+    let vault = guard
+        .as_mut()
+        .ok_or_else(|| "vault is locked".to_string())?;
+    let result = crate::vault_blob::begin_upload(&*vault.key, vault_ref, total_size)?;
+    vault.last_activity = Instant::now();
+    Ok(result)
+}
+
+pub(crate) fn write_blob_chunk(
+    state: &VaultState,
+    vault_ref: &str,
+    upload_id: &str,
+    index: u32,
+    bytes: &[u8],
+) -> Result<u64, String> {
+    validate_vault_ref(vault_ref)?;
+    let mut guard = state
+        .unlocked
+        .lock()
+        .map_err(|_| "vault state is unavailable".to_string())?;
+    let vault = guard
+        .as_mut()
+        .ok_or_else(|| "vault is locked".to_string())?;
+    let written = crate::vault_blob::write_upload_chunk(
+        &*vault.key,
+        &vault.metadata.vault_id,
+        vault_ref,
+        upload_id,
+        index,
+        bytes,
+    )?;
+    vault.last_activity = Instant::now();
+    Ok(written)
+}
+
+pub(crate) fn commit_blob_upload(
+    state: &VaultState,
+    vault_ref: &str,
+    upload_id: &str,
+) -> Result<crate::vault_blob::BlobInfo, String> {
+    validate_vault_ref(vault_ref)?;
+    let mut guard = state
+        .unlocked
+        .lock()
+        .map_err(|_| "vault state is unavailable".to_string())?;
+    let vault = guard
+        .as_mut()
+        .ok_or_else(|| "vault is locked".to_string())?;
+    let info = crate::vault_blob::commit_upload(vault_ref, upload_id)?;
+    vault.last_activity = Instant::now();
+    Ok(info)
+}
+
+pub(crate) fn abort_blob_upload(
+    state: &VaultState,
+    vault_ref: &str,
+    upload_id: &str,
+) -> Result<bool, String> {
+    validate_vault_ref(vault_ref)?;
+    let mut guard = state
+        .unlocked
+        .lock()
+        .map_err(|_| "vault state is unavailable".to_string())?;
+    let vault = guard
+        .as_mut()
+        .ok_or_else(|| "vault is locked".to_string())?;
+    let aborted = crate::vault_blob::abort_upload(vault_ref, upload_id)?;
+    vault.last_activity = Instant::now();
+    Ok(aborted)
+}
+
+pub(crate) fn get_blob_info(
+    state: &VaultState,
+    vault_ref: &str,
+) -> Result<Option<crate::vault_blob::BlobInfo>, String> {
+    validate_vault_ref(vault_ref)?;
+    let mut guard = state
+        .unlocked
+        .lock()
+        .map_err(|_| "vault state is unavailable".to_string())?;
+    let vault = guard
+        .as_mut()
+        .ok_or_else(|| "vault is locked".to_string())?;
+    let info = crate::vault_blob::info(&*vault.key, vault_ref)?;
+    vault.last_activity = Instant::now();
+    Ok(info)
+}
+
+pub(crate) fn read_blob_chunk(
+    state: &VaultState,
+    vault_ref: &str,
+    index: u32,
+) -> Result<Vec<u8>, String> {
+    validate_vault_ref(vault_ref)?;
+    let mut guard = state
+        .unlocked
+        .lock()
+        .map_err(|_| "vault state is unavailable".to_string())?;
+    let vault = guard
+        .as_mut()
+        .ok_or_else(|| "vault is locked".to_string())?;
+    let bytes = crate::vault_blob::read_chunk(
+        &*vault.key,
+        &vault.metadata.vault_id,
+        vault_ref,
+        index,
+    )?;
+    vault.last_activity = Instant::now();
+    Ok(bytes)
+}
+
+pub(crate) fn delete_blob(state: &VaultState, vault_ref: &str) -> Result<bool, String> {
+    validate_vault_ref(vault_ref)?;
+    let mut guard = state
+        .unlocked
+        .lock()
+        .map_err(|_| "vault state is unavailable".to_string())?;
+    let vault = guard
+        .as_mut()
+        .ok_or_else(|| "vault is locked".to_string())?;
+    let deleted = crate::vault_blob::delete(&*vault.key, vault_ref)?;
+    vault.last_activity = Instant::now();
+    Ok(deleted)
+}
+
 #[tauri::command]
 pub fn vault_status<'a>(state: State<'a, VaultState>) -> Result<VaultStatus, String> {
     let path = vault_path()?;
