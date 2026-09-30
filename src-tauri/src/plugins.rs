@@ -26,6 +26,7 @@ const ALLOWED_PERMISSIONS: &[&str] = &[
     "vault.secrets.write",
     "vault.documents.read",
     "vault.documents.write",
+    "vault.access.request",
     "storage.plugin",
     "tray.contribute",
     "notifications.show",
