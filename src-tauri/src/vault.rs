@@ -468,6 +468,8 @@ fn recover_interrupted_write(path: &Path) -> Result<(), String> {
 }
 
 fn write_vault_bytes(path: &Path, encrypted: &[u8]) -> Result<(), String> {
+    validate_vault_file_size(encrypted.len() as u64)?;
+
     let parent = path
         .parent()
         .ok_or_else(|| "failed to resolve vault directory".to_string())?;
@@ -929,6 +931,20 @@ mod tests {
         let metadata = new_metadata();
         let key = derive_key(passphrase, &metadata.kdf).unwrap();
         encrypt_document(&key, &metadata, &sample_document()).unwrap()
+    }
+
+    #[test]
+    fn write_rejects_vault_larger_than_file_limit() {
+        let dir = TestDir::new("oversized-write");
+        let path = dir.vault_path();
+        let oversized = vec![0u8; (MAX_VAULT_FILE_BYTES + 1) as usize];
+
+        let result = write_vault_bytes(&path, &oversized);
+
+        assert!(result.is_err());
+        assert!(!path.exists());
+        assert!(!path.with_extension("tmp").exists());
+        assert!(!path.with_extension("bak").exists());
     }
 
     #[test]
