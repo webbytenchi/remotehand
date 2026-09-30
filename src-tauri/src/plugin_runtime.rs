@@ -376,6 +376,27 @@ fn permission_granted(permissions: &[String], permission: &str) -> bool {
     permissions.iter().any(|value| value == permission)
 }
 
+fn vault_audit_action(method: &str) -> Option<&'static str> {
+    match method {
+        "credentials.use" => Some("legacy-secret.read"),
+        "credentials.store" => Some("legacy-secret.write"),
+        "vault.secret.get" => Some("secret.read"),
+        "vault.secret.set" => Some("secret.write"),
+        "vault.secret.delete" => Some("secret.delete"),
+        "vault.document.get" => Some("document.read"),
+        "vault.document.set" => Some("document.write"),
+        "vault.document.delete" => Some("document.delete"),
+        "vault.request_access" => Some("access.request"),
+        _ => None,
+    }
+}
+
+fn log_vault_audit(plugin_id: &str, method: &str, outcome: &str) {
+    if let Some(action) = vault_audit_action(method) {
+        log::info!("Vault audit: plugin={plugin_id} action={action} outcome={outcome}");
+    }
+}
+
 fn validate_plugin_credential_ref(plugin_id: &str, credential_ref: &str) -> Result<(), String> {
     let expected_prefix = format!("plugin:{plugin_id}:");
     if credential_ref.starts_with(&expected_prefix) {
@@ -508,7 +529,10 @@ fn handle_plugin_request(
     permissions: &[String],
     request: &PluginRequest,
 ) -> Result<serde_json::Value, String> {
-    validate_plugin_request(permissions, request)?;
+    if let Err(error) = validate_plugin_request(permissions, request) {
+        log_vault_audit(plugin_id, &request.method, "denied");
+        return Err(error);
+    }
     match request.method.as_str() {
         "credentials.use" => {
             let params: CredentialUseParams = serde_json::from_value(request.params.clone())
@@ -517,6 +541,7 @@ fn handle_plugin_request(
             let vault_state = app_handle.state::<crate::vault::VaultState>();
             let secret = crate::vault::get_secret(&vault_state, &params.credential_ref)?
                 .ok_or_else(|| "credential was not found".to_string())?;
+            log_vault_audit(plugin_id, &request.method, "allowed");
             Ok(serde_json::json!({ "secret": secret }))
         }
         "credentials.store" => {
@@ -528,6 +553,7 @@ fn handle_plugin_request(
             validate_plugin_credential_ref(plugin_id, &params.credential_ref)?;
             let vault_state = app_handle.state::<crate::vault::VaultState>();
             crate::vault::store_secret(&vault_state, params.credential_ref.clone(), params.secret)?;
+            log_vault_audit(plugin_id, &request.method, "allowed");
             Ok(serde_json::json!({ "credentialRef": params.credential_ref }))
         }
         "vault.secret.get" => {
@@ -537,6 +563,7 @@ fn handle_plugin_request(
             let vault_state = app_handle.state::<crate::vault::VaultState>();
             let secret = crate::vault::get_secret(&vault_state, &vault_ref)?
                 .ok_or_else(|| "Vault secret was not found".to_string())?;
+            log_vault_audit(plugin_id, &request.method, "allowed");
             Ok(serde_json::json!({ "secret": secret }))
         }
         "vault.secret.set" => {
@@ -548,6 +575,7 @@ fn handle_plugin_request(
             let vault_ref = plugin_vault_ref(plugin_id, &params.key)?;
             let vault_state = app_handle.state::<crate::vault::VaultState>();
             crate::vault::store_secret(&vault_state, vault_ref, params.secret)?;
+            log_vault_audit(plugin_id, &request.method, "allowed");
             Ok(serde_json::json!({ "stored": true }))
         }
         "vault.secret.delete" => {
@@ -556,6 +584,7 @@ fn handle_plugin_request(
             let vault_ref = plugin_vault_ref(plugin_id, &params.key)?;
             let vault_state = app_handle.state::<crate::vault::VaultState>();
             let deleted = crate::vault::delete_secret(&vault_state, &vault_ref)?;
+            log_vault_audit(plugin_id, &request.method, "allowed");
             Ok(serde_json::json!({ "deleted": deleted }))
         }
         "vault.document.get" => {
@@ -564,6 +593,7 @@ fn handle_plugin_request(
             let vault_ref = plugin_vault_ref(plugin_id, &params.key)?;
             let vault_state = app_handle.state::<crate::vault::VaultState>();
             let value = crate::vault::get_document(&vault_state, &vault_ref)?;
+            log_vault_audit(plugin_id, &request.method, "allowed");
             Ok(serde_json::json!({ "value": value }))
         }
         "vault.document.set" => {
@@ -575,6 +605,7 @@ fn handle_plugin_request(
             let vault_ref = plugin_vault_ref(plugin_id, &params.key)?;
             let vault_state = app_handle.state::<crate::vault::VaultState>();
             crate::vault::store_document(&vault_state, vault_ref, params.value)?;
+            log_vault_audit(plugin_id, &request.method, "allowed");
             Ok(serde_json::json!({ "stored": true }))
         }
         "vault.document.delete" => {
@@ -583,6 +614,7 @@ fn handle_plugin_request(
             let vault_ref = plugin_vault_ref(plugin_id, &params.key)?;
             let vault_state = app_handle.state::<crate::vault::VaultState>();
             let deleted = crate::vault::delete_document(&vault_state, &vault_ref)?;
+            log_vault_audit(plugin_id, &request.method, "allowed");
             Ok(serde_json::json!({ "deleted": deleted }))
         }
         "vault.request_access" => {
@@ -595,6 +627,7 @@ fn handle_plugin_request(
                 plugin_id,
                 &params.reason,
             )?;
+            log_vault_audit(plugin_id, &request.method, "allowed");
             Ok(serde_json::json!({ "unlocked": true }))
         }
         "storage.get" => {
@@ -1406,6 +1439,14 @@ mod tests {
         );
         assert!(plugin_vault_ref("remotehand.marielle-chat", "../notes").is_err());
         assert!(plugin_vault_ref("remotehand.marielle-chat", "other:plugin").is_err());
+    }
+
+    #[test]
+    fn maps_vault_audit_actions_without_secret_references() {
+        assert_eq!(vault_audit_action("vault.secret.get"), Some("secret.read"));
+        assert_eq!(vault_audit_action("vault.document.set"), Some("document.write"));
+        assert_eq!(vault_audit_action("vault.request_access"), Some("access.request"));
+        assert_eq!(vault_audit_action("storage.get"), None);
     }
 
     #[test]
