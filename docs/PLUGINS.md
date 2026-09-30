@@ -215,6 +215,8 @@ Recognized permissions:
 | vault.secrets.write | Create, replace, or delete secret values in the caller's own Vault namespace through `vault.secret.set` / `vault.secret.delete`. |
 | vault.documents.read | Read encrypted private documents from the caller's own Vault namespace through `vault.document.get`. |
 | vault.documents.write | Create, replace, or delete encrypted private documents in the caller's own Vault namespace through `vault.document.set` / `vault.document.delete`. |
+| vault.blobs.read | Inspect and read encrypted binary blobs from the caller's own Vault namespace through `vault.blob.info` / `vault.blob.read`. |
+| vault.blobs.write | Create, commit, abort, or delete encrypted binary blobs in the caller's own Vault namespace through `vault.blob.*`. |
 | vault.access.request | Ask RemoteHand's host UI to create/unlock the Vault through `vault.request_access`. The plugin never receives the passphrase. |
 | credentials.use | **Deprecated v1 compatibility alias.** Legacy secret read by opaque reference. New plugins should use `vault.secrets.read` + `vault.secret.get`. |
 | credentials.store | **Deprecated v1 compatibility alias.** Legacy secret write by opaque reference. New plugins should use `vault.secrets.write` + `vault.secret.set`. |
@@ -610,6 +612,105 @@ Store or delete a private document in the caller's own namespace.
 ~~~
 
 Documents are capped at 16 MiB. Delete uses `vault.document.delete` with the same `{ "key": ... }` shape and returns a boolean `deleted` field.
+
+### vault.blob.begin / write / commit / abort
+
+Requires: `vault.blobs.write`.
+
+Vault blobs are encrypted plugin-scoped binary objects intended for attachments and other large private payloads that do not fit the 16 MiB document API.
+
+Begin an immutable blob upload:
+
+~~~json
+{
+  "type": "plugin.request",
+  "requestId": 20,
+  "method": "vault.blob.begin",
+  "params": { "key": "attachment/019abc...", "size": 12345678 }
+}
+~~~
+
+The result returns an opaque `uploadId`, the required `chunkSize` (currently 1 MiB), and total chunk count.
+
+Write chunks sequentially:
+
+~~~json
+{
+  "type": "plugin.request",
+  "requestId": 21,
+  "method": "vault.blob.write",
+  "params": {
+    "key": "attachment/019abc...",
+    "uploadId": "...",
+    "index": 0,
+    "data": "<base64-no-padding>"
+  }
+}
+~~~
+
+Every non-final chunk must be exactly the advertised chunk size; the final chunk must exactly match the remaining declared size. Chunks are independently authenticated and encrypted by core.
+
+Commit only after all chunks are written:
+
+~~~json
+{
+  "type": "plugin.request",
+  "requestId": 22,
+  "method": "vault.blob.commit",
+  "params": { "key": "attachment/019abc...", "uploadId": "..." }
+}
+~~~
+
+`vault.blob.abort` uses the same key/uploadId shape and deletes the temporary upload.
+
+Blob keys are immutable in Plugin API v1: if a blob already exists for a key, delete it first or use a new key. This keeps commit atomic without replacing an existing encrypted object in place.
+
+The current core implementation limit is 4 GiB per blob. This is an implementation/resource bound rather than a Notes product-policy limit.
+
+### vault.blob.info / read / delete
+
+`vault.blob.info` and `vault.blob.read` require `vault.blobs.read`.
+
+`vault.blob.delete` requires `vault.blobs.write`.
+
+Info:
+
+~~~json
+{
+  "type": "plugin.request",
+  "requestId": 23,
+  "method": "vault.blob.info",
+  "params": { "key": "attachment/019abc..." }
+}
+~~~
+
+A present blob returns `exists`, `size`, `chunkSize`, and `chunks`.
+
+Read one decrypted chunk:
+
+~~~json
+{
+  "type": "plugin.request",
+  "requestId": 24,
+  "method": "vault.blob.read",
+  "params": { "key": "attachment/019abc...", "index": 0 }
+}
+~~~
+
+The result contains base64-without-padding chunk data. Core derives the full Vault namespace from authenticated plugin identity exactly as it does for secrets/documents; plugins cannot use blob calls to cross into another plugin or `core:` namespace.
+
+Delete:
+
+~~~json
+{
+  "type": "plugin.request",
+  "requestId": 25,
+  "method": "vault.blob.delete",
+  "params": { "key": "attachment/019abc..." }
+}
+~~~
+
+Blob filenames are opaque keyed identifiers. Blob payloads are stored outside the monolithic `vault.enc` document as independently authenticated encrypted chunk streams. Uploads are written to temporary files and renamed only after a complete commit. Vault lock aborts active uploads.
 
 ### Deprecated Plugin API v1 credential aliases
 
