@@ -339,6 +339,7 @@ pub fn run() {
             vault::vault_unlock,
             vault::vault_lock,
             vault::vault_set_auto_lock,
+            vault::vault_resolve_plugin_access_request,
             vault::vault_store_secret,
             vault::vault_delete_secret,
             terminal::terminal_start,
