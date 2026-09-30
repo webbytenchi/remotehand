@@ -23,26 +23,28 @@ const status = await invoke<{ exists: boolean; unlocked: boolean }>("vault_statu
 if (status.unlocked) return;
 
 const requestId = crypto.randomUUID();
-let dispose: (() => void) | undefined;
-const result = new Promise<void>(async (resolve, reject) => {
-dispose = await listen<VaultPromptResult>(VAULT_PROMPT_RESULT_EVENT, (event) => {
-if (event.payload.requestId !== requestId) return;
-dispose?.();
-dispose = undefined;
-if (event.payload.ok) resolve();
-else reject(new Error(event.payload.error || "Vault access was cancelled."));
-});
+let resolveResult!: () => void;
+let rejectResult!: (reason?: unknown) => void;
+const result = new Promise<void>((resolve, reject) => {
+resolveResult = resolve;
+rejectResult = reject;
 });
 
+let dispose: (() => void) | undefined;
 try {
+dispose = await listen<VaultPromptResult>(VAULT_PROMPT_RESULT_EVENT, (event) => {
+if (event.payload.requestId !== requestId) return;
+if (event.payload.ok) resolveResult();
+else rejectResult(new Error(event.payload.error || "Vault access was cancelled."));
+});
+
 await emit(VAULT_PROMPT_REQUEST_EVENT, {
 requestId,
 reason,
 create: !status.exists,
 } satisfies VaultPromptRequest);
 return await result;
-} catch (error) {
+} finally {
 dispose?.();
-throw error;
 }
 }
