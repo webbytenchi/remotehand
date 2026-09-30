@@ -3,7 +3,7 @@ export type RemoteHandShortcutModifiers = Pick<
   "ctrlKey" | "altKey" | "metaKey" | "shiftKey"
 >;
 
-const PRIMARY_BROWSER_KEYS = new Set([
+export const REMOTEHAND_BROWSER_PRIMARY_KEYS = [
   "f",
   "g",
   "h",
@@ -26,16 +26,19 @@ const PRIMARY_BROWSER_KEYS = new Set([
   "pageup",
   "pagedown",
   "tab",
-]);
+] as const;
 
-const PRIMARY_SHIFT_BROWSER_KEYS = new Set([
+export const REMOTEHAND_BROWSER_PRIMARY_SHIFT_KEYS = [
   "c",
   "i",
   "j",
   "r",
   "t",
   "w",
-]);
+] as const;
+
+const PRIMARY_BROWSER_KEYS = new Set<string>(REMOTEHAND_BROWSER_PRIMARY_KEYS);
+const PRIMARY_SHIFT_BROWSER_KEYS = new Set<string>(REMOTEHAND_BROWSER_PRIMARY_SHIFT_KEYS);
 
 export function shouldSuppressWebViewShortcut(
   key: string,
