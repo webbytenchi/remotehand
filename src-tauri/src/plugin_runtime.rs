@@ -261,6 +261,11 @@ struct VaultDocumentSetParams {
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct VaultAccessRequestParams {
+    reason: String,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct StorageGetParams {
     key: String,
 }
@@ -444,6 +449,12 @@ fn validate_plugin_request(permissions: &[String], request: &PluginRequest) -> R
             }
             Ok(())
         }
+        "vault.request_access" => {
+            if !permission_granted(permissions, "vault.access.request") {
+                return Err("plugin lacks vault.access.request permission".to_string());
+            }
+            Ok(())
+        }
         "storage.get" | "storage.set" => {
             if !permission_granted(permissions, "storage.plugin") {
                 return Err("plugin lacks storage.plugin permission".to_string());
@@ -573,6 +584,18 @@ fn handle_plugin_request(
             let vault_state = app_handle.state::<crate::vault::VaultState>();
             let deleted = crate::vault::delete_document(&vault_state, &vault_ref)?;
             Ok(serde_json::json!({ "deleted": deleted }))
+        }
+        "vault.request_access" => {
+            let params: VaultAccessRequestParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid vault.request_access params: {error}"))?;
+            let vault_state = app_handle.state::<crate::vault::VaultState>();
+            crate::vault::request_plugin_access(
+                app_handle,
+                &vault_state,
+                plugin_id,
+                &params.reason,
+            )?;
+            Ok(serde_json::json!({ "unlocked": true }))
         }
         "storage.get" => {
             let params: StorageGetParams = serde_json::from_value(request.params.clone())
@@ -1321,6 +1344,28 @@ mod tests {
             assert_eq!(error, "plugin lacks storage.plugin permission");
             assert!(validate_plugin_request(&["storage.plugin".to_string()], &request).is_ok());
         }
+    }
+
+    #[test]
+    fn validates_plugin_vault_access_request_permission() {
+        let request = PluginRequest {
+            message_type: "plugin.request".to_string(),
+            request_id: 22,
+            method: "vault.request_access".to_string(),
+            params: serde_json::json!({ "reason": "Use the configured provider credential." }),
+        };
+        assert_eq!(
+            validate_plugin_request(&[], &request).unwrap_err(),
+            "plugin lacks vault.access.request permission"
+        );
+        assert!(validate_plugin_request(
+            &["vault.access.request".to_string()],
+            &request
+        )
+        .is_ok());
+        let params: VaultAccessRequestParams =
+            serde_json::from_value(request.params.clone()).unwrap();
+        assert_eq!(params.reason, "Use the configured provider credential.");
     }
 
     #[test]
