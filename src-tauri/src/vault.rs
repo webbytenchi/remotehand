@@ -881,6 +881,29 @@ pub fn vault_delete_secret<'a>(
 mod tests {
     use super::*;
 
+    struct TestDir {
+        path: PathBuf,
+    }
+
+    impl TestDir {
+        fn new(label: &str) -> Self {
+            let suffix = encode_bytes(&random_bytes::<8>());
+            let path = env::temp_dir().join(format!("remotehand-vault-{label}-{suffix}"));
+            fs::create_dir_all(&path).unwrap();
+            Self { path }
+        }
+
+        fn vault_path(&self) -> PathBuf {
+            self.path.join("vault.enc")
+        }
+    }
+
+    impl Drop for TestDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
     fn sample_document() -> VaultDocument {
         let mut secrets = BTreeMap::new();
         secrets.insert(
@@ -898,6 +921,41 @@ mod tests {
         let metadata = new_metadata();
         let key = derive_key(passphrase, &metadata.kdf).unwrap();
         encrypt_document(&key, &metadata, &sample_document()).unwrap()
+    }
+
+    #[test]
+    fn recovery_restores_backup_when_active_vault_is_missing() {
+        let dir = TestDir::new("restore-backup");
+        let path = dir.vault_path();
+        let backup_path = path.with_extension("bak");
+        let temporary_path = path.with_extension("tmp");
+        let backup_bytes = sample_encrypted("recovery backup passphrase");
+
+        fs::write(&backup_path, &backup_bytes).unwrap();
+        fs::write(&temporary_path, b"unfinished temporary data").unwrap();
+
+        recover_interrupted_write(&path).unwrap();
+
+        assert!(path.exists());
+        assert_eq!(fs::read(&path).unwrap(), backup_bytes);
+        assert!(backup_path.exists());
+        assert!(!temporary_path.exists());
+    }
+
+    #[test]
+    fn recovery_discards_stale_temp_when_active_vault_exists() {
+        let dir = TestDir::new("discard-stale-temp");
+        let path = dir.vault_path();
+        let temporary_path = path.with_extension("tmp");
+        let active_bytes = sample_encrypted("active vault passphrase");
+
+        fs::write(&path, &active_bytes).unwrap();
+        fs::write(&temporary_path, b"unfinished temporary data").unwrap();
+
+        recover_interrupted_write(&path).unwrap();
+
+        assert_eq!(fs::read(&path).unwrap(), active_bytes);
+        assert!(!temporary_path.exists());
     }
 
     #[test]
