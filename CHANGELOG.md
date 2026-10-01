@@ -4,6 +4,24 @@ All notable changes to RemoteHand are documented here.
 
 ## Unreleased
 
+## `1.3.2` - 2026-10-01
+
+### Added
+
+- **Multi-file plugin picker.** `file.open` now accepts optional `multiple: true`; single-file callers keep the existing `path` response while multi-file callers receive `paths`.
+- **External-link host service.** Plugin API v1 adds the `links.open` permission and `link.open` host method for opening validated HTTPS URLs in the user's default browser.
+
+### Security
+
+- `link.open` accepts HTTPS URLs only, rejects other schemes such as `file:`, and bounds URLs to 2048 characters.
+- External links remain host-mediated and require the plugin to declare and receive `links.open`.
+
+### Compatibility
+
+- Plugin API remains **v1**.
+- Existing `file.open` callers that omit `multiple` retain the original single-file behavior and response shape.
+- Plugins that do not request `links.open` are unaffected.
+
 ## `1.3.1` - 2026-10-01
 
 ### Added
