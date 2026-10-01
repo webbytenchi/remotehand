@@ -209,6 +209,7 @@ Recognized permissions:
 | clipboard.write | Write bounded text to the system clipboard through `clipboard.write`. |
 | files.open | Open user-selected local files through `file.open` and receive native `files.drop` panel events. |
 | files.save | Save user-selected local files through `file.save`. |
+| links.open | Open validated HTTPS links in the user's default browser through `link.open`. |
 | tray.contribute | Publish and update generic per-plugin system-tray items through `tray.update`. |
 | notifications.show | Show bounded native notifications associated with a plugin tray item through `notification.show`. |
 | vault.secrets.read | Read secret values from the caller's own Vault namespace through `vault.secret.get`. |
@@ -492,6 +493,29 @@ Successful multi-file result:
 ~~~
 
 Cancel returns `{ "opened": false }` in both modes. Up to 8 filters are accepted, each with up to 32 extensions; `"*"` is accepted by `file.open` as an all-files extension. The host only returns user-selected native paths; reading and validating file contents remains the plugin's responsibility.
+
+### link.open
+
+Requires: `links.open`.
+
+Opens a validated HTTPS URL in the user's default system browser. This exists for sandboxed plugin panels, which should not rely on in-panel navigation for external documentation or account setup links.
+
+~~~json
+{
+ "type": "plugin.request",
+ "requestId": 4,
+ "method": "link.open",
+ "params": { "url": "https://aistudio.google.com/apikey" }
+}
+~~~
+
+Successful result:
+
+~~~json
+{ "opened": true }
+~~~
+
+Only `https://` URLs are accepted, with a maximum URL length of 2048 characters. Other schemes such as `http:`, `file:`, and custom application protocols are rejected.
 
 ### network.interfaces
 
