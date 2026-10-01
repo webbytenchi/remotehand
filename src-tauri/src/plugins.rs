@@ -995,6 +995,11 @@ mod tests {
     }
 
     #[test]
+    fn accepts_links_open_permission() {
+        assert!(validate_manifest(&manifest("remotehand.test", &["links.open"])).is_ok());
+    }
+
+    #[test]
     fn rejects_path_like_plugin_id() {
         let error = validate_manifest(&manifest("../escape", &[])).unwrap_err();
         assert!(error.contains("plugin id"));
