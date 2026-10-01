@@ -1,23 +1,34 @@
+# Changelog
+
+All notable changes to RemoteHand are documented here.
+
 ## Unreleased
 
 ## `1.3.1` - 2026-10-01
 
 ### Added
-- Generic encrypted Vault blob storage for plugin-owned binary data.
-- Plugin API v1 blob permissions `vault.blobs.read` and `vault.blobs.write`.
-- Chunked `vault.blob.*` upload/read/delete methods for payloads larger than the document API.
-- Vault status events forwarded to plugin panels so decrypted plugin UI can redact immediately on lock.
-- Serialize each plugin runtime request/response lifetime so a second panel call cannot overtake a nested host API response and desynchronize Plugin API v1 framing.
+
+- **Encrypted Vault blob storage.** Plugins can store large private binary payloads through generic, caller-scoped Vault blob APIs.
+- **Plugin blob permissions.** Plugin API v1 adds `vault.blobs.read` and `vault.blobs.write`.
+- **Chunked blob operations.** Added `vault.blob.begin`, `vault.blob.write`, `vault.blob.commit`, `vault.blob.abort`, `vault.blob.info`, `vault.blob.read`, and `vault.blob.delete`.
+- **Vault status events.** Plugin panels receive Vault lock-state changes so decrypted UI can redact immediately when the Vault locks.
+- **Serialized plugin runtime request lifetimes.** RemoteHand now keeps each plugin runtime request/response exchange ordered through nested host API calls, preventing concurrent panel requests from desynchronizing Plugin API v1 framing.
 
 ### Security
+
 - Blob filenames are opaque keyed identifiers rather than logical plugin keys.
 - Blob encryption uses domain-separated per-blob keys with XChaCha20-Poly1305 authenticated 1 MiB chunks.
-- Blob AAD binds Vault ID, caller-scoped Vault reference, chunk index, total size, and format context.
+- Blob authenticated data binds Vault ID, caller-scoped Vault reference, chunk index, total size, and format context.
 - Incomplete uploads remain temporary and are aborted on Vault lock.
+- Plugin blob access remains permission-gated and scoped to the authenticated plugin identity.
 
-# Changelog
+### Compatibility
 
-All notable changes to RemoteHand are documented here.
+- Plugin API remains **v1**.
+- Existing API-v1 plugins remain compatible.
+- The structured Vault document/secret API remains unchanged.
+- The blob API is an additive generic host capability; plugins that do not request blob permissions are unaffected.
+
 
 ## `1.3.0` - 2026-10-01
 
