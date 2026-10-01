@@ -320,6 +320,8 @@ struct FileSaveFilter {
 struct FileOpenParams {
     #[serde(default)]
     filters: Vec<FileSaveFilter>,
+    #[serde(default)]
+    multiple: bool,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -850,6 +852,18 @@ fn handle_plugin_request(
                     .map(String::as_str)
                     .collect::<Vec<_>>();
                 dialog = dialog.add_filter(&filter.name, &extensions);
+            }
+            if params.multiple {
+                let Some(paths) = dialog.pick_files() else {
+                    return Ok(serde_json::json!({"opened":false}));
+                };
+                return Ok(serde_json::json!({
+                    "opened": true,
+                    "paths": paths
+                        .iter()
+                        .map(|path| path.to_string_lossy().to_string())
+                        .collect::<Vec<_>>()
+                }));
             }
             let Some(path) = dialog.pick_file() else {
                 return Ok(serde_json::json!({"opened":false}));
@@ -1504,7 +1518,16 @@ mod tests {
             "plugin lacks files.open permission"
         );
         let params: FileOpenParams = serde_json::from_value(request.params.clone()).unwrap();
+        assert!(!params.multiple);
         assert!(validate_file_open_params(&params).is_ok());
+
+        let multiple: FileOpenParams = serde_json::from_value(serde_json::json!({
+            "multiple": true,
+            "filters": [{ "name": "Images", "extensions": ["png", "jpg", "webp"] }]
+        }))
+        .unwrap();
+        assert!(multiple.multiple);
+        assert!(validate_file_open_params(&multiple).is_ok());
     }
 
     #[test]
