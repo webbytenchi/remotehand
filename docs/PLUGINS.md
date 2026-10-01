@@ -440,6 +440,59 @@ Writes text to the system clipboard through the host. The current host limit is 
 
 A successful response returns a null result. Use this service from sandboxed plugin panels when a user explicitly chooses a copy action.
 
+### file.open
+
+Requires: `files.open`.
+
+Opens a native user-owned file picker. Existing single-file behavior is unchanged when `multiple` is omitted or false.
+
+Single-file request:
+
+~~~json
+{
+ "type": "plugin.request",
+ "requestId": 4,
+ "method": "file.open",
+ "params": {
+  "filters": [{ "name": "Images", "extensions": ["png", "jpg", "webp"] }]
+ }
+}
+~~~
+
+Successful single-file result:
+
+~~~json
+{ "opened": true, "path": "C:\\Users\\user\\Pictures\\image.png" }
+~~~
+
+For multi-file selection, pass `"multiple": true`:
+
+~~~json
+{
+ "type": "plugin.request",
+ "requestId": 5,
+ "method": "file.open",
+ "params": {
+  "multiple": true,
+  "filters": [{ "name": "Images", "extensions": ["png", "jpg", "webp"] }]
+ }
+}
+~~~
+
+Successful multi-file result:
+
+~~~json
+{
+ "opened": true,
+ "paths": [
+  "C:\\Users\\user\\Pictures\\a.png",
+  "C:\\Users\\user\\Pictures\\b.webp"
+ ]
+}
+~~~
+
+Cancel returns `{ "opened": false }` in both modes. Up to 8 filters are accepted, each with up to 32 extensions; `"*"` is accepted by `file.open` as an all-files extension. The host only returns user-selected native paths; reading and validating file contents remains the plugin's responsibility.
+
 ### network.interfaces
 
 Requires: `network.inspect`.
