@@ -22,6 +22,7 @@ const ALLOWED_PERMISSIONS: &[&str] = &[
     "clipboard.write",
     "files.open",
     "files.save",
+    "links.open",
     "credentials.use",
     "credentials.store",
     "vault.secrets.read",
