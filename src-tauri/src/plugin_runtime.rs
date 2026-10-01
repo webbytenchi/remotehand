@@ -325,6 +325,11 @@ struct FileOpenParams {
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LinkOpenParams {
+    url: String,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct FileSaveParams {
     suggested_name: String,
     content: String,
@@ -580,6 +585,12 @@ fn validate_plugin_request(permissions: &[String], request: &PluginRequest) -> R
             }
             Ok(())
         }
+        "link.open" => {
+            if !permission_granted(permissions, "links.open") {
+                return Err("plugin lacks links.open permission".to_string());
+            }
+            Ok(())
+        }
         "plugin.available" | "plugin.open_panel" => {
             if !permission_granted(permissions, "plugins.open") {
                 return Err("plugin lacks plugins.open permission".to_string());
@@ -595,6 +606,49 @@ fn validate_plugin_request(permissions: &[String], request: &PluginRequest) -> R
         other => Err(format!("unsupported host API method: {other}")),
     }
 }
+fn validate_link_open_params(params: &LinkOpenParams) -> Result<(), String> {
+    let url = params.url.trim();
+    if url.is_empty() || url.len() > 2048 {
+        return Err("link.open URL is missing or too long".to_string());
+    }
+    if !url.starts_with("https://") {
+        return Err("link.open only supports https URLs".to_string());
+    }
+    Ok(())
+}
+
+fn open_external_link(url: &str) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        Command::new("rundll32.exe")
+            .arg("url.dll,FileProtocolHandler")
+            .arg(url)
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .map_err(|error| format!("failed to open external link: {error}"))?;
+        return Ok(());
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(url)
+            .spawn()
+            .map_err(|error| format!("failed to open external link: {error}"))?;
+        return Ok(());
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        Command::new("xdg-open")
+            .arg(url)
+            .spawn()
+            .map_err(|error| format!("failed to open external link: {error}"))?;
+        return Ok(());
+    }
+    #[allow(unreachable_code)]
+    Err("opening external links is not supported on this platform".to_string())
+}
+
 fn focused_dialog_parent(app_handle: &AppHandle) -> Option<tauri::WebviewWindow> {
     app_handle
         .webview_windows()
@@ -869,6 +923,13 @@ fn handle_plugin_request(
                 return Ok(serde_json::json!({"opened":false}));
             };
             Ok(serde_json::json!({"opened":true,"path":path.to_string_lossy()}))
+        }
+        "link.open" => {
+            let params: LinkOpenParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid link.open params: {error}"))?;
+            validate_link_open_params(&params)?;
+            open_external_link(params.url.trim())?;
+            Ok(serde_json::json!({ "opened": true }))
         }
         "file.save" => {
             let params: FileSaveParams = serde_json::from_value(request.params.clone())
@@ -1528,6 +1589,31 @@ mod tests {
         .unwrap();
         assert!(multiple.multiple);
         assert!(validate_file_open_params(&multiple).is_ok());
+    }
+
+    #[test]
+    fn validates_link_open_permission_and_params() {
+        let request = PluginRequest {
+            message_type: "plugin.request".to_string(),
+            request_id: 2,
+            method: "link.open".to_string(),
+            params: serde_json::json!({ "url": "https://aistudio.google.com/apikey" }),
+        };
+        assert!(validate_plugin_request(&["links.open".to_string()], &request).is_ok());
+        assert_eq!(
+            validate_plugin_request(&[], &request).unwrap_err(),
+            "plugin lacks links.open permission"
+        );
+        let params: LinkOpenParams = serde_json::from_value(request.params.clone()).unwrap();
+        assert!(validate_link_open_params(&params).is_ok());
+        assert!(validate_link_open_params(&LinkOpenParams {
+            url: "http://example.com".to_string()
+        })
+        .is_err());
+        assert!(validate_link_open_params(&LinkOpenParams {
+            url: "file:///etc/passwd".to_string()
+        })
+        .is_err());
     }
 
     #[test]
