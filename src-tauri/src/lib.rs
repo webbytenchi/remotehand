@@ -108,32 +108,20 @@ fn set_panel_popout_geometry(
         .get_webview_window(&label)
         .ok_or_else(|| format!("panel popout {label} is not available"))?;
 
-    let monitors = window.available_monitors().map_err(|error| error.to_string())?;
-    let mut target_x = x;
-    let mut target_y = y;
-    let mut target_width = width.max(320);
-    let mut target_height = height.max(240);
-
-    if let Some(monitor) = monitors.iter().find(|monitor| {
-        let work = monitor.work_area();
-        let right = work.position.x + work.size.width as i32;
-        let bottom = work.position.y + work.size.height as i32;
-        x < right && y < bottom && x + width as i32 > work.position.x && y + height as i32 > work.position.y
-    }).or_else(|| monitors.first()) {
-        let work = monitor.work_area();
-        target_width = target_width.min(work.size.width);
-        target_height = target_height.min(work.size.height);
-        let max_x = work.position.x + work.size.width as i32 - target_width as i32;
-        let max_y = work.position.y + work.size.height as i32 - target_height as i32;
-        target_x = target_x.clamp(work.position.x, max_x.max(work.position.x));
-        target_y = target_y.clamp(work.position.y, max_y.max(work.position.y));
-    }
-
+    // Dockview serializes popout geometry from browser screenX/screenY and
+    // innerWidth/innerHeight, which are CSS/logical pixels. Applying those
+    // values as Tauri Physical* coordinates makes the window drift and shrink
+    // on Windows when display scaling is above 100%, and the smaller result is
+    // then serialized again on the next shutdown. Keep both sides in logical
+    // units so the geometry round-trips without cumulative DPI scaling.
     window
-        .set_size(tauri::PhysicalSize::new(target_width, target_height))
+        .set_size(tauri::LogicalSize::new(
+            width.max(320) as f64,
+            height.max(240) as f64,
+        ))
         .map_err(|error| error.to_string())?;
     window
-        .set_position(tauri::PhysicalPosition::new(target_x, target_y))
+        .set_position(tauri::LogicalPosition::new(x as f64, y as f64))
         .map_err(|error| error.to_string())?;
     Ok(())
 }
