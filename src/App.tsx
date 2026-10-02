@@ -29,6 +29,11 @@ type VaultPromptRequest,
 } from "./vaultPrompt";
 import { enqueueVaultPrompt, settleVaultPromptBatch } from "./vaultPromptBatch";
 import {
+  captureGridGroupSizes,
+  restoreGridGroupSizes,
+  type GridGroupSize,
+} from "./workspaceSizing";
+import {
   EMPTY_UI_CONTRIBUTION_LAYOUT,
   contributionOrderIndex,
   mergeRememberedOrder,
@@ -792,6 +797,7 @@ const workspaceSaveTimerRef = useRef<number | null>(null);
 const workspacePersistenceEnabledRef = useRef(true);
 const poppedOutPanelRef = useRef<{ panelId: string; count: number; window?: Window } | null>(null);
 const popoutWindowsRef = useRef<Map<string, RemoteHandPopoutWindow>>(new Map());
+const popoutReturnSizesRef = useRef<Map<string, GridGroupSize[]>>(new Map());
 const mainReturnGroupRef = useRef<Map<string, string>>(new Map());
 const lastFocusedElementRef = useRef<HTMLElement | null>(null);
 useEffect(() => {
@@ -1210,6 +1216,7 @@ const dockPanel = useCallback((panelId: string) => {
 const api = apiRef.current;
 const panel = api?.getPanel(panelId);
 if (!api || !panel || panel.api.location.type !== "popout") return;
+const preservedMainSizes = captureGridGroupSizes(api.groups);
 try {
 const popoutWindow = panel.api.getWindow() as RemoteHandPopoutWindow;
 const nativeLabel = popoutWindow.__REMOTEHAND_NATIVE_WINDOW_LABEL__;
@@ -1224,6 +1231,12 @@ position: rememberedGroup ? "center" : "right",
 });
 mainReturnGroupRef.current.set(panelId, (rememberedGroup ?? fallbackGroup).id);
 panel.api.setActive();
+
+const restoreMainSizes = () => restoreGridGroupSizes(api.groups, preservedMainSizes);
+window.requestAnimationFrame(() => {
+restoreMainSizes();
+window.requestAnimationFrame(restoreMainSizes);
+});
 
 if (isTauri() && nativeLabel) {
 queueMicrotask(() => {
@@ -1881,10 +1894,20 @@ event.api.onDidLayoutChange(() => {
 captureLayout(event.api);
 releaseWorkspaceTabDragAssist();
 });
+event.api.onDidPopoutGroupSizeChange(() => {
+captureLayout(event.api);
+});
+event.api.onDidPopoutGroupPositionChange(() => {
+captureLayout(event.api);
+});
 event.api.onDidAddPopoutGroup((popout) => {
 popout.group.activePanel?.api.setActive();
 popout.window.focus();
 popoutWindowsRef.current.set(popout.id, popout.window as RemoteHandPopoutWindow);
+const rememberMainSizesBeforeReturn = () => {
+popoutReturnSizesRef.current.set(popout.id, captureGridGroupSizes(event.api.groups));
+};
+popout.window.addEventListener("beforeunload", rememberMainSizesBeforeReturn, { once: true });
 poppedOutPanelRef.current = {
 panelId: popout.group.activePanel?.id ?? poppedOutPanelRef.current?.panelId ?? "",
 count: event.api.getPopouts().length,
@@ -1933,7 +1956,14 @@ revealPopout();
 event.api.onDidRemovePopoutGroup((removedPopout) => {
 const popoutWindow = popoutWindowsRef.current.get(removedPopout.id);
 popoutWindowsRef.current.delete(removedPopout.id);
+const preservedMainSizes = popoutReturnSizesRef.current.get(removedPopout.id) ?? [];
+popoutReturnSizesRef.current.delete(removedPopout.id);
 const nativeLabel = popoutWindow?.__REMOTEHAND_NATIVE_WINDOW_LABEL__;
+const restoreMainSizes = () => restoreGridGroupSizes(event.api.groups, preservedMainSizes);
+window.requestAnimationFrame(() => {
+restoreMainSizes();
+window.requestAnimationFrame(restoreMainSizes);
+});
 window.setTimeout(() => {
 if (popoutWindow && !popoutWindow.closed) {
 popoutWindow.close();
