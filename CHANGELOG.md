@@ -4,6 +4,23 @@ All notable changes to RemoteHand are documented here.
 
 ## Unreleased
 
+## `1.3.3` - 2026-10-02
+
+### Improved
+
+- **Larger plugin clipboard writes.** The generic `clipboard.write` host service now accepts up to **4 MiB** of text per request instead of 64 KiB, allowing plugins to copy larger diagnostics, traces, and exported text while keeping a bounded host-side limit.
+
+### Compatibility
+
+- Plugin API remains **v1**.
+- The `clipboard.write` request and response shapes are unchanged; only the maximum accepted text size increased.
+- Existing plugins require no migration.
+
+### Verification
+
+- Manual Windows acceptance confirmed a Marielle Module Trace larger than the previous 64 KiB ceiling can be copied through the plugin host and pasted intact.
+
+
 ## `1.3.2` - 2026-10-01
 
 ### Added
