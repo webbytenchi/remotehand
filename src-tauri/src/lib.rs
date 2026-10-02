@@ -451,6 +451,16 @@ pub fn run() {
                 .build()
                 .map_err(std::io::Error::other)?;
             native_file_drop::install(&main_window).map_err(std::io::Error::other)?;
+
+            // Restore the native main-window geometry before slower startup work
+            // (notably plugin runtime startup) can allow the frontend Dockview
+            // workspace to initialize against the default window dimensions.
+            // Dockview can then restore saved split proportions against the final
+            // viewport size instead of only preserving the split topology.
+            let tracker = window_state::WindowStateTracker::default();
+            app.manage(tracker.clone());
+            window_state::restore(app, &tracker).map_err(std::io::Error::other)?;
+
             startup_tray::install(&app.handle().clone(), &startup_tray_state)
                 .map_err(std::io::Error::other)?;
             let saved = storage::load_settings().map_err(std::io::Error::other)?;
@@ -478,9 +488,6 @@ pub fn run() {
                     log::error!("Failed to restore enabled plugins: {error}");
                 }
             }
-            let tracker = window_state::WindowStateTracker::default();
-            app.manage(tracker.clone());
-            window_state::restore(app, &tracker).map_err(std::io::Error::other)?;
             setup_window_restored.store(true, Ordering::Release);
             if setup_page_loaded.load(Ordering::Acquire) && !start_hidden {
                 if let Some(window) = app.get_webview_window("main") {
