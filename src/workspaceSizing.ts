@@ -121,16 +121,15 @@ export type PopoutGeometry = {
   height: number;
 };
 
-export function extractPopoutGeometries(layout: unknown): PopoutGeometry[] {
+export function extractPopoutGeometries(layout: unknown): Array<PopoutGeometry | null> {
   if (!layout || typeof layout !== "object") return [];
   const popouts = (layout as { popoutGroups?: unknown }).popoutGroups;
   if (!Array.isArray(popouts)) return [];
 
-  const geometries: PopoutGeometry[] = [];
-  for (const popoutValue of popouts) {
-    if (!popoutValue || typeof popoutValue !== "object") continue;
+  return popouts.map((popoutValue) => {
+    if (!popoutValue || typeof popoutValue !== "object") return null;
     const position = (popoutValue as { position?: unknown }).position;
-    if (!position || typeof position !== "object") continue;
+    if (!position || typeof position !== "object") return null;
     const value = position as {
       left?: unknown;
       top?: unknown;
@@ -145,14 +144,13 @@ export function extractPopoutGeometries(layout: unknown): PopoutGeometry[] {
       value.width <= 0 ||
       value.height <= 0
     ) {
-      continue;
+      return null;
     }
-    geometries.push({
+    return {
       left: value.left,
       top: value.top,
       width: value.width,
       height: value.height,
-    });
-  }
-  return geometries;
+    };
+  });
 }
