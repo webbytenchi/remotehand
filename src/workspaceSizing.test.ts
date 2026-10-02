@@ -32,7 +32,27 @@ describe("workspaceSizing", () => {
       { id: "main-a", width: 420, height: 700 },
       { id: "main-b", width: 860, height: 700 },
     ]);
-    it("extracts nested popout group dimensions from a saved workspace", () => {
+  });
+
+  it("restores only groups that were present in the captured main grid", () => {
+    const mainA = group("main-a", "grid", 500, 700);
+    const returned = group("returned", "grid", 300, 700);
+    const mainB = group("main-b", "grid", 480, 700);
+
+    restoreGridGroupSizes(
+      [mainA, returned, mainB],
+      [
+        { id: "main-a", width: 420, height: 700 },
+        { id: "main-b", width: 860, height: 700 },
+      ],
+    );
+
+    expect(mainA.api.setSize).toHaveBeenCalledWith({ width: 420, height: 700 });
+    expect(mainB.api.setSize).toHaveBeenCalledWith({ width: 860, height: 700 });
+    expect(returned.api.setSize).not.toHaveBeenCalled();
+  });
+
+  it("extracts nested popout group dimensions from a saved workspace", () => {
     const sizes = extractPopoutGridGroupSizes({
       popoutGroups: [
         {
@@ -76,24 +96,5 @@ describe("workspaceSizing", () => {
       { id: "top-right", width: 600, height: 200 },
       { id: "bottom-right", width: 600, height: 400 },
     ]);
-  });
-});
-
-  it("restores only groups that were present in the captured main grid", () => {
-    const mainA = group("main-a", "grid", 500, 700);
-    const returned = group("returned", "grid", 300, 700);
-    const mainB = group("main-b", "grid", 480, 700);
-
-    restoreGridGroupSizes(
-      [mainA, returned, mainB],
-      [
-        { id: "main-a", width: 420, height: 700 },
-        { id: "main-b", width: 860, height: 700 },
-      ],
-    );
-
-    expect(mainA.api.setSize).toHaveBeenCalledWith({ width: 420, height: 700 });
-    expect(mainB.api.setSize).toHaveBeenCalledWith({ width: 860, height: 700 });
-    expect(returned.api.setSize).not.toHaveBeenCalled();
   });
 });
