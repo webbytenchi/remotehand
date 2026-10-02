@@ -93,6 +93,52 @@ fn close_panel_popouts(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn set_panel_popout_geometry(
+    app: tauri::AppHandle,
+    label: String,
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+) -> Result<(), String> {
+    if !label.starts_with("panel-popout-") {
+        return Err("refusing to resize a non-panel popout window".to_string());
+    }
+    let window = app
+        .get_webview_window(&label)
+        .ok_or_else(|| format!("panel popout {label} is not available"))?;
+
+    let monitors = window.available_monitors().map_err(|error| error.to_string())?;
+    let mut target_x = x;
+    let mut target_y = y;
+    let mut target_width = width.max(320);
+    let mut target_height = height.max(240);
+
+    if let Some(monitor) = monitors.iter().find(|monitor| {
+        let work = monitor.work_area();
+        let right = work.position.x + work.size.width as i32;
+        let bottom = work.position.y + work.size.height as i32;
+        x < right && y < bottom && x + width as i32 > work.position.x && y + height as i32 > work.position.y
+    }).or_else(|| monitors.first()) {
+        let work = monitor.work_area();
+        target_width = target_width.min(work.size.width);
+        target_height = target_height.min(work.size.height);
+        let max_x = work.position.x + work.size.width as i32 - target_width as i32;
+        let max_y = work.position.y + work.size.height as i32 - target_height as i32;
+        target_x = target_x.clamp(work.position.x, max_x.max(work.position.x));
+        target_y = target_y.clamp(work.position.y, max_y.max(work.position.y));
+    }
+
+    window
+        .set_size(tauri::PhysicalSize::new(target_width, target_height))
+        .map_err(|error| error.to_string())?;
+    window
+        .set_position(tauri::PhysicalPosition::new(target_x, target_y))
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 fn hide_single_panel_popout(app: tauri::AppHandle) -> Result<(), String> {
     let mut popouts = app
         .webview_windows()
@@ -361,6 +407,7 @@ pub fn run() {
             close_current_window,
             close_panel_popout,
             close_panel_popouts,
+            set_panel_popout_geometry,
             hide_single_panel_popout,
             focus_main_window,
             focus_single_panel_popout,
