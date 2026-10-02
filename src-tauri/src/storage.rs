@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::{env, fs, path::PathBuf};
+use tauri::Manager;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Settings {
@@ -183,8 +184,67 @@ pub fn load_workspace() -> Result<Option<serde_json::Value>, String> {
     let workspace = serde_json::from_str(&contents).map_err(|error| error.to_string())?;
     Ok(Some(workspace))
 }
+fn apply_native_popout_geometry(
+    workspace: &mut serde_json::Value,
+    geometries: &[(f64, f64, f64, f64)],
+) {
+    let Some(popouts) = workspace
+        .get_mut("popoutGroups")
+        .and_then(serde_json::Value::as_array_mut)
+    else {
+        return;
+    };
+
+    for (popout, (left, top, width, height)) in popouts.iter_mut().zip(geometries.iter()) {
+        let Some(object) = popout.as_object_mut() else {
+            continue;
+        };
+        object.insert(
+            "position".to_string(),
+            serde_json::json!({
+                "left": left,
+                "top": top,
+                "width": width,
+                "height": height,
+            }),
+        );
+    }
+}
+
 #[tauri::command]
-pub fn save_workspace(workspace: serde_json::Value) -> Result<(), String> {
+pub fn save_workspace(
+    app: tauri::AppHandle,
+    mut workspace: serde_json::Value,
+) -> Result<(), String> {
+    // Dockview reports popout screenX/screenY from the WebView document. On
+    // Windows/WebView2 those coordinates can be offset from the native outer
+    // window origin by non-client chrome, which caused a small down/right drift
+    // every time the serialized position was restored and saved again. Replace
+    // Dockview's popout geometry with the exact native window geometry before
+    // persisting the workspace.
+    let mut popouts: Vec<_> = app
+        .webview_windows()
+        .into_iter()
+        .filter(|(label, _)| label.starts_with("panel-popout-"))
+        .collect();
+    popouts.sort_by_key(|(label, _)| {
+        label
+            .strip_prefix("panel-popout-")
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(0)
+    });
+
+    let geometries: Vec<_> = popouts
+        .into_iter()
+        .filter_map(|(_, window)| {
+            let scale = window.scale_factor().ok()?;
+            let position = window.outer_position().ok()?.to_logical::<f64>(scale);
+            let size = window.inner_size().ok()?.to_logical::<f64>(scale);
+            Some((position.x, position.y, size.width, size.height))
+        })
+        .collect();
+    apply_native_popout_geometry(&mut workspace, &geometries);
+
     let path = workspace_path()?;
     let parent = path
         .parent()
@@ -206,6 +266,33 @@ pub fn clear_workspace() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_popout_geometry_replaces_serialized_browser_geometry_in_order() {
+        let mut workspace = serde_json::json!({
+            "popoutGroups": [
+                { "position": { "left": 101, "top": 102, "width": 500, "height": 400 } },
+                { "position": { "left": 201, "top": 202, "width": 600, "height": 450 } }
+            ]
+        });
+
+        apply_native_popout_geometry(
+            &mut workspace,
+            &[
+                (10.0, 20.0, 800.0, 600.0),
+                (30.0, 40.0, 900.0, 700.0),
+            ],
+        );
+
+        assert_eq!(
+            workspace["popoutGroups"][0]["position"],
+            serde_json::json!({ "left": 10.0, "top": 20.0, "width": 800.0, "height": 600.0 })
+        );
+        assert_eq!(
+            workspace["popoutGroups"][1]["position"],
+            serde_json::json!({ "left": 30.0, "top": 40.0, "width": 900.0, "height": 700.0 })
+        );
+    }
 
     #[test]
     fn saved_connection_serialization_never_contains_password_material() {
