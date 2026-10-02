@@ -27,6 +27,7 @@ VAULT_PROMPT_RESULT_EVENT,
 requestVaultAccess,
 type VaultPromptRequest,
 } from "./vaultPrompt";
+import { enqueueVaultPrompt, settleVaultPromptBatch } from "./vaultPromptBatch";
 import {
   EMPTY_UI_CONTRIBUTION_LAYOUT,
   contributionOrderIndex,
@@ -1647,7 +1648,7 @@ let unlisten: (() => void) | undefined;
 void listen<VaultPromptRequest>(VAULT_PROMPT_REQUEST_EVENT, (event) => {
 const request = event.payload;
 if (vaultPromptRef.current) {
-vaultPromptQueueRef.current.push(request);
+enqueueVaultPrompt(vaultPromptQueueRef.current, request);
 return;
 }
 vaultPromptRef.current = request;
@@ -1681,7 +1682,7 @@ source: "plugin",
 reason: `Plugin ${incoming.pluginId ?? "unknown"} requests Vault access. ${incoming.reason}`,
 };
 if (vaultPromptRef.current) {
-vaultPromptQueueRef.current.push(request);
+enqueueVaultPrompt(vaultPromptQueueRef.current, request);
 return;
 }
 vaultPromptRef.current = request;
@@ -1725,11 +1726,7 @@ ok,
 
 // Keep the active marker in place while settling so any Vault requests that
 // arrive during the same unlock are queued and released by this one prompt.
-let batch = [request];
-while (batch.length > 0) {
-await Promise.allSettled(batch.map((pending) => settle(pending)));
-batch = vaultPromptQueueRef.current.splice(0);
-}
+await settleVaultPromptBatch(request, vaultPromptQueueRef.current, settle);
 
 vaultPromptRef.current = null;
 setVaultPrompt(null);
