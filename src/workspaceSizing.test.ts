@@ -64,6 +64,7 @@ describe("workspaceSizing", () => {
       }),
     ).toEqual([
       { left: 120, top: 80, width: 900, height: 600 },
+      null,
       { left: 1400, top: 200, width: 700, height: 500 },
     ]);
   });
