@@ -112,3 +112,47 @@ export function extractPopoutGridGroupSizes(layout: unknown): GridGroupSize[] {
   }
   return output;
 }
+
+
+export type PopoutGeometry = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
+export function extractPopoutGeometries(layout: unknown): PopoutGeometry[] {
+  if (!layout || typeof layout !== "object") return [];
+  const popouts = (layout as { popoutGroups?: unknown }).popoutGroups;
+  if (!Array.isArray(popouts)) return [];
+
+  const geometries: PopoutGeometry[] = [];
+  for (const popoutValue of popouts) {
+    if (!popoutValue || typeof popoutValue !== "object") continue;
+    const position = (popoutValue as { position?: unknown }).position;
+    if (!position || typeof position !== "object") continue;
+    const value = position as {
+      left?: unknown;
+      top?: unknown;
+      width?: unknown;
+      height?: unknown;
+    };
+    if (
+      typeof value.left !== "number" ||
+      typeof value.top !== "number" ||
+      typeof value.width !== "number" ||
+      typeof value.height !== "number" ||
+      value.width <= 0 ||
+      value.height <= 0
+    ) {
+      continue;
+    }
+    geometries.push({
+      left: value.left,
+      top: value.top,
+      width: value.width,
+      height: value.height,
+    });
+  }
+  return geometries;
+}
