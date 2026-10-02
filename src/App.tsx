@@ -956,11 +956,18 @@ layoutHistoryIndexRef.current = next.length - 1;
 persistWorkspaceSnapshot(snapshot);
 }, [persistWorkspaceSnapshot]);
 
-const applyHistorySnapshot = useCallback((snapshot: string, index: number) => {
+const applyHistorySnapshot = useCallback(async (snapshot: string, index: number) => {
 const api = apiRef.current;
 if (!api) return;
 applyingHistoryRef.current = true;
 try {
+if (isTauri() && api.getPopouts().length > 0) {
+try {
+await invoke("close_panel_popouts");
+} catch (error) {
+console.error("Failed to close native popouts before applying workspace history", error);
+}
+}
 api.fromJSON(JSON.parse(snapshot) as WorkspaceLayout);
 layoutHistoryIndexRef.current = index;
 persistWorkspaceSnapshot(snapshot, true);
@@ -975,7 +982,7 @@ const undoLayout = useCallback(() => {
 const index = layoutHistoryIndexRef.current;
 if (index <= 0) return;
 const nextIndex = index - 1;
-applyHistorySnapshot(layoutHistoryRef.current[nextIndex], nextIndex);
+void applyHistorySnapshot(layoutHistoryRef.current[nextIndex], nextIndex);
 }, [applyHistorySnapshot]);
 
 const redoLayout = useCallback(() => {
@@ -983,7 +990,7 @@ const index = layoutHistoryIndexRef.current;
 const history = layoutHistoryRef.current;
 if (index < 0 || index >= history.length - 1) return;
 const nextIndex = index + 1;
-applyHistorySnapshot(history[nextIndex], nextIndex);
+void applyHistorySnapshot(history[nextIndex], nextIndex);
 }, [applyHistorySnapshot]);
 
 const addConnection = useCallback((connection: Connection) => {
@@ -1774,12 +1781,31 @@ const watchdog = () => {
 focusPassphrase();
 if (!cancelled) window.requestAnimationFrame(watchdog);
 };
+const keepVaultPromptKeystrokes = (event: KeyboardEvent) => {
+const input = vaultPassphraseInputRef.current;
+if (!input || input.disabled) return;
+const modal = input.closest(".vault-prompt-modal");
+const target = event.target;
+if (target instanceof Node && modal?.contains(target)) return;
+if (event.ctrlKey || event.metaKey || event.altKey || event.key.length !== 1) {
+event.preventDefault();
+event.stopImmediatePropagation();
+focusPassphrase();
+return;
+}
+event.preventDefault();
+event.stopImmediatePropagation();
+focusPassphrase();
+setVaultPromptPassphrase((current) => current + event.key);
+};
 document.addEventListener("focusin", keepVaultPromptFocused, true);
+window.addEventListener("keydown", keepVaultPromptKeystrokes, true);
 const frame = window.requestAnimationFrame(watchdog);
 return () => {
 cancelled = true;
 window.cancelAnimationFrame(frame);
 document.removeEventListener("focusin", keepVaultPromptFocused, true);
+window.removeEventListener("keydown", keepVaultPromptKeystrokes, true);
 };
 }, [vaultPrompt]);
 
@@ -1938,12 +1964,6 @@ captureLayout(event.api);
 });
 event.api.onDidPopoutGroupPositionChange(() => {
 captureLayout(event.api);
-});
-event.api.onWillClosePopoutWindow((closingPopout) => {
-const closingWindow = closingPopout.window as RemoteHandPopoutWindow;
-const nativeLabel = closingWindow.__REMOTEHAND_NATIVE_WINDOW_LABEL__;
-if (!isTauri() || !nativeLabel) return;
-void invoke("close_panel_popout", { label: nativeLabel }).catch(() => undefined);
 });
 event.api.onDidAddPopoutGroup((popout) => {
 const restoreSavedPopoutSizes = () => {
