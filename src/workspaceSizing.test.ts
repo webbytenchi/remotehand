@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   captureGridGroupSizes,
+  extractPopoutGeometries,
   extractPopoutGridGroupSizes,
   restoreGridGroupSizes,
 } from "./workspaceSizing";
@@ -50,6 +51,21 @@ describe("workspaceSizing", () => {
     expect(mainA.api.setSize).toHaveBeenCalledWith({ width: 420, height: 700 });
     expect(mainB.api.setSize).toHaveBeenCalledWith({ width: 860, height: 700 });
     expect(returned.api.setSize).not.toHaveBeenCalled();
+  });
+
+  it("extracts saved popout desktop geometry in restore order", () => {
+    expect(
+      extractPopoutGeometries({
+        popoutGroups: [
+          { position: { left: 120, top: 80, width: 900, height: 600 } },
+          { position: null },
+          { position: { left: 1400, top: 200, width: 700, height: 500 } },
+        ],
+      }),
+    ).toEqual([
+      { left: 120, top: 80, width: 900, height: 600 },
+      { left: 1400, top: 200, width: 700, height: 500 },
+    ]);
   });
 
   it("extracts nested popout group dimensions from a saved workspace", () => {
