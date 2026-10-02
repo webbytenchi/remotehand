@@ -1907,7 +1907,7 @@ popoutWindowsRef.current.set(popout.id, popout.window as RemoteHandPopoutWindow)
 const rememberMainSizesBeforeReturn = () => {
 popoutReturnSizesRef.current.set(popout.id, captureGridGroupSizes(event.api.groups));
 };
-popout.window.addEventListener("beforeunload", rememberMainSizesBeforeReturn, { once: true });
+popout.window.addEventListener("beforeunload", rememberMainSizesBeforeReturn, { once: true, capture: true });
 poppedOutPanelRef.current = {
 panelId: popout.group.activePanel?.id ?? poppedOutPanelRef.current?.panelId ?? "",
 count: event.api.getPopouts().length,
