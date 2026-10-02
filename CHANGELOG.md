@@ -4,6 +4,37 @@ All notable changes to RemoteHand are documented here.
 
 ## Unreleased
 
+## `1.3.4` - 2026-10-03
+
+### Improved
+
+- **Concurrent Vault startup access.** Multiple Vault-dependent plugin panels can request access during startup and share one host-owned unlock flow instead of leaving later panels blank until reopened.
+- **Vault prompt focus ownership.** While RemoteHand is asking for the Vault passphrase, startup panel and popout activity no longer steals keyboard focus from the host-owned passphrase field.
+- **Workspace restoration.** Main-workspace split proportions are restored against the final native window geometry, and popout workspaces retain their internal panel proportions across restarts.
+- **Popout persistence.** Popout windows now restore their native desktop position and size reliably, including multiple simultaneous popouts and scaled Windows displays.
+- **Popout reintegration.** Closing or docking a popout returns its panels to the main workspace without disturbing the existing main-workspace proportions.
+
+### Fixed
+
+- **Vault startup race.** Fixed concurrent Vault access requests where one startup plugin could succeed while another remained blank.
+- **Popout geometry drift.** Fixed restored popouts gradually moving down/right or shrinking on each restart by persisting native window geometry instead of round-tripping browser-reported coordinates.
+- **Popout focus during Vault unlock.** Restored popouts can be revealed without taking native focus while the Vault prompt is active.
+- **Layout undo with popouts.** Ctrl+Z / Ctrl+Y workspace history no longer leaves empty native popout shells behind when a saved layout recreates a popout.
+- **Workspace split reset.** Returning panels from a popout no longer resets the sizes of existing main-workspace panels.
+
+### Compatibility
+
+- Plugin API remains **v1**.
+- Existing plugins require no migration.
+- Vault cryptography, plugin Vault permissions, and stored Vault formats are unchanged.
+- Existing workspace files remain compatible; RemoteHand simply records and restores popout geometry more precisely.
+
+### Verification
+
+- Frontend tests passed with **23 tests and 0 failures** on the accepted feature branch.
+- Production frontend and optimized Windows Tauri builds passed during acceptance.
+- Manual Windows acceptance confirmed concurrent Vault startup, Vault prompt focus retention, main and popout split restoration, multi-popout position persistence, clean popout reintegration, and popout-safe layout undo/redo.
+
 ## `1.3.3` - 2026-10-02
 
 ### Improved
