@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { captureGridGroupSizes, restoreGridGroupSizes } from "./workspaceSizing";
+import {
+  captureGridGroupSizes,
+  extractPopoutGridGroupSizes,
+  restoreGridGroupSizes,
+} from "./workspaceSizing";
 
 function group(
   id: string,
@@ -28,7 +32,52 @@ describe("workspaceSizing", () => {
       { id: "main-a", width: 420, height: 700 },
       { id: "main-b", width: 860, height: 700 },
     ]);
+    it("extracts nested popout group dimensions from a saved workspace", () => {
+    const sizes = extractPopoutGridGroupSizes({
+      popoutGroups: [
+        {
+          grid: {
+            width: 900,
+            height: 600,
+            orientation: "HORIZONTAL",
+            root: {
+              type: "branch",
+              data: [
+                {
+                  type: "leaf",
+                  size: 300,
+                  data: { id: "left" },
+                },
+                {
+                  type: "branch",
+                  size: 600,
+                  data: [
+                    {
+                      type: "leaf",
+                      size: 200,
+                      data: { id: "top-right" },
+                    },
+                    {
+                      type: "leaf",
+                      size: 400,
+                      data: { id: "bottom-right" },
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      ],
+    });
+
+    expect(sizes).toEqual([
+      { id: "left", width: 300, height: 600 },
+      { id: "top-right", width: 600, height: 200 },
+      { id: "bottom-right", width: 600, height: 400 },
+    ]);
   });
+});
 
   it("restores only groups that were present in the captured main grid", () => {
     const mainA = group("main-a", "grid", 500, 700);
