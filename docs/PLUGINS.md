@@ -428,7 +428,7 @@ Key rules:
 
 Requires: `clipboard.write`.
 
-Writes text to the system clipboard through the host. The current host limit is 64 KiB per request.
+Writes text to the system clipboard through the host. The current host limit is 4 MiB per request.
 
 ~~~json
 {
