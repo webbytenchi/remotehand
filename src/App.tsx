@@ -30,9 +30,11 @@ type VaultPromptRequest,
 import { enqueueVaultPrompt, settleVaultPromptBatch } from "./vaultPromptBatch";
 import {
   captureGridGroupSizes,
+  extractPopoutGeometries,
   extractPopoutGridGroupSizes,
   restoreGridGroupSizes,
   type GridGroupSize,
+  type PopoutGeometry,
 } from "./workspaceSizing";
 import {
   EMPTY_UI_CONTRIBUTION_LAYOUT,
@@ -801,6 +803,7 @@ const poppedOutPanelRef = useRef<{ panelId: string; count: number; window?: Wind
 const popoutWindowsRef = useRef<Map<string, RemoteHandPopoutWindow>>(new Map());
 const popoutReturnSizesRef = useRef<Map<string, GridGroupSize[]>>(new Map());
 const restoredPopoutSizesRef = useRef<GridGroupSize[]>([]);
+const restoredPopoutGeometriesRef = useRef<PopoutGeometry[]>([]);
 const mainReturnGroupRef = useRef<Map<string, string>>(new Map());
 const lastFocusedElementRef = useRef<HTMLElement | null>(null);
 useEffect(() => {
@@ -1754,19 +1757,27 @@ setVaultPromptBusy(false);
 
 useEffect(() => {
 if (!vaultPrompt) return;
-const keepVaultPromptFocused = (event: FocusEvent) => {
-const target = event.target;
-if (!(target instanceof HTMLElement)) return;
-if (target.closest(".vault-prompt-modal")) return;
-window.requestAnimationFrame(() => {
-vaultPassphraseInputRef.current?.focus({ preventScroll: true });
-});
+let cancelled = false;
+const focusPassphrase = () => {
+if (cancelled) return;
+const input = vaultPassphraseInputRef.current;
+if (!input || input.disabled) return;
+const active = document.activeElement;
+const modal = input.closest(".vault-prompt-modal");
+if (modal?.contains(active)) return;
+input.focus({ preventScroll: true });
+};
+const keepVaultPromptFocused = () => {
+window.requestAnimationFrame(focusPassphrase);
+};
+const watchdog = () => {
+focusPassphrase();
+if (!cancelled) window.requestAnimationFrame(watchdog);
 };
 document.addEventListener("focusin", keepVaultPromptFocused, true);
-const frame = window.requestAnimationFrame(() => {
-vaultPassphraseInputRef.current?.focus({ preventScroll: true });
-});
+const frame = window.requestAnimationFrame(watchdog);
 return () => {
+cancelled = true;
 window.cancelAnimationFrame(frame);
 document.removeEventListener("focusin", keepVaultPromptFocused, true);
 };
@@ -1873,6 +1884,7 @@ try {
 const saved = await invoke<WorkspaceLayout | null>("load_workspace");
 if (saved) {
 restoredPopoutSizesRef.current = extractPopoutGridGroupSizes(saved);
+restoredPopoutGeometriesRef.current = extractPopoutGeometries(saved);
 event.api.fromJSON(saved);
 restoredRef.current = true;
 }
@@ -1886,6 +1898,7 @@ if (saved) {
 try {
 const parsed = JSON.parse(saved) as WorkspaceLayout;
 restoredPopoutSizesRef.current = extractPopoutGridGroupSizes(parsed);
+restoredPopoutGeometriesRef.current = extractPopoutGeometries(parsed);
 event.api.fromJSON(parsed);
 restoredRef.current = true;
 } catch {
@@ -1926,6 +1939,12 @@ captureLayout(event.api);
 event.api.onDidPopoutGroupPositionChange(() => {
 captureLayout(event.api);
 });
+event.api.onWillClosePopoutWindow((closingPopout) => {
+const closingWindow = closingPopout.window as RemoteHandPopoutWindow;
+const nativeLabel = closingWindow.__REMOTEHAND_NATIVE_WINDOW_LABEL__;
+if (!isTauri() || !nativeLabel) return;
+void invoke("close_panel_popout", { label: nativeLabel }).catch(() => undefined);
+});
 event.api.onDidAddPopoutGroup((popout) => {
 const restoreSavedPopoutSizes = () => {
 const matchingGroups = event.api.groups.filter(
@@ -1939,9 +1958,25 @@ window.requestAnimationFrame(() => {
 restoreSavedPopoutSizes();
 window.requestAnimationFrame(restoreSavedPopoutSizes);
 });
+const nativePopout = popout.window as RemoteHandPopoutWindow;
+const nativeLabel = nativePopout.__REMOTEHAND_NATIVE_WINDOW_LABEL__;
+const savedGeometry = restoredPopoutGeometriesRef.current.shift();
+if (isTauri() && nativeLabel && savedGeometry) {
+void invoke("set_panel_popout_geometry", {
+label: nativeLabel,
+x: savedGeometry.left,
+y: savedGeometry.top,
+width: savedGeometry.width,
+height: savedGeometry.height,
+}).catch((error) => {
+console.error("Failed to restore panel popout geometry", error);
+});
+}
+if (!vaultPromptRef.current) {
 popout.group.activePanel?.api.setActive();
 popout.window.focus();
-popoutWindowsRef.current.set(popout.id, popout.window as RemoteHandPopoutWindow);
+}
+popoutWindowsRef.current.set(popout.id, nativePopout);
 const rememberMainSizesBeforeReturn = () => {
 popoutReturnSizesRef.current.set(popout.id, captureGridGroupSizes(event.api.groups));
 };
