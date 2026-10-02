@@ -243,7 +243,7 @@ fn finish_drag_target_window(app: tauri::AppHandle, label: String) -> Result<(),
 }
 
 #[tauri::command]
-fn show_pending_popout(app: tauri::AppHandle) -> Result<(), String> {
+fn show_pending_popout(app: tauri::AppHandle, focus: bool) -> Result<(), String> {
     let mut popouts: Vec<_> = app
         .webview_windows()
         .into_iter()
@@ -258,7 +258,9 @@ fn show_pending_popout(app: tauri::AppHandle) -> Result<(), String> {
     for (_, popout) in popouts.into_iter().rev() {
         if !popout.is_visible().map_err(|error| error.to_string())? {
             popout.show().map_err(|error| error.to_string())?;
-            popout.set_focus().map_err(|error| error.to_string())?;
+            if focus {
+                popout.set_focus().map_err(|error| error.to_string())?;
+            }
             return Ok(());
         }
     }
