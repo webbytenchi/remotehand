@@ -717,6 +717,7 @@ const [globalShortcutApplying, setGlobalShortcutApplying] = useState(false);
 const [settingsOpen, setSettingsOpen] = useState(false);
 const [vaultPrompt, setVaultPrompt] = useState<VaultPromptRequest | null>(null);
 const vaultPromptRef = useRef<VaultPromptRequest | null>(null);
+const vaultPromptQueueRef = useRef<VaultPromptRequest[]>([]);
 const [vaultPromptPassphrase, setVaultPromptPassphrase] = useState("");
 const [vaultPromptPassphraseConfirm, setVaultPromptPassphraseConfirm] = useState("");
 const [vaultPromptError, setVaultPromptError] = useState("");
@@ -1646,11 +1647,7 @@ let unlisten: (() => void) | undefined;
 void listen<VaultPromptRequest>(VAULT_PROMPT_REQUEST_EVENT, (event) => {
 const request = event.payload;
 if (vaultPromptRef.current) {
-void emit(VAULT_PROMPT_RESULT_EVENT, {
-requestId: request.requestId,
-ok: false,
-error: "Another Vault unlock request is already active.",
-});
+vaultPromptQueueRef.current.push(request);
 return;
 }
 vaultPromptRef.current = request;
@@ -1684,11 +1681,7 @@ source: "plugin",
 reason: `Plugin ${incoming.pluginId ?? "unknown"} requests Vault access. ${incoming.reason}`,
 };
 if (vaultPromptRef.current) {
-void invoke("vault_resolve_plugin_access_request", {
-requestId: request.requestId,
-ok: false,
-error: "Another Vault unlock request is already active.",
-}).catch(() => undefined);
+vaultPromptQueueRef.current.push(request);
 return;
 }
 vaultPromptRef.current = request;
@@ -1713,25 +1706,37 @@ unlisten?.();
 const finishVaultPrompt = useCallback(async (ok: boolean, error?: string) => {
 const request = vaultPromptRef.current;
 if (!request) return;
+
+const settle = async (pending: VaultPromptRequest) => {
+if (pending.source === "plugin") {
+await invoke("vault_resolve_plugin_access_request", {
+requestId: pending.requestId,
+ok,
+error: error ?? null,
+});
+return;
+}
+await emit(VAULT_PROMPT_RESULT_EVENT, {
+requestId: pending.requestId,
+ok,
+...(error ? { error } : {}),
+});
+};
+
+// Keep the active marker in place while settling so any Vault requests that
+// arrive during the same unlock are queued and released by this one prompt.
+let batch = [request];
+while (batch.length > 0) {
+await Promise.allSettled(batch.map((pending) => settle(pending)));
+batch = vaultPromptQueueRef.current.splice(0);
+}
+
 vaultPromptRef.current = null;
 setVaultPrompt(null);
 setVaultPromptPassphrase("");
 setVaultPromptPassphraseConfirm("");
 setVaultPromptError("");
 setVaultPromptBusy(false);
-if (request.source === "plugin") {
-await invoke("vault_resolve_plugin_access_request", {
-requestId: request.requestId,
-ok,
-error: error ?? null,
-});
-} else {
-await emit(VAULT_PROMPT_RESULT_EVENT, {
-requestId: request.requestId,
-ok,
-...(error ? { error } : {}),
-});
-}
 }, []);
 
 const confirmVaultPrompt = useCallback(async () => {
