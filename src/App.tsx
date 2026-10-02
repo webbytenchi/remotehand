@@ -30,6 +30,7 @@ type VaultPromptRequest,
 import { enqueueVaultPrompt, settleVaultPromptBatch } from "./vaultPromptBatch";
 import {
   captureGridGroupSizes,
+  extractPopoutGridGroupSizes,
   restoreGridGroupSizes,
   type GridGroupSize,
 } from "./workspaceSizing";
@@ -724,6 +725,7 @@ const [settingsOpen, setSettingsOpen] = useState(false);
 const [vaultPrompt, setVaultPrompt] = useState<VaultPromptRequest | null>(null);
 const vaultPromptRef = useRef<VaultPromptRequest | null>(null);
 const vaultPromptQueueRef = useRef<VaultPromptRequest[]>([]);
+const vaultPassphraseInputRef = useRef<HTMLInputElement | null>(null);
 const [vaultPromptPassphrase, setVaultPromptPassphrase] = useState("");
 const [vaultPromptPassphraseConfirm, setVaultPromptPassphraseConfirm] = useState("");
 const [vaultPromptError, setVaultPromptError] = useState("");
@@ -798,6 +800,7 @@ const workspacePersistenceEnabledRef = useRef(true);
 const poppedOutPanelRef = useRef<{ panelId: string; count: number; window?: Window } | null>(null);
 const popoutWindowsRef = useRef<Map<string, RemoteHandPopoutWindow>>(new Map());
 const popoutReturnSizesRef = useRef<Map<string, GridGroupSize[]>>(new Map());
+const restoredPopoutSizesRef = useRef<GridGroupSize[]>([]);
 const mainReturnGroupRef = useRef<Map<string, string>>(new Map());
 const lastFocusedElementRef = useRef<HTMLElement | null>(null);
 useEffect(() => {
@@ -1749,6 +1752,26 @@ setVaultPromptError("");
 setVaultPromptBusy(false);
 }, []);
 
+useEffect(() => {
+if (!vaultPrompt) return;
+const keepVaultPromptFocused = (event: FocusEvent) => {
+const target = event.target;
+if (!(target instanceof HTMLElement)) return;
+if (target.closest(".vault-prompt-modal")) return;
+window.requestAnimationFrame(() => {
+vaultPassphraseInputRef.current?.focus({ preventScroll: true });
+});
+};
+document.addEventListener("focusin", keepVaultPromptFocused, true);
+const frame = window.requestAnimationFrame(() => {
+vaultPassphraseInputRef.current?.focus({ preventScroll: true });
+});
+return () => {
+window.cancelAnimationFrame(frame);
+document.removeEventListener("focusin", keepVaultPromptFocused, true);
+};
+}, [vaultPrompt]);
+
 const confirmVaultPrompt = useCallback(async () => {
 const request = vaultPromptRef.current;
 if (!request || vaultPromptBusy) return;
@@ -1849,6 +1872,7 @@ if (isTauri()) {
 try {
 const saved = await invoke<WorkspaceLayout | null>("load_workspace");
 if (saved) {
+restoredPopoutSizesRef.current = extractPopoutGridGroupSizes(saved);
 event.api.fromJSON(saved);
 restoredRef.current = true;
 }
@@ -1860,7 +1884,9 @@ console.error("Failed to load workspace", error);
 const saved = localStorage.getItem(WORKSPACE_KEY);
 if (saved) {
 try {
-event.api.fromJSON(JSON.parse(saved) as WorkspaceLayout);
+const parsed = JSON.parse(saved) as WorkspaceLayout;
+restoredPopoutSizesRef.current = extractPopoutGridGroupSizes(parsed);
+event.api.fromJSON(parsed);
 restoredRef.current = true;
 } catch {
 localStorage.removeItem(WORKSPACE_KEY);
@@ -1901,6 +1927,18 @@ event.api.onDidPopoutGroupPositionChange(() => {
 captureLayout(event.api);
 });
 event.api.onDidAddPopoutGroup((popout) => {
+const restoreSavedPopoutSizes = () => {
+const matchingGroups = event.api.groups.filter(
+(group) =>
+group.api.location.type === "popout" &&
+group.api.getWindow() === popout.window,
+);
+restoreGridGroupSizes(matchingGroups, restoredPopoutSizesRef.current);
+};
+window.requestAnimationFrame(() => {
+restoreSavedPopoutSizes();
+window.requestAnimationFrame(restoreSavedPopoutSizes);
+});
 popout.group.activePanel?.api.setActive();
 popout.window.focus();
 popoutWindowsRef.current.set(popout.id, popout.window as RemoteHandPopoutWindow);
@@ -2270,6 +2308,7 @@ elevated
 <label>
 <span>Vault passphrase</span>
 <input
+ref={vaultPassphraseInputRef}
 type="password"
 value={vaultPromptPassphrase}
 onChange={(event) => setVaultPromptPassphrase(event.target.value)}
