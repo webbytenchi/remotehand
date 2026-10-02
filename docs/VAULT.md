@@ -517,7 +517,7 @@ Plugins now have a dedicated capability for requesting host-owned Vault access:
 - RemoteHand core emits a host UI request and waits for the host-owned prompt result;
 - the plugin never receives or submits the Vault passphrase;
 - the plugin never receives the derived/master key;
-- concurrent prompts are rejected rather than silently stacked;
+- concurrent Vault access requests share the active host-owned prompt; later requests remain pending and are settled with the same successful unlock or cancellation;
 - plugin access requests time out instead of blocking indefinitely;
 - successful completion means the Vault is unlocked before the plugin request returns.
 
@@ -541,6 +541,8 @@ The older `credentials.use` / `credentials.store` paths remain temporarily suppo
 The frontend Vault request helper no longer uses an async Promise executor. Listener setup is completed before the request event is emitted, and cleanup runs deterministically after success or failure.
 
 First-time Vault creation now includes a confirmation field so an accidental passphrase typo cannot silently create a Vault that the user cannot reopen.
+
+When multiple Vault-dependent plugins restore at startup while the Vault is locked, the first request owns the visible prompt and additional requests are queued in the host UI. A successful unlock releases every queued request, so each plugin can continue its original initialization without being closed and reopened.
 
 ### Current Validation Target
 
