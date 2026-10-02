@@ -2030,7 +2030,14 @@ const revealPopout = () => {
 root.style.visibility = "visible";
 popout.window.dispatchEvent(new CustomEvent("remotehand-appearance-change"));
 if (isTauri()) {
-void invoke("show_pending_popout").catch((error) => {
+const vaultPromptActive = vaultPromptRef.current !== null;
+void invoke("show_pending_popout", { focus: !vaultPromptActive })
+.then(() => {
+if (vaultPromptActive) {
+return invoke("focus_main_window");
+}
+})
+.catch((error) => {
 console.error("Failed to reveal native popout after Dockview setup", error);
 });
 }
