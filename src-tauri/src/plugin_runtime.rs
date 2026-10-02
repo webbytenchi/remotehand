@@ -881,8 +881,8 @@ fn handle_plugin_request(
         "clipboard.write" => {
             let params: ClipboardWriteParams = serde_json::from_value(request.params.clone())
                 .map_err(|error| format!("invalid clipboard.write params: {error}"))?;
-            if params.text.len() > 64 * 1024 {
-                return Err("clipboard text exceeds 64 KiB".to_string());
+            if params.text.len() > 4 * 1024 * 1024 {
+                return Err("clipboard text exceeds 4 MiB".to_string());
             }
             let mut clipboard = arboard::Clipboard::new()
                 .map_err(|error| format!("clipboard is unavailable: {error}"))?;
