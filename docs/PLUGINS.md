@@ -208,6 +208,7 @@ Recognized permissions:
 | clipboard.read | Read from the system clipboard. |
 | clipboard.write | Write bounded text to the system clipboard through `clipboard.write`. |
 | files.open | Open user-selected local files through `file.open` and receive native `files.drop` panel events. |
+| folders.open | Open a host-owned native folder picker through `folder.open` and receive the selected local directory path. |
 | files.save | Save user-selected local files through `file.save`. |
 | links.open | Open validated HTTPS links in the user's default browser through `link.open`. |
 | tray.contribute | Publish and update generic per-plugin system-tray items through `tray.update`. |
@@ -228,6 +229,38 @@ Contribution declarations (panels, sidebar, commands) are not permissions. They 
 These declarations are not yet a complete security boundary. Plugins are native executables with the OS permissions of the RemoteHand process. A plugin that declares no permissions can still open a network socket, read files, etc., through its own code. Permissions exist to make intent explicit and to gate host-mediated capabilities like vault access and plugin storage. They are not a sandbox.
 
 Only install plugins you trust.
+
+### Folder picker
+
+Plugins that declare `folders.open` may call:
+
+~~~json
+{
+  "type": "plugin.request",
+  "requestId": 1,
+  "method": "folder.open",
+  "params": {}
+}
+~~~
+
+When the user selects a folder, the host returns:
+
+~~~json
+{
+  "opened": true,
+  "path": "C:\\Users\\Example\\Project"
+}
+~~~
+
+If the dialog is cancelled, the result is:
+
+~~~json
+{
+  "opened": false
+}
+~~~
+
+The dialog is owned by the currently focused RemoteHand window, matching the existing host-owned file-dialog behavior. The plugin receives only the selected path; this API does not grant automatic execution or recursive access semantics.
 
 ## Runtime and IPC
 
