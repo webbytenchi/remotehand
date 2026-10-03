@@ -86,32 +86,8 @@ async function writeTerminal(sessionId: string, data: string) {
 await invoke("terminal_write", { sessionId, data });
 }
 
-function splitMultilineTerminalInput(data: string): string[] {
-if (!/[\r\n]/.test(data)) return [data];
-return data.match(/[^\r\n]*(?:\r\n|\r|\n)|[^\r\n]+$/g) ?? [data];
-}
-
 async function writeTerminalInput(sessionId: string, data: string) {
-const chunks = splitMultilineTerminalInput(data);
-if (chunks.length === 1) {
 await writeTerminal(sessionId, data);
-return;
-}
-
-/*
- * A large paste can otherwise be delivered to the local PTY/ssh process as
- * one burst. The remote TTY may echo that burst while the shell is also
- * emitting continuation prompts, producing visible line overwrites even
- * though the received file is correct. Keep xterm's native paste semantics,
- * but pace multi-line input at line boundaries so echo and prompt output can
- * drain in order.
- */
-for (let index = 0; index < chunks.length; index += 1) {
-await writeTerminal(sessionId, chunks[index]);
-if (index + 1 < chunks.length) {
-await new Promise<void>((resolve) => window.setTimeout(resolve, 8));
-}
-}
 }
 
 
@@ -137,7 +113,19 @@ const initialCommand = params?.initialCommand;
 const sendPaste = (text: string) => {
 const terminal = terminalRef.current;
 if (!terminal) return;
+const multiline = /[\r\n]/.test(text);
 terminal.paste(text);
+/*
+ * When the shell has enabled bracketed paste mode, xterm wraps the entire
+ * paste as one protected editing-buffer transaction. Submit it with a single
+ * Enter after the closing bracket so the shell executes the complete block
+ * instead of receiving future commands while earlier commands are still
+ * producing output. Shells without bracketed paste keep their normal raw
+ * multiline behavior.
+ */
+if (multiline && terminal.modes.bracketedPasteMode) {
+terminal.input("\r", true);
+}
 terminal.focus();
 };
 useEffect(() => {
@@ -151,11 +139,11 @@ const terminal = new Terminal({
 cursorBlink: true,
 convertEol: false,
 /*
- * RemoteHand confirms multi-line paste before it reaches xterm. Keep pasted
- * newlines as ordinary terminal input so readline does not buffer/repaint the
- * whole block in bracketed-paste mode while RemoteHand paces the lines below.
+ * Honor bracketed paste when the active shell enables it. RemoteHand confirms
+ * multi-line paste before it reaches xterm, then submits the protected block
+ * once after xterm closes the bracketed-paste transaction.
  */
-ignoreBracketedPasteMode: true,
+ignoreBracketedPasteMode: false,
 documentOverride: host.ownerDocument,
 fontFamily: getComputedStyle(host.ownerDocument.documentElement).getPropertyValue("--terminal-font-family").trim() || ["JetBrains Mono", "Cascadia Code", "Cascadia Mono", "Consolas", "Liberation Mono", "monospace"].join(", "),
 fontSize: Number.parseInt(getComputedStyle(host.ownerDocument.documentElement).getPropertyValue("--terminal-font-size"), 10) || 13,
