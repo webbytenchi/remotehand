@@ -21,6 +21,7 @@ const ALLOWED_PERMISSIONS: &[&str] = &[
     "clipboard.read",
     "clipboard.write",
     "files.open",
+    "folders.open",
     "files.save",
     "links.open",
     "credentials.use",
@@ -987,6 +988,11 @@ mod tests {
             DEPRECATED_V1_PERMISSIONS,
         ))
         .is_ok());
+    }
+
+    #[test]
+    fn accepts_folders_open_permission() {
+        assert!(validate_manifest(&manifest("remotehand.test", &["folders.open"])).is_ok());
     }
 
     #[test]
