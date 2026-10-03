@@ -579,6 +579,12 @@ fn validate_plugin_request(permissions: &[String], request: &PluginRequest) -> R
             }
             Ok(())
         }
+        "folder.open" => {
+            if !permission_granted(permissions, "folders.open") {
+                return Err("plugin lacks folders.open permission".to_string());
+            }
+            Ok(())
+        }
         "file.save" => {
             if !permission_granted(permissions, "files.save") {
                 return Err("plugin lacks files.save permission".to_string());
@@ -920,6 +926,16 @@ fn handle_plugin_request(
                 }));
             }
             let Some(path) = dialog.pick_file() else {
+                return Ok(serde_json::json!({"opened":false}));
+            };
+            Ok(serde_json::json!({"opened":true,"path":path.to_string_lossy()}))
+        }
+        "folder.open" => {
+            let mut dialog = rfd::FileDialog::new();
+            if let Some(window) = focused_dialog_parent(app_handle) {
+                dialog = dialog.set_parent(&window);
+            }
+            let Some(path) = dialog.pick_folder() else {
                 return Ok(serde_json::json!({"opened":false}));
             };
             Ok(serde_json::json!({"opened":true,"path":path.to_string_lossy()}))
@@ -1589,6 +1605,21 @@ mod tests {
         .unwrap();
         assert!(multiple.multiple);
         assert!(validate_file_open_params(&multiple).is_ok());
+    }
+
+    #[test]
+    fn validates_folder_open_permission() {
+        let request = PluginRequest {
+            message_type: "plugin.request".to_string(),
+            request_id: 3,
+            method: "folder.open".to_string(),
+            params: serde_json::json!({}),
+        };
+        assert!(validate_plugin_request(&["folders.open".to_string()], &request).is_ok());
+        assert_eq!(
+            validate_plugin_request(&[], &request).unwrap_err(),
+            "plugin lacks folders.open permission"
+        );
     }
 
     #[test]
