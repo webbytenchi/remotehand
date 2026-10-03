@@ -4,6 +4,14 @@ All notable changes to RemoteHand are documented here.
 
 ## Unreleased
 
+### Added
+
+- **Plugin folder picker API.** Plugin API v1 now supports the generic `folders.open` permission and host-owned `folder.open` native directory picker for plugins that need the user to choose a local folder.
+
+### Compatibility
+
+- Plugin API remains **v1**.
+
 ## `1.3.5` - 2026-10-04
 
 ### Improved
