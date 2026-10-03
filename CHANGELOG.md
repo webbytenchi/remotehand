@@ -4,6 +4,34 @@ All notable changes to RemoteHand are documented here.
 
 ## Unreleased
 
+## `1.3.5` - 2026-10-04
+
+### Improved
+
+- **Multiline terminal paste.** RemoteHand now honors xterm's bracketed-paste mode when the active shell supports it, submitting confirmed multiline input as one protected block instead of pacing individual lines through the PTY.
+
+### Fixed
+
+- **Terminal paste visual echo.** Fixed multiline paste output becoming visually interleaved or corrupted when later pasted commands were echoed while an earlier command was still producing output, including SSH sessions launched from a PowerShell panel.
+- **SSH command rendering.** Confirmed multiline command blocks no longer leave chopped command fragments or glue future command text onto Git/remote command output when bracketed paste is available.
+
+### Compatibility
+
+- Plugin API remains **v1**.
+- Existing terminal, SSH, PowerShell, Command Prompt, and workspace data require no migration.
+- RemoteHand continues to use xterm.js for terminal rendering and `portable-pty` for PTY handling.
+
+### Verification
+
+- Production Windows Tauri build passed on the accepted terminal-fix branch.
+- Manual Windows acceptance confirmed clean multiline paste rendering in:
+  - RemoteHand native SSH terminal.
+  - PowerShell → interactive `ssh` session (the original failure path).
+  - Local PowerShell.
+  - Local Command Prompt.
+- The original five-command SSH reproduction completed without chopped command fragments, pasted command text glued onto command output, or later command echo leaking into earlier output.
+
+
 ## `1.3.4` - 2026-10-03
 
 ### Improved

@@ -75,7 +75,7 @@ Terminal interaction includes:
 - Automatic clipboard copy when terminal text is selected
 - Right-click paste workflow
 - Multi-line paste confirmation/protection
-- Paced multi-line PTY input to keep large SSH/here-document pastes visually stable while preserving transmitted content
+- Bracketed multi-line paste support when the active shell enables it, preserving confirmed command blocks without interleaved visual echo
 - Isolated backend PTY ownership for restored terminal panels
 - Resize propagation to the native PTY
 - Configurable terminal font and theme
@@ -191,7 +191,7 @@ Settings are stored portably under `data/config/settings.json`.
 
 ## Plugins
 
-RemoteHand supports out-of-process executable plugins that extend the app without modifying core. Plugins can contribute panels, sidebar buttons, commands, and live top-bar widgets. Plugin API v1 remains the current plugin API in RemoteHand v1.3.4.
+RemoteHand supports out-of-process executable plugins that extend the app without modifying core. Plugins can contribute panels, sidebar buttons, commands, and live top-bar widgets. Plugin API v1 remains the current plugin API in RemoteHand v1.3.5.
 
 The plugin system is built on a simple rule: core owns infrastructure, plugins own functionality. RemoteHand core provides lifecycle, permissions, storage, IPC, and generic UI surfaces. Plugins provide protocol-specific behavior - for example, VNC, RDP, or host monitoring - that core does not need to know about.
 
