@@ -42,3 +42,11 @@ export function remoteHandFunctionKeyDisposition(
   }
   return "blocked";
 }
+
+export function shouldPluginFramePreventFunctionKeyDefault(
+  key: string,
+  modifiers: FunctionKeyModifiers,
+): boolean {
+  const disposition = remoteHandFunctionKeyDisposition(key, modifiers);
+  return disposition === "blocked" || disposition === "about";
+}
