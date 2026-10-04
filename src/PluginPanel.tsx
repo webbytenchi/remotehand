@@ -417,10 +417,17 @@ const sessionKey = pluginContextKey(pluginId, panelId);
 void Promise.all([
 invoke<string>("plugin_read_panel_html", { id: pluginId, panelId }),
 invoke<unknown>("plugin_panel_session_get", { pluginId, panelId }).catch(() => null),
-]).then(([source, hostSessionState]) => {
+]).then(async ([source, hostSessionState]) => {
 if (cancelled) return;
-const sessionState = hostSessionState ?? pluginPanelSessionState.get(sessionKey) ?? null;
+let sessionState = pluginPanelSessionState.get(sessionKey) ?? hostSessionState ?? null;
 if (hostSessionState != null) pluginPanelSessionState.set(sessionKey, hostSessionState);
+if (sessionState == null) {
+await new Promise((resolve) => window.setTimeout(resolve, 150));
+if (cancelled) return;
+const retryHostSessionState = await invoke<unknown>("plugin_panel_session_get", { pluginId, panelId }).catch(() => null);
+sessionState = pluginPanelSessionState.get(sessionKey) ?? retryHostSessionState ?? null;
+if (retryHostSessionState != null) pluginPanelSessionState.set(sessionKey, retryHostSessionState);
+}
 setHtml(injectBridge(source, pluginId, panelId, sessionState));
 }).catch((cause) => { if (!cancelled) setError(String(cause)); });
 return () => { cancelled = true; };
