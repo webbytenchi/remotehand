@@ -19,7 +19,9 @@ context?: { targetId?: string; target?: string; view?: string; alertKey?: string
 type PluginContext = PluginPanelParams["context"];
 type PluginContextHandler = (context: PluginContext) => void;
 const pluginContextHandlers = new Map<string, PluginContextHandler>();
+const pluginPanelSessionState = new Map<string, unknown>();
 const pluginContextKey = (pluginId: string, panelId: string) => pluginId + ":" + panelId;
+const MAX_PLUGIN_PANEL_SESSION_STATE_BYTES = 256 * 1024;
 export function sendPluginPanelContext(pluginId: string, panelId: string, context: PluginContext) {
 pluginContextHandlers.get(pluginContextKey(pluginId, panelId))?.(context);
 }
@@ -32,6 +34,10 @@ params?: unknown;
 type PluginHostFunctionKeyMessage = {
 type: "remotehand.host.function-key";
 key: "F1";
+};
+type PluginSessionStateMessage = {
+type: "remotehand.plugin.session-state";
+state?: unknown;
 };
 type PluginBridgeResponse = {
 type: "remotehand.plugin.response";
@@ -143,9 +149,10 @@ const PLUGIN_SCROLLBAR_STYLE = `
   background: transparent !important;
 }
 </style>`;
-function bridgeScript(pluginId: string, panelId: string) {
+function bridgeScript(pluginId: string, panelId: string, initialSessionState: unknown) {
 const pluginIdJson = JSON.stringify(pluginId);
 const panelIdJson = JSON.stringify(panelId);
+const initialSessionStateJson = JSON.stringify(initialSessionState ?? null);
 const functionKeysJson = JSON.stringify(REMOTEHAND_FUNCTION_KEYS);
 const pluginFrameFunctionKeyPolicyJson = JSON.stringify(
   REMOTEHAND_FUNCTION_KEYS.reduce<Record<string, Record<string, boolean>>>((policy, key) => {
@@ -191,6 +198,7 @@ return `
 (() => {
 const pluginId = ${pluginIdJson};
 const panelId = ${panelIdJson};
+window.__REMOTEHAND_PLUGIN_SESSION_STATE__ = ${initialSessionStateJson};
 const remoteHandFunctionKeys = new Set(${functionKeysJson});
 const pluginFrameFunctionKeyPolicy = ${pluginFrameFunctionKeyPolicyJson};
 const remoteHandBrowserPrimaryKeys = new Set(${browserPrimaryKeysJson});
@@ -299,6 +307,13 @@ pending.set(requestId, { resolve, reject });
 parent.postMessage({ type: "remotehand.plugin.request", requestId, method, params }, "*");
 });
 },
+getSessionState() {
+return window.__REMOTEHAND_PLUGIN_SESSION_STATE__ ?? null;
+},
+setSessionState(state = null) {
+window.__REMOTEHAND_PLUGIN_SESSION_STATE__ = state;
+parent.postMessage({ type: "remotehand.plugin.session-state", state }, "*");
+},
 onEvent(eventName, listener) {
 if (typeof eventName !== "string" || typeof listener !== "function") throw new TypeError("onEvent requires an event name and listener");
 let listeners = eventListeners.get(eventName);
@@ -348,8 +363,8 @@ const light = theme === "light";
 const read = (name: string, fallback: string) => computed.getPropertyValue(name).trim() || fallback;
 return { theme, colorScheme: root.dataset.scheme || "blue", uiFontFamily: read("--ui-font-family", 'ui-sans-serif, system-ui, sans-serif'), uiFontSize: read("--ui-font-size", "13px"), terminalFontFamily: read("--terminal-font-family", '"JetBrains Mono", "Cascadia Code", Consolas, monospace'), terminalFontSize: read("--terminal-font-size", "13px"), terminalBackground: read("--terminal-background", light ? "#ffffff" : "#11151a"), terminalForeground: read("--terminal-foreground", light ? "#20242c" : "#d8dde6"), colors: { background: light ? "#f4f5f7" : "#11151a", surface: light ? "#ffffff" : "#171d24", surfaceRaised: light ? "#f8f9fb" : "#1d252f", border: light ? "#c8d0da" : "#35404d", text: light ? "#20242c" : "#dee5ef", mutedText: light ? "#667085" : "#93a1b2", inputBackground: light ? "#ffffff" : "#0f141a", buttonBackground: light ? "#eef1f4" : "#232c37", buttonHover: light ? "#e2e7ec" : "#2a3542", accent: read("--accent", light ? "#356fa9" : "#70a7e8"), accentBorder: read("--accent-border", light ? "#8fb3d8" : "#3b5f8d"), accentSurface: read("--accent-surface", light ? "#e7f0fa" : "#16263a"), accentSurfaceHover: read("--accent-surface-hover", light ? "#d9e9f8" : "#1d3550"), dangerText: light ? "#a12a2a" : "#efaaaa", dangerBorder: light ? "#d4a1a1" : "#5a3035", dangerSurface: light ? "#fff0f0" : "#241316", successText: light ? "#27643c" : "#bce5c7", successSurface: light ? "#e8f6ed" : "#214c34" } };
 }
-function injectBridge(html: string, pluginId: string, panelId: string) {
-const bridge = bridgeScript(pluginId, panelId);
+function injectBridge(html: string, pluginId: string, panelId: string, sessionState: unknown) {
+const bridge = bridgeScript(pluginId, panelId, sessionState);
 const lower = html.toLowerCase();
 const headStart = lower.indexOf("<head");
 if (headStart >= 0) {
@@ -373,7 +388,10 @@ setHtml(null);
 setError(null);
 if (!pluginId || !panelId) { setError("Plugin panel metadata is missing."); return; }
 if (!isTauri()) { setError("Plugin panels require the RemoteHand desktop app."); return; }
-void invoke<string>("plugin_read_panel_html", { id: pluginId, panelId }).then((source) => { if (!cancelled) setHtml(injectBridge(source, pluginId, panelId)); }).catch((cause) => { if (!cancelled) setError(String(cause)); });
+const sessionKey = pluginContextKey(pluginId, panelId);
+void invoke<string>("plugin_read_panel_html", { id: pluginId, panelId }).then((source) => {
+if (!cancelled) setHtml(injectBridge(source, pluginId, panelId, pluginPanelSessionState.get(sessionKey) ?? null));
+}).catch((cause) => { if (!cancelled) setError(String(cause)); });
 return () => { cancelled = true; };
 }, [panelId, pluginId]);
 useEffect(() => {
@@ -383,11 +401,27 @@ iframeRef.current?.contentWindow?.postMessage({ type: "remotehand.appearance", a
 const postContext = (nextContext: PluginContext = contextRef.current) => {
 iframeRef.current?.contentWindow?.postMessage({ type: "remotehand.plugin.context", context: nextContext ?? {} }, "*");
 };
-const onMessage = (event: MessageEvent<PluginBridgeRequest | PluginHostFunctionKeyMessage | { type: "remotehand.plugin.ready" }>) => {
+const onMessage = (event: MessageEvent<PluginBridgeRequest | PluginHostFunctionKeyMessage | PluginSessionStateMessage | { type: "remotehand.plugin.ready" }>) => {
 if (event.source !== iframeRef.current?.contentWindow) return;
 const message = event.data;
 if (!message) return;
 if (message.type === "remotehand.plugin.ready") { postAppearance(); postContext(); return; }
+if (message.type === "remotehand.plugin.session-state") {
+const sessionKey = pluginContextKey(pluginId, panelId);
+if (message.state == null) {
+pluginPanelSessionState.delete(sessionKey);
+return;
+}
+try {
+const encoded = JSON.stringify(message.state);
+if (encoded.length <= MAX_PLUGIN_PANEL_SESSION_STATE_BYTES) {
+pluginPanelSessionState.set(sessionKey, message.state);
+}
+} catch {
+console.error("RemoteHand rejected non-serializable plugin panel session state");
+}
+return;
+}
 if (message.type === "remotehand.host.function-key") {
 if (message.key === "F1") window.dispatchEvent(new CustomEvent("remotehand-open-about"));
 return;
