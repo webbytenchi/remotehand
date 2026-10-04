@@ -389,8 +389,14 @@ setError(null);
 if (!pluginId || !panelId) { setError("Plugin panel metadata is missing."); return; }
 if (!isTauri()) { setError("Plugin panels require the RemoteHand desktop app."); return; }
 const sessionKey = pluginContextKey(pluginId, panelId);
-void invoke<string>("plugin_read_panel_html", { id: pluginId, panelId }).then((source) => {
-if (!cancelled) setHtml(injectBridge(source, pluginId, panelId, pluginPanelSessionState.get(sessionKey) ?? null));
+void Promise.all([
+invoke<string>("plugin_read_panel_html", { id: pluginId, panelId }),
+invoke<unknown>("plugin_panel_session_get", { pluginId, panelId }).catch(() => null),
+]).then(([source, hostSessionState]) => {
+if (cancelled) return;
+const sessionState = hostSessionState ?? pluginPanelSessionState.get(sessionKey) ?? null;
+if (hostSessionState != null) pluginPanelSessionState.set(sessionKey, hostSessionState);
+setHtml(injectBridge(source, pluginId, panelId, sessionState));
 }).catch((cause) => { if (!cancelled) setError(String(cause)); });
 return () => { cancelled = true; };
 }, [panelId, pluginId]);
@@ -410,12 +416,18 @@ if (message.type === "remotehand.plugin.session-state") {
 const sessionKey = pluginContextKey(pluginId, panelId);
 if (message.state == null) {
 pluginPanelSessionState.delete(sessionKey);
+void invoke("plugin_panel_session_set", { pluginId, panelId, value: null }).catch((error) => {
+console.error("RemoteHand failed to clear plugin panel session state", error);
+});
 return;
 }
 try {
 const encoded = JSON.stringify(message.state);
 if (encoded.length <= MAX_PLUGIN_PANEL_SESSION_STATE_BYTES) {
 pluginPanelSessionState.set(sessionKey, message.state);
+void invoke("plugin_panel_session_set", { pluginId, panelId, value: message.state }).catch((error) => {
+console.error("RemoteHand failed to persist plugin panel session state", error);
+});
 }
 } catch {
 console.error("RemoteHand rejected non-serializable plugin panel session state");
