@@ -4,13 +4,25 @@ All notable changes to RemoteHand are documented here.
 
 ## Unreleased
 
+## `1.3.6` - 2026-10-04
+
 ### Added
 
 - **Plugin folder picker API.** Plugin API v1 now supports the generic `folders.open` permission and host-owned `folder.open` native directory picker for plugins that need the user to choose a local folder.
+- **Focused-window folder dialogs.** Folder pickers are owned by the currently focused RemoteHand window so native dialogs behave correctly from the main workspace and popouts.
 
 ### Compatibility
 
 - Plugin API remains **v1**.
+- Existing plugins require no migration.
+- Plugins only need to declare `folders.open` when they want access to the new `folder.open` host method.
+
+### Verification
+
+- Rust tests passed with **78 tests and 0 failures** on the accepted folder-picker branch.
+- Frontend tests passed with **23 tests and 0 failures**.
+- Production frontend build and `cargo check` passed.
+- Manual Windows acceptance confirmed folder selection, cancellation, exact selected-path return, and project restoration through the real Project Manager plugin.
 
 ## `1.3.5` - 2026-10-04
 
