@@ -31,6 +31,10 @@ requestId: string;
 method: string;
 params?: unknown;
 };
+type PluginBridgeDetachedRequest =
+| { type: "remotehand.plugin.detached.start"; requestId: string; method: string; params?: unknown }
+| { type: "remotehand.plugin.detached.status"; requestId: string; callId: string }
+| { type: "remotehand.plugin.detached.forget"; requestId: string; callId: string };
 type PluginHostFunctionKeyMessage = {
 type: "remotehand.host.function-key";
 key: "F1";
@@ -307,6 +311,27 @@ pending.set(requestId, { resolve, reject });
 parent.postMessage({ type: "remotehand.plugin.request", requestId, method, params }, "*");
 });
 },
+startRequest(method, params = null) {
+return new Promise((resolve, reject) => {
+const requestId = String(++sequence);
+pending.set(requestId, { resolve, reject });
+parent.postMessage({ type: "remotehand.plugin.detached.start", requestId, method, params }, "*");
+});
+},
+requestStatus(callId) {
+return new Promise((resolve, reject) => {
+const requestId = String(++sequence);
+pending.set(requestId, { resolve, reject });
+parent.postMessage({ type: "remotehand.plugin.detached.status", requestId, callId }, "*");
+});
+},
+forgetRequest(callId) {
+return new Promise((resolve, reject) => {
+const requestId = String(++sequence);
+pending.set(requestId, { resolve, reject });
+parent.postMessage({ type: "remotehand.plugin.detached.forget", requestId, callId }, "*");
+});
+},
 getSessionState() {
 return window.__REMOTEHAND_PLUGIN_SESSION_STATE__ ?? null;
 },
@@ -407,7 +432,7 @@ iframeRef.current?.contentWindow?.postMessage({ type: "remotehand.appearance", a
 const postContext = (nextContext: PluginContext = contextRef.current) => {
 iframeRef.current?.contentWindow?.postMessage({ type: "remotehand.plugin.context", context: nextContext ?? {} }, "*");
 };
-const onMessage = (event: MessageEvent<PluginBridgeRequest | PluginHostFunctionKeyMessage | PluginSessionStateMessage | { type: "remotehand.plugin.ready" }>) => {
+const onMessage = (event: MessageEvent<PluginBridgeRequest | PluginBridgeDetachedRequest | PluginHostFunctionKeyMessage | PluginSessionStateMessage | { type: "remotehand.plugin.ready" }>) => {
 if (event.source !== iframeRef.current?.contentWindow) return;
 const message = event.data;
 if (!message) return;
@@ -438,9 +463,30 @@ if (message.type === "remotehand.host.function-key") {
 if (message.key === "F1") window.dispatchEvent(new CustomEvent("remotehand-open-about"));
 return;
 }
+const respond = (response: PluginBridgeResponse) => { iframeRef.current?.contentWindow?.postMessage(response, "*"); };
+if (message.type === "remotehand.plugin.detached.start") {
+if (typeof message.requestId !== "string" || typeof message.method !== "string") return;
+void invoke("plugin_runtime_call_start", { id: pluginId, method: message.method, params: message.params ?? null })
+.then((result) => respond({ type: "remotehand.plugin.response", requestId: message.requestId, ok: true, result }))
+.catch((cause) => respond({ type: "remotehand.plugin.response", requestId: message.requestId, ok: false, error: String(cause) }));
+return;
+}
+if (message.type === "remotehand.plugin.detached.status") {
+if (typeof message.requestId !== "string" || typeof message.callId !== "string") return;
+void invoke("plugin_runtime_call_status", { pluginId, callId: message.callId })
+.then((result) => respond({ type: "remotehand.plugin.response", requestId: message.requestId, ok: true, result }))
+.catch((cause) => respond({ type: "remotehand.plugin.response", requestId: message.requestId, ok: false, error: String(cause) }));
+return;
+}
+if (message.type === "remotehand.plugin.detached.forget") {
+if (typeof message.requestId !== "string" || typeof message.callId !== "string") return;
+void invoke("plugin_runtime_call_forget", { pluginId, callId: message.callId })
+.then((result) => respond({ type: "remotehand.plugin.response", requestId: message.requestId, ok: true, result }))
+.catch((cause) => respond({ type: "remotehand.plugin.response", requestId: message.requestId, ok: false, error: String(cause) }));
+return;
+}
 if (message.type !== "remotehand.plugin.request") return;
 if (typeof message.requestId !== "string" || typeof message.method !== "string") return;
-const respond = (response: PluginBridgeResponse) => { iframeRef.current?.contentWindow?.postMessage(response, "*"); };
 void invoke("plugin_runtime_call", { id: pluginId, method: message.method, params: message.params ?? null }).then((result) => respond({ type: "remotehand.plugin.response", requestId: message.requestId, ok: true, result })).catch((cause) => respond({ type: "remotehand.plugin.response", requestId: message.requestId, ok: false, error: String(cause) }));
 };
 const contextKey = pluginContextKey(pluginId, panelId);
