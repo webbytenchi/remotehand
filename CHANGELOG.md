@@ -6,15 +6,28 @@ All notable changes to RemoteHand are documented here.
 
 ## `1.3.7` - 2026-10-04
 
-### Fixed
+### Added
 
+- **Host-owned plugin panel session state.** Plugin panels can preserve bounded session state across renderer remounts without moving plugin-specific semantics into RemoteHand core.
+- **Detached plugin calls.** The generic plugin bridge can dispatch host-owned detached runtime calls and later retrieve their results, allowing long-running plugin work to outlive a panel renderer lifecycle.
+
+### Improved
+
+- **Plugin remount continuity.** Panel session restoration prefers the newest host/in-memory state and performs a short retry when a renderer remount races the host-side session update.
+- **Detached result lifetime.** Detached-call result storage keeps the result lock scoped correctly so completed results can be retrieved without unnecessary contention.
 - **Plugin-owned F5 routing.** Plain F5 now reaches plugin keyboard handlers without arriving pre-cancelled by RemoteHand's injected plugin-frame guard, restoring intentional plugin shortcuts such as Editor timestamp insertion.
 - **Function-key policy consistency.** Plugin-frame suppression now derives from the same RemoteHand function-key ownership policy used by the host window, reducing the chance of host/plugin routing drift.
+
+### Fixed
+
+- **Panel remount race.** Fixed cases where a plugin panel could remount before its newest host-owned session state was visible and restore with empty/default state.
+- **Detached call result access.** Fixed the detached-call result lock lifetime so completed background call results remain safely retrievable.
 
 ### Compatibility
 
 - Plugin API remains **v1**.
 - Existing plugins require no migration.
+- Panel session state and detached calls are additive generic host capabilities; RemoteHand remains plugin-agnostic.
 - Plain F5 remains the intentional plugin-owned function-key exception; host-owned and blocked function keys continue to suppress WebView/browser behavior.
 - Native Alt+F4 handling remains unchanged.
 
@@ -27,6 +40,7 @@ All notable changes to RemoteHand are documented here.
 - `cargo check` passed.
 - Optimized Windows Tauri branch build passed.
 - Manual Windows acceptance confirmed Editor v0.5.0 F5 timestamp insertion works again in RemoteHand.
+- Marielle/Chat2Hand acceptance exercised plugin panel remount continuity and detached background turn handling in the real plugin stack.
 
 ## `1.3.6` - 2026-10-04
 
