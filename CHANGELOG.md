@@ -4,6 +4,30 @@ All notable changes to RemoteHand are documented here.
 
 ## Unreleased
 
+## `1.3.7` - 2026-10-04
+
+### Fixed
+
+- **Plugin-owned F5 routing.** Plain F5 now reaches plugin keyboard handlers without arriving pre-cancelled by RemoteHand's injected plugin-frame guard, restoring intentional plugin shortcuts such as Editor timestamp insertion.
+- **Function-key policy consistency.** Plugin-frame suppression now derives from the same RemoteHand function-key ownership policy used by the host window, reducing the chance of host/plugin routing drift.
+
+### Compatibility
+
+- Plugin API remains **v1**.
+- Existing plugins require no migration.
+- Plain F5 remains the intentional plugin-owned function-key exception; host-owned and blocked function keys continue to suppress WebView/browser behavior.
+- Native Alt+F4 handling remains unchanged.
+
+### Verification
+
+- Focused function-key tests passed with **8 tests and 0 failures**.
+- Full frontend tests passed with **26 tests and 0 failures**.
+- Production frontend build passed.
+- Rust tests passed with **78 tests and 0 failures**.
+- `cargo check` passed.
+- Optimized Windows Tauri branch build passed.
+- Manual Windows acceptance confirmed Editor v0.5.0 F5 timestamp insertion works again in RemoteHand.
+
 ## `1.3.6` - 2026-10-04
 
 ### Added
