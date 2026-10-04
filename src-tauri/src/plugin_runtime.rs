@@ -23,6 +23,7 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 pub struct PluginRuntimeState {
     sessions: Mutex<BTreeMap<String, PluginSession>>,
     app_handle: Mutex<Option<AppHandle>>,
+    panel_session_state: Mutex<BTreeMap<String, serde_json::Value>>,
 }
 struct PluginSession {
     child: Child,
@@ -1221,6 +1222,54 @@ fn start_reader(
         }
     });
 }
+const MAX_PANEL_SESSION_STATE_BYTES: usize = 256 * 1024;
+
+fn panel_session_key(plugin_id: &str, panel_id: &str) -> Result<String, String> {
+    if !valid_message_name(plugin_id) || !valid_message_name(panel_id) {
+        return Err("invalid plugin panel session key".to_string());
+    }
+    Ok(format!("{plugin_id}:{panel_id}"))
+}
+
+#[tauri::command]
+pub fn plugin_panel_session_get(
+    state: tauri::State<'_, PluginRuntimeState>,
+    plugin_id: String,
+    panel_id: String,
+) -> Result<serde_json::Value, String> {
+    let key = panel_session_key(&plugin_id, &panel_id)?;
+    let values = state
+        .panel_session_state
+        .lock()
+        .map_err(|_| "plugin panel session state lock poisoned".to_string())?;
+    Ok(values.get(&key).cloned().unwrap_or(serde_json::Value::Null))
+}
+
+#[tauri::command]
+pub fn plugin_panel_session_set(
+    state: tauri::State<'_, PluginRuntimeState>,
+    plugin_id: String,
+    panel_id: String,
+    value: serde_json::Value,
+) -> Result<(), String> {
+    let key = panel_session_key(&plugin_id, &panel_id)?;
+    let mut values = state
+        .panel_session_state
+        .lock()
+        .map_err(|_| "plugin panel session state lock poisoned".to_string())?;
+    if value.is_null() {
+        values.remove(&key);
+        return Ok(());
+    }
+    let encoded = serde_json::to_vec(&value)
+        .map_err(|error| format!("invalid plugin panel session state: {error}"))?;
+    if encoded.len() > MAX_PANEL_SESSION_STATE_BYTES {
+        return Err("plugin panel session state exceeds 256 KiB".to_string());
+    }
+    values.insert(key, value);
+    Ok(())
+}
+
 impl PluginRuntimeState {
     pub fn set_app_handle(&self, app_handle: AppHandle) -> Result<(), String> {
         let mut slot = self
