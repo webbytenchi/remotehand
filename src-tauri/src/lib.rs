@@ -354,6 +354,8 @@ pub fn run() {
             plugins::plugin_set_enabled,
             plugins::plugin_remove,
             plugin_runtime::plugin_runtime_call,
+            plugin_runtime::plugin_panel_session_get,
+            plugin_runtime::plugin_panel_session_set,
             sftp::sftp_list,
             sftp::sftp_pick_upload_files,
             sftp::sftp_pick_download_folder,
