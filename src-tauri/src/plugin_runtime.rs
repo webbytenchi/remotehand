@@ -1387,7 +1387,7 @@ pub async fn plugin_runtime_call_start(
             if let Some(call) = calls.get_mut(&task_call_id) {
                 call.outcome = Some(result);
             }
-        }
+        };
     });
 
     Ok(serde_json::json!({"callId":call_id}))
