@@ -2,7 +2,10 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { IDockviewPanelProps } from "dockview-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { REMOTEHAND_FUNCTION_KEYS } from "./functionKeys";
+import {
+  REMOTEHAND_FUNCTION_KEYS,
+  shouldPluginFramePreventFunctionKeyDefault,
+} from "./functionKeys";
 import {
 REMOTEHAND_BROWSER_PRIMARY_KEYS,
 REMOTEHAND_BROWSER_PRIMARY_SHIFT_KEYS,
@@ -144,6 +147,43 @@ function bridgeScript(pluginId: string, panelId: string) {
 const pluginIdJson = JSON.stringify(pluginId);
 const panelIdJson = JSON.stringify(panelId);
 const functionKeysJson = JSON.stringify(REMOTEHAND_FUNCTION_KEYS);
+const pluginFrameFunctionKeyPolicyJson = JSON.stringify(
+  REMOTEHAND_FUNCTION_KEYS.reduce<Record<string, Record<string, boolean>>>((policy, key) => {
+    policy[key] = {
+      plain: shouldPluginFramePreventFunctionKeyDefault(key, {
+        ctrlKey: false,
+        altKey: false,
+        metaKey: false,
+        shiftKey: false,
+      }),
+      ctrl: shouldPluginFramePreventFunctionKeyDefault(key, {
+        ctrlKey: true,
+        altKey: false,
+        metaKey: false,
+        shiftKey: false,
+      }),
+      alt: shouldPluginFramePreventFunctionKeyDefault(key, {
+        ctrlKey: false,
+        altKey: true,
+        metaKey: false,
+        shiftKey: false,
+      }),
+      meta: shouldPluginFramePreventFunctionKeyDefault(key, {
+        ctrlKey: false,
+        altKey: false,
+        metaKey: true,
+        shiftKey: false,
+      }),
+      shift: shouldPluginFramePreventFunctionKeyDefault(key, {
+        ctrlKey: false,
+        altKey: false,
+        metaKey: false,
+        shiftKey: true,
+      }),
+    };
+    return policy;
+  }, {}),
+);
 const browserPrimaryKeysJson = JSON.stringify(REMOTEHAND_BROWSER_PRIMARY_KEYS);
 const browserPrimaryShiftKeysJson = JSON.stringify(REMOTEHAND_BROWSER_PRIMARY_SHIFT_KEYS);
 return `
@@ -152,6 +192,7 @@ return `
 const pluginId = ${pluginIdJson};
 const panelId = ${panelIdJson};
 const remoteHandFunctionKeys = new Set(${functionKeysJson});
+const pluginFrameFunctionKeyPolicy = ${pluginFrameFunctionKeyPolicyJson};
 const remoteHandBrowserPrimaryKeys = new Set(${browserPrimaryKeysJson});
 const remoteHandBrowserPrimaryShiftKeys = new Set(${browserPrimaryShiftKeysJson});
 let lastFocusedElement = null;
@@ -182,14 +223,19 @@ return event.altKey
 document.addEventListener("keydown", (event) => {
 if (shouldSuppressBrowserShortcut(event)) event.preventDefault();
 if (!remoteHandFunctionKeys.has(event.key)) return;
-const nativeAltF4 = event.key === "F4"
-&& event.altKey
-&& !event.ctrlKey
-&& !event.metaKey
-&& !event.shiftKey;
-if (nativeAltF4) return;
-event.preventDefault();
 const plain = !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey;
+const policy = pluginFrameFunctionKeyPolicy[event.key];
+const modifierKey = event.ctrlKey
+? "ctrl"
+: event.altKey
+? "alt"
+: event.metaKey
+? "meta"
+: event.shiftKey
+? "shift"
+: "plain";
+if (policy && policy[modifierKey]) event.preventDefault();
+if (event.key === "F4" && event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) return;
 if (event.key === "F5" && plain) return;
 event.stopImmediatePropagation();
 if (event.key === "F1" && plain) {
