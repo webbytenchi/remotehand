@@ -10,7 +10,7 @@ use std::{
     path::{Component, Path},
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc, Arc, Mutex,
     },
     thread,
@@ -24,6 +24,13 @@ pub struct PluginRuntimeState {
     sessions: Mutex<BTreeMap<String, PluginSession>>,
     app_handle: Mutex<Option<AppHandle>>,
     panel_session_state: Mutex<BTreeMap<String, serde_json::Value>>,
+    detached_calls: Mutex<BTreeMap<String, DetachedPluginCall>>,
+    next_detached_call_id: AtomicU64,
+}
+
+struct DetachedPluginCall {
+    plugin_id: String,
+    outcome: Option<Result<serde_json::Value, String>>,
 }
 struct PluginSession {
     child: Child,
@@ -1268,6 +1275,122 @@ pub fn plugin_panel_session_set(
     }
     values.insert(key, value);
     Ok(())
+}
+
+const MAX_DETACHED_PLUGIN_CALLS: usize = 128;
+
+fn validate_detached_call_id(call_id: &str) -> Result<(), String> {
+    if call_id.len() < 8
+        || call_id.len() > 96
+        || !call_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+    {
+        return Err("invalid detached plugin call id".to_string());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn plugin_runtime_call_status(
+    state: tauri::State<'_, PluginRuntimeState>,
+    plugin_id: String,
+    call_id: String,
+) -> Result<serde_json::Value, String> {
+    validate_detached_call_id(&call_id)?;
+    let calls = state
+        .detached_calls
+        .lock()
+        .map_err(|_| "detached plugin call lock poisoned".to_string())?;
+    let call = calls
+        .get(&call_id)
+        .ok_or_else(|| "detached plugin call was not found".to_string())?;
+    if call.plugin_id != plugin_id {
+        return Err("detached plugin call belongs to another plugin".to_string());
+    }
+    Ok(match call.outcome.as_ref() {
+        None => serde_json::json!({"status":"running"}),
+        Some(Ok(result)) => serde_json::json!({"status":"completed","result":result}),
+        Some(Err(error)) => serde_json::json!({"status":"failed","error":error}),
+    })
+}
+
+#[tauri::command]
+pub fn plugin_runtime_call_forget(
+    state: tauri::State<'_, PluginRuntimeState>,
+    plugin_id: String,
+    call_id: String,
+) -> Result<bool, String> {
+    validate_detached_call_id(&call_id)?;
+    let mut calls = state
+        .detached_calls
+        .lock()
+        .map_err(|_| "detached plugin call lock poisoned".to_string())?;
+    let Some(call) = calls.get(&call_id) else {
+        return Ok(false);
+    };
+    if call.plugin_id != plugin_id {
+        return Err("detached plugin call belongs to another plugin".to_string());
+    }
+    calls.remove(&call_id);
+    Ok(true)
+}
+
+#[tauri::command]
+pub async fn plugin_runtime_call_start(
+    app: AppHandle,
+    id: String,
+    method: String,
+    params: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    if !valid_message_name(&method) {
+        return Err("invalid plugin method".to_string());
+    }
+    let call_id = {
+        let runtime = app.state::<PluginRuntimeState>();
+        let mut calls = runtime
+            .detached_calls
+            .lock()
+            .map_err(|_| "detached plugin call lock poisoned".to_string())?;
+        if calls.len() >= MAX_DETACHED_PLUGIN_CALLS {
+            return Err("too many detached plugin calls are retained".to_string());
+        }
+        let sequence = runtime
+            .next_detached_call_id
+            .fetch_add(1, Ordering::Relaxed)
+            .wrapping_add(1);
+        let call_id = format!("plugin-call-{sequence}");
+        calls.insert(
+            call_id.clone(),
+            DetachedPluginCall {
+                plugin_id: id.clone(),
+                outcome: None,
+            },
+        );
+        call_id
+    };
+
+    let task_app = app.clone();
+    let task_call_id = call_id.clone();
+    tauri::async_runtime::spawn(async move {
+        let blocking_app = task_app.clone();
+        let result = tauri::async_runtime::spawn_blocking(move || {
+            let runtime = blocking_app.state::<PluginRuntimeState>();
+            runtime.call(&id, &method, params)
+        })
+        .await
+        .map_err(|error| format!("Plugin runtime task failed: {error}"))
+        .and_then(|value| value);
+
+        let runtime = task_app.state::<PluginRuntimeState>();
+        if let Ok(mut calls) = runtime.detached_calls.lock() {
+            if let Some(call) = calls.get_mut(&task_call_id) {
+                call.outcome = Some(result);
+            }
+        }
+    });
+
+    Ok(serde_json::json!({"callId":call_id}))
 }
 
 impl PluginRuntimeState {
