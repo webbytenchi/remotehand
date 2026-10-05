@@ -2181,6 +2181,28 @@ const filteredCommands = commands.filter((command) =>
 command.label.toLowerCase().includes(paletteQuery.toLowerCase()),
 );
 
+const functionShortcutActions = [
+{ id: "core.commandPalette", label: "Command Palette", detail: "Open or close the RemoteHand command palette." },
+{ id: "core.settings", label: "Settings", detail: "Open Settings directly to Keyboard Shortcuts." },
+{ id: "core.home", label: "Home", detail: "Open or focus the Home panel." },
+{ id: "core.connections", label: "Connections", detail: "Open or focus the Connections panel." },
+...plugins.flatMap((plugin) =>
+plugin.enabled
+? plugin.manifest.contributes.panels.map((panel) => ({
+id: `plugin:${plugin.manifest.id}:${panel.id}`,
+label: panel.title,
+detail: `${plugin.manifest.name} plugin`,
+}))
+: [],
+),
+];
+const setFunctionShortcut = (actionId: string, shortcut: string) => {
+setSettings((current) => ({
+...current,
+functionKeyShortcuts: assignFunctionShortcut(current.functionKeyShortcuts, actionId, shortcut),
+}));
+};
+
 const coreSidebarItems = [
 { id: "core:home", label: "Home" },
 ...(localOs === "windows"
@@ -2462,6 +2484,7 @@ tabs={<div className="settings-tabs" role="tablist" aria-label="Settings section
 <button type="button" role="tab" aria-selected={settingsTab === "startup"} className={settingsTab === "startup" ? "active" : ""} onClick={() => setSettingsTab("startup")}>Startup &amp; Tray</button>
 <button type="button" role="tab" aria-selected={settingsTab === "vault"} className={settingsTab === "vault" ? "active" : ""} onClick={() => setSettingsTab("vault")}>Vault</button>
 <button type="button" role="tab" aria-selected={settingsTab === "plugins"} className={settingsTab === "plugins" ? "active" : ""} onClick={() => setSettingsTab("plugins")}>Plugins</button>
+<button type="button" role="tab" aria-selected={settingsTab === "shortcuts"} className={settingsTab === "shortcuts" ? "active" : ""} onClick={() => setSettingsTab("shortcuts")}>Keyboard Shortcuts</button>
 <button type="button" role="tab" aria-selected={settingsTab === "about"} className={settingsTab === "about" ? "active" : ""} onClick={() => setSettingsTab("about")}>About</button>
 {papaTabUnlocked ? <span className="papa-tab-reveal"><button type="button" role="tab" aria-selected={settingsTab === "papa"} className={settingsTab === "papa" ? "active" : ""} onClick={() => { setSettingsTab("papa"); startPapaAudio(); }}>Papa</button>{papaConfettiActive ? <span className="papa-heart-confetti" aria-hidden="true">{Array.from({ length: 10 }, (_, index) => <span key={index}>♥</span>)}</span> : null}</span> : null}
 </div>}>
@@ -2733,6 +2756,50 @@ return <div key={id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1
 <span>Install, enable, disable, and remove RemoteHand plugins.</span>
 </div>
 <div ref={setPluginSettingsHost} />
+</div>
+) : settingsTab === "shortcuts" ? (
+<div className="settings-tab-content">
+<div className="settings-section-heading">
+<strong>Function key mapper</strong>
+<span>Assign Ctrl+F1 through Ctrl+F12 to RemoteHand actions or enabled plugin panels. Assigning a shortcut automatically clears it from any previous action.</span>
+</div>
+<div style={{ display: "grid", gap: 8, marginTop: 14 }}>
+{functionShortcutActions.map((action) => (
+<div
+key={action.id}
+style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 150px", gap: 12, alignItems: "center", padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 8 }}
+>
+<div style={{ minWidth: 0, display: "grid", gap: 3 }}>
+<strong>{action.label}</strong>
+<span className="app-modal-muted" style={{ fontSize: 11, lineHeight: 1.4 }}>{action.detail}</span>
+</div>
+<select
+aria-label={`Shortcut for ${action.label}`}
+value={settings.functionKeyShortcuts[action.id] ?? ""}
+onChange={(event) => setFunctionShortcut(action.id, event.target.value)}
+style={{ width: "100%", border: "1px solid #2b3747", borderRadius: 7, background: "#0d141d", color: "#d2dae5", padding: "8px 10px", outline: "none" }}
+>
+<option value="">Unassigned</option>
+{REMOTEHAND_FUNCTION_SHORTCUTS.map((shortcut) => (
+<option key={shortcut} value={shortcut}>{shortcut}</option>
+))}
+</select>
+</div>
+))}
+</div>
+<div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14 }}>
+<button
+type="button"
+className="settings-reset"
+onClick={() => setSettings((current) => ({ ...current, functionKeyShortcuts: { ...DEFAULT_SETTINGS.functionKeyShortcuts } }))}
+>
+Reset shortcuts
+</button>
+</div>
+<div className="plugin-security-note" style={{ marginTop: 14 }}>
+<strong>Shortcut ownership</strong>
+<span>RemoteHand owns mapped Ctrl+function-key combinations even while focus is inside a plugin panel. Plain F5 remains available for intentional plugin-specific behavior. Ctrl+K is no longer used by the Command Palette.</span>
+</div>
 </div>
 ) : settingsTab === "about" ? (
 <div className="settings-tab-content">
