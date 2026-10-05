@@ -2186,9 +2186,6 @@ border-color: #c7ced8;
 color: #29313d;
 }
 /* Plugin manager */
-.app-modal:has(.plugin-manager) {
-width: min(720px, 100%);
-}
 .plugin-manager {
 display: grid;
 gap: 14px;
