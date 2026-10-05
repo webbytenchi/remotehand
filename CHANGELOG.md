@@ -4,6 +4,39 @@ All notable changes to RemoteHand are documented here.
 
 ## Unreleased
 
+## `1.3.8` - 2026-10-05
+
+### Added
+
+- **Keyboard Shortcuts settings.** RemoteHand now has a dedicated Settings → Keyboard Shortcuts page for assigning Ctrl+F1 through Ctrl+F12 to core actions and enabled plugin panels.
+- **Dynamic plugin shortcuts.** Enabled plugin panel contributions appear automatically in the shortcut mapper without hard-coding plugin identities into RemoteHand core.
+- **Core terminal shortcuts.** Windows users can map shortcuts to New PowerShell, New Command Prompt, and New WSL Terminal; other platforms expose New Terminal.
+
+### Improved
+
+- **Command Palette shortcut ownership.** The Command Palette now defaults to **Ctrl+F12** instead of Ctrl+K, avoiding conflicts with terminal applications such as nano.
+- **Shortcut conflict handling.** Assigning a Ctrl+function-key combination to a new action automatically clears the same shortcut from its previous action.
+- **Plugin-frame routing.** Mapped Ctrl+function-key shortcuts continue to work while keyboard focus is inside an enabled plugin panel.
+- **Function-key ownership.** Plain F5 remains available for intentional plugin-specific behavior while mapped Ctrl+F1 through Ctrl+F12 combinations are host-owned.
+
+### Compatibility
+
+- Plugin API remains **v1**.
+- Existing plugins require no migration.
+- Shortcut mappings are stored in the existing RemoteHand settings file and default safely when older settings do not contain the new mapping field.
+- The existing global show/focus/hide shortcut remains separate and unchanged.
+- Plain F1 continues to open About, plain F5 remains plugin-specific, and native Alt+F4 handling remains unchanged.
+
+### Verification
+
+- Frontend tests passed with **30 tests and 0 failures**.
+- Production frontend build passed.
+- Rust tests passed with **79 tests and 0 failures**.
+- Manual Windows acceptance confirmed Ctrl+K remains available inside nano and no longer opens the Command Palette.
+- Manual Windows acceptance confirmed mapped terminal shortcuts open new local terminal sessions.
+- Manual Windows acceptance confirmed mapped plugin shortcuts open/focus enabled plugin panels from both terminal and plugin-focused contexts.
+
+
 ## `1.3.7` - 2026-10-04
 
 ### Added
