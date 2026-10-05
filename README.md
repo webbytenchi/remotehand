@@ -21,6 +21,7 @@ RemoteHand V1 is intentionally focused on the workflows needed for day-to-day te
 - Configurable color scheme, UI font, and terminal appearance
 - Optional startup at user login and system-tray integration
 - Configurable global shortcut to show, focus, or tuck away the existing RemoteHand window
+- Configurable Ctrl+F1 through Ctrl+F12 keyboard shortcuts for core actions and enabled plugin panels
 - Start minimized and minimize-to-tray support
 - Tray shortcuts for Home, Connections, New Terminal, and Settings
 - Terminal selection auto-copy, native xterm paste handling, right-click paste, and multi-line paste confirmation
@@ -160,7 +161,7 @@ See [docs/VAULT.md](docs/VAULT.md) for the implemented Vault architecture and [S
 
 ## Settings
 
-V1.2 includes Appearance, Interface, Startup & Tray, Plugins, and About settings.
+RemoteHand settings include Appearance, Interface, Startup & Tray, Vault, Plugins, Keyboard Shortcuts, and About.
 
 Startup & Tray settings include:
 
@@ -172,6 +173,8 @@ Startup & Tray settings include:
 - Capture a custom global shortcut by clicking the shortcut field and pressing the desired key combination
 
 The default global shortcut is **Ctrl + Shift + Space**. It shows and focuses the existing RemoteHand window from anywhere without launching a second instance. When RemoteHand is already focused, pressing the shortcut hides it to the system tray when the tray icon is enabled, or minimizes it to the taskbar when the tray icon is disabled. Restoring through the shortcut resumes the last focused in-app control when available. Changes are applied explicitly, and unapplied captured shortcuts are discarded when Settings closes.
+
+Keyboard Shortcuts provides a separate host-owned Ctrl+F1 through Ctrl+F12 mapping bank. The Command Palette defaults to **Ctrl + F12**, replacing the former Ctrl+K binding so terminal applications such as nano retain their native Ctrl+K behavior. Core terminal actions and enabled plugin panels are discovered by RemoteHand and can be assigned without hard-coding plugin-specific behavior into core. Assigning an already-used shortcut moves that shortcut to the new action.
 
 The tray menu provides context-aware Show/Hide control plus quick access to Home, Connections, New Terminal, Settings, and Exit.
 
