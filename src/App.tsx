@@ -1204,6 +1204,22 @@ if (actionId === "core.connections") {
 addConnections();
 return true;
 }
+if (actionId === "core.terminal.default") {
+addTerminal();
+return true;
+}
+if (actionId === "core.terminal.powershell") {
+addTerminal(undefined, "powershell");
+return true;
+}
+if (actionId === "core.terminal.cmd") {
+addTerminal(undefined, "cmd");
+return true;
+}
+if (actionId === "core.terminal.wsl") {
+addTerminal(undefined, "wsl");
+return true;
+}
 if (actionId.startsWith("plugin:")) {
 const [, pluginId, panelId] = actionId.split(":");
 const plugin = plugins.find((item) => item.enabled && item.manifest.id === pluginId);
@@ -1212,7 +1228,7 @@ openPluginPanel(plugin, panelId);
 return true;
 }
 return false;
-}, [addConnections, openHome, openPluginPanel, plugins, settings.functionKeyShortcuts]);
+}, [addConnections, addTerminal, openHome, openPluginPanel, plugins, settings.functionKeyShortcuts]);
 const components = useMemo(
 () => ({
 welcome: (props: IDockviewPanelProps<HomePanelParams>) => (
@@ -2180,6 +2196,15 @@ const functionShortcutActions = [
 { id: "core.commandPalette", label: "Command Palette", detail: "Open or close the RemoteHand command palette." },
 { id: "core.home", label: "Home", detail: "Open or focus the Home panel." },
 { id: "core.connections", label: "Connections", detail: "Open or focus the Connections panel." },
+...(localOs === "windows"
+? [
+{ id: "core.terminal.powershell", label: "New PowerShell", detail: "Open a new local PowerShell terminal." },
+{ id: "core.terminal.cmd", label: "New Command Prompt", detail: "Open a new local Command Prompt terminal." },
+{ id: "core.terminal.wsl", label: "New WSL Terminal", detail: "Open a new local WSL terminal." },
+]
+: [
+{ id: "core.terminal.default", label: "New Terminal", detail: "Open a new local terminal." },
+]),
 ...plugins.flatMap((plugin) =>
 plugin.enabled
 ? plugin.manifest.contributes.panels.map((panel) => ({
