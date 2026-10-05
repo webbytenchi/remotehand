@@ -1189,6 +1189,35 @@ return;
 }
 api.addPanel({ id: "home-" + Date.now(), component: "welcome", title: "Home", params: { activities: recentActivities } });
 }, [recentActivities]);
+const runFunctionShortcut = useCallback((shortcut: string) => {
+const actionId = assignedShortcutAction(settings.functionKeyShortcuts, shortcut);
+if (!actionId) return false;
+if (actionId === "core.commandPalette") {
+setPaletteOpen((open) => !open);
+return true;
+}
+if (actionId === "core.settings") {
+setSettingsTab("shortcuts");
+setSettingsOpen(true);
+return true;
+}
+if (actionId === "core.home") {
+openHome();
+return true;
+}
+if (actionId === "core.connections") {
+addConnections();
+return true;
+}
+if (actionId.startsWith("plugin:")) {
+const [, pluginId, panelId] = actionId.split(":");
+const plugin = plugins.find((item) => item.enabled && item.manifest.id === pluginId);
+if (!plugin || !panelId) return false;
+openPluginPanel(plugin, panelId);
+return true;
+}
+return false;
+}, [addConnections, openHome, openPluginPanel, plugins, settings.functionKeyShortcuts]);
 const components = useMemo(
 () => ({
 welcome: (props: IDockviewPanelProps<HomePanelParams>) => (
@@ -1870,6 +1899,13 @@ setSettingsTab(tab);
 setSettingsOpen(true);
 };
 const onKeyDown = (event: KeyboardEvent) => {
+const mappedShortcut = functionShortcutFromKeyboardEvent(event.key, event);
+if (mappedShortcut) {
+event.preventDefault();
+event.stopImmediatePropagation();
+runFunctionShortcut(mappedShortcut);
+return;
+}
 const functionKeyDisposition = remoteHandFunctionKeyDisposition(event.key, event);
 if (functionKeyDisposition !== "none") {
 event.preventDefault();
@@ -1885,10 +1921,6 @@ return;
 // Plain F5 is allowed to continue to an intentional plugin-specific handler,
 // but the WebView/browser default refresh action remains suppressed.
 }
-if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
-event.preventDefault();
-setPaletteOpen((open) => !open);
-}
 if (event.key === "Escape") setPaletteOpen(false);
 if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
 event.preventDefault();
@@ -1901,13 +1933,19 @@ redoLayout();
 }
 };
 const onOpenAbout = () => openSettingsFromFunctionKey("about");
+const onMappedFunctionShortcut = (event: Event) => {
+const shortcut = (event as CustomEvent<string>).detail;
+if (typeof shortcut === "string") runFunctionShortcut(shortcut);
+};
 window.addEventListener("keydown", onKeyDown, true);
 window.addEventListener("remotehand-open-about", onOpenAbout);
+window.addEventListener("remotehand-function-shortcut", onMappedFunctionShortcut);
 return () => {
 window.removeEventListener("keydown", onKeyDown, true);
 window.removeEventListener("remotehand-open-about", onOpenAbout);
+window.removeEventListener("remotehand-function-shortcut", onMappedFunctionShortcut);
 };
-}, [redoLayout, undoLayout]);
+}, [redoLayout, runFunctionShortcut, undoLayout]);
 const handleReady = async (event: DockviewReadyEvent) => {
 apiRef.current = event.api;
 event.api.onWillDragPanel((dragEvent) => {
