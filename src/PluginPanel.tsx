@@ -37,7 +37,11 @@ type PluginBridgeDetachedRequest =
 | { type: "remotehand.plugin.detached.forget"; requestId: string; callId: string };
 type PluginHostFunctionKeyMessage = {
 type: "remotehand.host.function-key";
-key: "F1";
+key: string;
+ctrlKey?: boolean;
+altKey?: boolean;
+metaKey?: boolean;
+shiftKey?: boolean;
 };
 type PluginSessionStateMessage = {
 type: "remotehand.plugin.session-state";
@@ -250,10 +254,15 @@ if (policy && policy[modifierKey]) event.preventDefault();
 if (event.key === "F4" && event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) return;
 if (event.key === "F5" && plain) return;
 event.stopImmediatePropagation();
-if (event.key === "F1" && plain) {
 lastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-parent.postMessage({ type: "remotehand.host.function-key", key: "F1" }, "*");
-}
+parent.postMessage({
+type: "remotehand.host.function-key",
+key: event.key,
+ctrlKey: Boolean(event.ctrlKey),
+altKey: Boolean(event.altKey),
+metaKey: Boolean(event.metaKey),
+shiftKey: Boolean(event.shiftKey)
+}, "*");
 }, true);
 function applyAppearance(appearance) {
 if (!appearance || typeof appearance !== "object") return;
@@ -467,7 +476,20 @@ console.error("RemoteHand rejected non-serializable plugin panel session state")
 return;
 }
 if (message.type === "remotehand.host.function-key") {
-if (message.key === "F1") window.dispatchEvent(new CustomEvent("remotehand-open-about"));
+const plain = !message.ctrlKey && !message.altKey && !message.metaKey && !message.shiftKey;
+if (message.key === "F1" && plain) {
+window.dispatchEvent(new CustomEvent("remotehand-open-about"));
+return;
+}
+if (
+message.ctrlKey
+&& !message.altKey
+&& !message.metaKey
+&& !message.shiftKey
+&& /^F(?:[1-9]|1[0-2])$/.test(message.key)
+) {
+window.dispatchEvent(new CustomEvent("remotehand-function-shortcut", { detail: "Ctrl+" + message.key }));
+}
 return;
 }
 const respond = (response: PluginBridgeResponse) => { iframeRef.current?.contentWindow?.postMessage(response, "*"); };
