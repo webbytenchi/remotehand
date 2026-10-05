@@ -19,6 +19,10 @@ All notable changes to RemoteHand are documented here.
 - **Plugin-frame routing.** Mapped Ctrl+function-key shortcuts continue to work while keyboard focus is inside an enabled plugin panel.
 - **Function-key ownership.** Plain F5 remains available for intentional plugin-specific behavior while mapped Ctrl+F1 through Ctrl+F12 combinations are host-owned.
 
+### Fixed
+
+- **Settings modal sizing.** Settings now keeps one consistent wider modal width across Appearance, Interface, Startup & Tray, Vault, Plugins, Keyboard Shortcuts, and About, with horizontal tab overflow available on narrower windows.
+
 ### Compatibility
 
 - Plugin API remains **v1**.
