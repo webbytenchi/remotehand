@@ -1100,6 +1100,7 @@ margin-top: 8px;
 color: #e2e8f0;
 }
 .settings-modal {
+width: min(800px, calc(100vw - 32px));
 height: min(90vh, calc(100vh - 48px));
 min-height: 0;
 max-height: 90vh;
@@ -2460,9 +2461,12 @@ background: transparent;
   display: flex;
   gap: 4px;
   padding: 0 22px;
+  overflow-x: auto;
+  scrollbar-width: thin;
   border-bottom: 1px solid #1d2632;
 }
 .settings-tabs button {
+  flex: 0 0 auto;
   border: 0;
   border-bottom: 2px solid transparent;
   background: transparent;
@@ -2471,6 +2475,7 @@ background: transparent;
   cursor: pointer;
   font-size: 12px;
   font-weight: 700;
+  white-space: nowrap;
 }
 .settings-tabs button:hover {
   color: #b9c4d1;
