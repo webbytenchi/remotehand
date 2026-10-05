@@ -1196,11 +1196,6 @@ if (actionId === "core.commandPalette") {
 setPaletteOpen((open) => !open);
 return true;
 }
-if (actionId === "core.settings") {
-setSettingsTab("shortcuts");
-setSettingsOpen(true);
-return true;
-}
 if (actionId === "core.home") {
 openHome();
 return true;
@@ -2183,7 +2178,6 @@ command.label.toLowerCase().includes(paletteQuery.toLowerCase()),
 
 const functionShortcutActions = [
 { id: "core.commandPalette", label: "Command Palette", detail: "Open or close the RemoteHand command palette." },
-{ id: "core.settings", label: "Settings", detail: "Open Settings directly to Keyboard Shortcuts." },
 { id: "core.home", label: "Home", detail: "Open or focus the Home panel." },
 { id: "core.connections", label: "Connections", detail: "Open or focus the Connections panel." },
 ...plugins.flatMap((plugin) =>
