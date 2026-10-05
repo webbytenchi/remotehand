@@ -20,6 +20,12 @@ import { AppModal } from "./AppModal";
 import { PluginManager } from "./PluginManager";
 import { PluginPanel, sendPluginPanelContext, type PluginPanelParams } from "./PluginPanel";
 import { remoteHandFunctionKeyDisposition } from "./functionKeys";
+import {
+  REMOTEHAND_FUNCTION_SHORTCUTS,
+  assignFunctionShortcut,
+  assignedShortcutAction,
+  functionShortcutFromKeyboardEvent,
+} from "./shortcutMapper";
 import { shouldSuppressWebViewShortcut } from "./browserShortcuts";
 import {
 VAULT_PROMPT_REQUEST_EVENT,
@@ -76,6 +82,7 @@ minimizeToTrayOnClose: boolean;
 topbarAlignment: TopbarAlignment;
 globalShortcutEnabled: boolean;
 globalShortcut: string;
+functionKeyShortcuts: Record<string, string>;
 vaultAutoLockMinutes: number;
 };
 type WorkspaceLayout = Parameters<DockviewApi["fromJSON"]>[0];
@@ -101,6 +108,7 @@ minimizeToTrayOnClose: false,
 topbarAlignment: "center",
 globalShortcutEnabled: true,
 globalShortcut: "Ctrl+Shift+Space",
+functionKeyShortcuts: { "core.commandPalette": "Ctrl+F12" },
 vaultAutoLockMinutes: 15,
 };
 const UI_FONT_OPTIONS = ["Inter", "IBM Plex Sans", "Segoe UI", "System Default"] as const;
@@ -732,7 +740,7 @@ const [vaultPromptPassphrase, setVaultPromptPassphrase] = useState("");
 const [vaultPromptPassphraseConfirm, setVaultPromptPassphraseConfirm] = useState("");
 const [vaultPromptError, setVaultPromptError] = useState("");
 const [vaultPromptBusy, setVaultPromptBusy] = useState(false);
-const [settingsTab, setSettingsTab] = useState<"appearance" | "layout" | "startup" | "vault" | "plugins" | "about" | "papa">("appearance");
+const [settingsTab, setSettingsTab] = useState<"appearance" | "layout" | "startup" | "vault" | "plugins" | "shortcuts" | "about" | "papa">("appearance");
 const [vaultStatus, setVaultStatus] = useState<{ exists: boolean; unlocked: boolean } | null>(null);
 const [vaultStatusError, setVaultStatusError] = useState("");
 const [vaultActionBusy, setVaultActionBusy] = useState(false);
