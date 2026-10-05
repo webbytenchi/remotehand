@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{env, fs, path::PathBuf};
+use std::{collections::BTreeMap, env, fs, path::PathBuf};
 use tauri::Manager;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -20,6 +20,7 @@ pub struct Settings {
     pub topbar_alignment: String,
     pub global_shortcut_enabled: bool,
     pub global_shortcut: String,
+    pub function_key_shortcuts: BTreeMap<String, String>,
     pub vault_auto_lock_minutes: u64,
 }
 impl Default for Settings {
@@ -41,6 +42,10 @@ impl Default for Settings {
             topbar_alignment: "center".to_string(),
             global_shortcut_enabled: true,
             global_shortcut: "Ctrl+Shift+Space".to_string(),
+            function_key_shortcuts: BTreeMap::from([(
+                "core.commandPalette".to_string(),
+                "Ctrl+F12".to_string(),
+            )]),
             vault_auto_lock_minutes: 15,
         }
     }
