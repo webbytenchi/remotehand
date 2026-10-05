@@ -273,6 +273,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn default_settings_map_command_palette_to_ctrl_f12() {
+        let settings = Settings::default();
+        assert_eq!(
+            settings
+                .function_key_shortcuts
+                .get("core.commandPalette")
+                .map(String::as_str),
+            Some("Ctrl+F12")
+        );
+    }
+
+    #[test]
     fn native_popout_geometry_replaces_serialized_browser_geometry_in_order() {
         let mut workspace = serde_json::json!({
             "popoutGroups": [
