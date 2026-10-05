@@ -1980,9 +1980,6 @@ html[data-theme="light"] .terminal-paste-preview {
 .settings-tab-content {
   padding-top: 14px;
 }
-.app-modal:has(.appearance-settings) {
-  width: min(560px, 100%);
-}
 .settings-section-heading {
   display: grid;
   gap: 3px;
