@@ -1,6 +1,6 @@
 # Contributing to RemoteHand
 
-RemoteHand has reached its V1 feature baseline. Contributions should preserve the portable-first architecture and avoid regressing the accepted Windows/Linux desktop workflows.
+RemoteHand has reached its V1 feature baseline. Contributions should preserve the portable-first architecture and avoid regressing the tested Windows workflows. Linux remains a source-build target; release packaging and validation are still to be confirmed.
 
 ## Principles
 
@@ -8,7 +8,7 @@ Contributions should preserve these goals:
 
 - Modern, approachable UI
 - Strong security defaults
-- Portable-only Windows and Linux operation
+- Portable-first operation without an installer or cloud account; Windows x64 release builds are published, while Linux release packaging and validation remain to be confirmed
 - Cross-platform design
 - Reuse of mature protocol implementations
 - Clear frontend/native separation
