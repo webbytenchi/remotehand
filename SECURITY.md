@@ -100,7 +100,9 @@ If `cargo audit` is not installed, install the RustSec tool first with `cargo in
 
 ## Reporting Vulnerabilities
 
-Until a dedicated private security-reporting channel is configured, avoid publishing exploitable details in a public issue. For private deployments of this repository, contact the repository owner directly.
+Before the repository is made public, the maintainer should enable GitHub Private Vulnerability Reporting in the repository's Settings under Advanced Security. Once enabled, use the repository's **Security and quality → Advisories → Report a vulnerability** form to disclose security issues privately.
+
+Until private vulnerability reporting is enabled, do not publish exploitable details in a public issue. If you need to report a concern before the private form is available, open a non-sensitive issue asking the maintainer for private reporting instructions; do not include exploit steps, secrets, or sensitive system details in that issue.
 
 ## Plugin security
 
