@@ -4,6 +4,12 @@ RemoteHand is an open-source, portable remote workstation manager for Windows an
 
 RemoteHand V1 is intentionally focused on the workflows needed for day-to-day terminal and file-based remote administration. Later protocols such as RDP, VNC, and X11 remain roadmap items.
 
+## Downloads
+
+Get the latest published release from the [GitHub Releases page](https://github.com/webbytenchi/remotehand/releases/latest). The current v1.3.8 release provides Windows x64 builds: a standalone `.exe`, a portable `.zip`, and `SHA256SUMS.txt` for checksum verification. These are portable builds, not an installer.
+
+A prebuilt Linux release artifact is not currently published. Linux users can review the source-build prerequisites and commands in [Development](#development); Linux release packaging and validation remain to be confirmed.
+
 ## V1 Highlights
 
 - Portable-only desktop application: extract and run, with no installer required
