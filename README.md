@@ -1,6 +1,6 @@
 # RemoteHand
 
-RemoteHand is an open-source, portable remote workstation manager for Windows and Linux. It combines local terminals, SSH sessions, SFTP file management, saved connections, encrypted portable credentials, and a dockable multi-pane workspace in one desktop application.
+RemoteHand is an open-source, portable remote workstation manager designed for Windows and Linux. It combines local terminals, SSH sessions, SFTP file management, saved connections, encrypted portable credentials, and a dockable multi-pane workspace in one desktop application.
 
 RemoteHand V1 is intentionally focused on the workflows needed for day-to-day terminal and file-based remote administration. Later protocols such as RDP, VNC, and X11 remain roadmap items.
 
