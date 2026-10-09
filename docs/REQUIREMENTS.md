@@ -10,7 +10,7 @@ The following are part of the current V1 baseline.
 
 ### Desktop and Portability
 
-- Windows and Linux desktop architecture
+- Windows desktop release baseline and Linux-oriented source-build target; Linux release packaging and validation remain to be confirmed
 - Tauri-based native shell
 - Portable-only runtime model
 - Normal operation without administrator/root privileges
