@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
@@ -752,6 +753,8 @@ setSettingsOpen(false);
 }, [settings.globalShortcut]);
 const [papaTabUnlocked, setPapaTabUnlocked] = useState(false);
 const [papaConfettiActive, setPapaConfettiActive] = useState(false);
+const [papaConfettiPosition, setPapaConfettiPosition] = useState<{ top: number; left: number } | null>(null);
+const papaTabButtonRef = useRef<HTMLButtonElement | null>(null);
 const papaSequenceRef = useRef<string[]>([]);
 const papaAudioRef = useRef<HTMLAudioElement | null>(null);
 const [pluginSettingsHost, setPluginSettingsHost] = useState<HTMLDivElement | null>(null);
@@ -1710,6 +1713,19 @@ window.addEventListener("keydown", onKeyDown, true);
 return () => window.removeEventListener("keydown", onKeyDown, true);
 }, [settingsOpen, settingsTab, papaTabUnlocked, startPapaAudio]);
 useEffect(() => {
+if (!papaConfettiActive) {
+setPapaConfettiPosition(null);
+return;
+}
+const button = papaTabButtonRef.current;
+if (!button) return;
+const frame = window.requestAnimationFrame(() => {
+const rect = button.getBoundingClientRect();
+setPapaConfettiPosition({ top: rect.top + 2, left: rect.left + rect.width / 2 });
+});
+return () => window.cancelAnimationFrame(frame);
+}, [papaConfettiActive, papaTabUnlocked]);
+useEffect(() => {
 if (!papaConfettiActive) return;
 const timer = window.setTimeout(() => setPapaConfettiActive(false), 1400);
 return () => window.clearTimeout(timer);
@@ -2505,7 +2521,8 @@ tabs={<div className="settings-tabs" role="tablist" aria-label="Settings section
 <button type="button" role="tab" aria-selected={settingsTab === "plugins"} className={settingsTab === "plugins" ? "active" : ""} onClick={() => setSettingsTab("plugins")}>Plugins</button>
 <button type="button" role="tab" aria-selected={settingsTab === "shortcuts"} className={settingsTab === "shortcuts" ? "active" : ""} onClick={() => setSettingsTab("shortcuts")}>Keyboard Shortcuts</button>
 <button type="button" role="tab" aria-selected={settingsTab === "about"} className={settingsTab === "about" ? "active" : ""} onClick={() => setSettingsTab("about")}>About</button>
-{papaTabUnlocked ? <span className="papa-tab-reveal"><button type="button" role="tab" aria-selected={settingsTab === "papa"} className={settingsTab === "papa" ? "active" : ""} onClick={() => { setSettingsTab("papa"); startPapaAudio(); }}>Papa</button>{papaConfettiActive ? <span className="papa-heart-confetti" aria-hidden="true">{Array.from({ length: 10 }, (_, index) => <span key={index}>♥</span>)}</span> : null}</span> : null}
+{papaTabUnlocked ? <span className="papa-tab-reveal"><button ref={papaTabButtonRef} type="button" role="tab" aria-selected={settingsTab === "papa"} className={settingsTab === "papa" ? "active" : ""} onClick={() => { setSettingsTab("papa"); startPapaAudio(); }}>Papa</button></span> : null}
+{papaConfettiActive && papaConfettiPosition ? createPortal(<span className="papa-heart-confetti" aria-hidden="true" style={{ top: papaConfettiPosition.top, left: papaConfettiPosition.left }}>{Array.from({ length: 10 }, (_, index) => <span key={index}>♥</span>)}</span>, document.body) : null}
 </div>}>
 {settingsTab === "appearance" ? (
 <div className="appearance-settings settings-tab-content">
