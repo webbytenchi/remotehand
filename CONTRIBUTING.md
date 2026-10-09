@@ -54,7 +54,7 @@ Current persistent areas include:
 - `data/connections/connections.json`
 - `data/activity/recent.json`
 - `data/workspaces/default.json`
-- `data/vault/credentials.enc`
+- `data/vault/vault.enc`
 
 Do not place plaintext credentials in normal settings, workspace, activity, or connection JSON files.
 
