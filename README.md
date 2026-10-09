@@ -126,7 +126,7 @@ RemoteHand/
     ├── connections/
     │   └── connections.json
     ├── vault/
-    │   └── credentials.enc
+    │   └── vault.enc
     └── workspaces/
         └── default.json
 ```
@@ -194,13 +194,13 @@ Settings are stored portably under `data/config/settings.json`.
 
 ## Plugins
 
-RemoteHand supports out-of-process executable plugins that extend the app without modifying core. Plugins can contribute panels, sidebar buttons, commands, and live top-bar widgets. Plugin API v1 remains the current plugin API in RemoteHand v1.3.5.
+RemoteHand supports out-of-process executable plugins that extend the app without modifying core. Plugins can contribute panels, sidebar buttons, commands, and live top-bar widgets. Plugin API v1 remains the current plugin API in RemoteHand v1.3.8.
 
 The plugin system is built on a simple rule: core owns infrastructure, plugins own functionality. RemoteHand core provides lifecycle, permissions, storage, IPC, and generic UI surfaces. Plugins provide protocol-specific behavior - for example, VNC, RDP, or host monitoring - that core does not need to know about.
 
 Plugin API v1 is documented in docs/PLUGINS.md. It covers package layout, the manifest, IPC, plugin-scoped storage, network/clipboard host services, panel hosting, top-bar contributions, system-tray contributions, native notifications, generic panel-context routing, scoped Vault access, Vault status events, and encrypted blob storage.
 
-RemoteHand v1.3.4 keeps the existing Plugin API v1 surface while improving host-owned Vault startup coordination and native workspace/popout restoration. The 4 MiB generic `clipboard.write` limit, multi-file `file.open { multiple: true }`, and permission-gated HTTPS launching through `links.open` / `link.open` remain available and compatible.
+RemoteHand v1.3.8 preserves the existing Plugin API v1 surface, including the 4 MiB generic `clipboard.write` limit, multi-file `file.open { multiple: true }`, and permission-gated HTTPS launching through `links.open` / `link.open`. The v1.3.x line also includes improvements to host-owned Vault startup coordination and native workspace/popout restoration.
 
 Plugins are disabled by default after install. Only install plugins you trust - a plugin is a native executable with the host process privileges. See SECURITY.md for the plugin threat model.
 
@@ -241,7 +241,7 @@ RemoteHand is configured as portable-only. Tauri bundling/installers are disable
 
 ## V1 Status
 
-**Status: V1 feature baseline complete. RemoteHand v1.3.4 hardens the existing Plugin API v1/Vault foundation with coordinated startup unlock handling and more reliable native workspace/popout restoration.**
+**Status: V1 feature baseline complete. RemoteHand v1.3.8 includes configurable keyboard shortcuts for core actions and enabled plugin panels, alongside continued improvements to plugin interaction and workspace usability.**
 
 The current V1 has been exercised on the Windows Tauri build for the primary workspace, terminal, connection, Home, persistence, credential-vault, and SFTP workflows. Remaining work belongs to post-V1 expansion and hardening rather than the original bootstrap phase.
 
