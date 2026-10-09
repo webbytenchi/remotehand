@@ -88,7 +88,8 @@ Credentials must not be embedded directly in connection JSON.
 - Passphrase-based unlock
 - Explicit lock
 - Store/get/delete by opaque credential reference
-- `age` encryption format
+- Argon2id passphrase-based key derivation
+- XChaCha20-Poly1305 authenticated encryption
 - Vault stored separately from ordinary profile/configuration JSON
 
 ### Appearance and Settings
