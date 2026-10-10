@@ -69,7 +69,7 @@ Deferred beyond V1:
 - Recent Activity persistence
 - Main-window state persistence
 - Credential references separated from profiles
-- Portable encrypted vault using `age`
+- Portable encrypted vault using Argon2id and XChaCha20-Poly1305
 - Vault initialize/unlock/lock/store/get/delete commands
 
 Still desirable post-V1:

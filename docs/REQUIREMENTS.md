@@ -10,7 +10,7 @@ The following are part of the current V1 baseline.
 
 ### Desktop and Portability
 
-- Windows and Linux desktop architecture
+- Windows desktop release baseline and Linux-oriented source-build target; Linux release packaging and validation remain to be confirmed
 - Tauri-based native shell
 - Portable-only runtime model
 - Normal operation without administrator/root privileges
@@ -88,7 +88,8 @@ Credentials must not be embedded directly in connection JSON.
 - Passphrase-based unlock
 - Explicit lock
 - Store/get/delete by opaque credential reference
-- `age` encryption format
+- Argon2id passphrase-based key derivation
+- XChaCha20-Poly1305 authenticated encryption
 - Vault stored separately from ordinary profile/configuration JSON
 
 ### Appearance and Settings
