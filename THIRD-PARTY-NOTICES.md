@@ -6,7 +6,9 @@ The list below is a dependency-review inventory. Inclusion does not, by itself, 
 
 ## Components identified under MPL-2.0
 
-| Component | Version | License | Source |
+The following links lead to the exact published crate versions on crates.io. Each crate page provides access to that version's published source package and package metadata, including licensing information.
+
+| Component | Version | License | Source package |
 |---|---|---|---|
 | `cssparser` | 0.36.0 | MPL-2.0 | https://crates.io/crates/cssparser/0.36.0 |
 | `cssparser-macros` | 0.6.1 | MPL-2.0 | https://crates.io/crates/cssparser-macros/0.6.1 |
@@ -14,11 +16,11 @@ The list below is a dependency-review inventory. Inclusion does not, by itself, 
 | `option-ext` | 0.2.0 | MPL-2.0 | https://crates.io/crates/option-ext/0.2.0 |
 | `selectors` | 0.36.1 | MPL-2.0 | https://crates.io/crates/selectors/0.36.1 |
 
-The source links above identify the published crate versions. The corresponding source distributions should be consulted for their copyright and license notices.
+To obtain a listed version's source, open its crates.io page and use the version-specific source/package download provided there. Preserve the copyright, license, and other notices included with the source distribution.
 
 ## Mozilla Public License 2.0
 
-The full text of the Mozilla Public License, version 2.0, is available at:
+The full text of the Mozilla Public License, version 2.0, is included in `MPL-2.0.txt` and is also available at:
 
 https://www.mozilla.org/MPL/2.0/
 
@@ -30,7 +32,7 @@ RemoteHand's own license is provided separately in the repository's `LICENSE` fi
 
 ## Scope and verification
 
-This notice reflects the Windows x64 dependency inventory reviewed for RemoteHand v1.3.8. It is not a claim that every listed package is present in the final executable. Before distribution, verify the applicable source-availability arrangements and preserve the original license and copyright notices supplied with the relevant source packages.
+This notice reflects the Windows x64 dependency inventory reviewed for RemoteHand v1.3.8. It is not a claim that every listed package is present in the final executable. The links above identify source packages for the exact listed versions; the dependency inventory alone does not establish which packages are included in the final executable or which specific source-availability duties apply. Before distribution, verify the applicability of those duties and preserve the original license and copyright notices supplied with the relevant source packages.
 
 Release reviewed: RemoteHand v1.3.8  
 Release tag: https://github.com/webbytenchi/remotehand/releases/tag/v1.3.8
