@@ -90,6 +90,7 @@ type AlertPayload = {
   target?: string;
   targetName?: string;
   fallbackBeep?: boolean;
+  playSound?: boolean;
   sound?: { dataUrl?: string; durationMs?: number } | null;
 };
 
@@ -436,7 +437,10 @@ export function PluginManager({
           );
         }
       } else if (event.payload.event === "monitor.alert") {
-        void playAlertSound(event.payload.payload as AlertPayload);
+        const payload = event.payload.payload as AlertPayload;
+        // Some alert events are emitted for notifications even when audio is disabled.
+        // Preserve compatibility with older plugins that do not send playSound.
+        if (payload.playSound !== false) void playAlertSound(payload);
       }
     }).then((dispose) => {
       if (cancelled) dispose();
