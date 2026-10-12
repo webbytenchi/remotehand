@@ -37,6 +37,8 @@ pub fn sync_plugin_handlers(plugin: &PluginInfo, enabled: bool) -> Result<(), St
                     if run_reg(&["add", &format!("HKCU\\Software\\Classes\\{}", prog_id), "/ve", "/t", "REG_SZ", "/d", &label, "/f"]).is_err()
                         || run_reg(&["add", &commands, "/ve", "/t", "REG_SZ", "/d", &command_value, "/f"]).is_err()
                         || run_reg(&["add", &format!("HKCU\\Software\\Classes\\.{}\\OpenWithProgids", extension), "/v", &prog_id, "/t", "REG_NONE", "/f"]).is_err()
+                        || run_reg(&["add", capabilities, "/v", "ApplicationName", "/t", "REG_SZ", "/d", "RemoteHand", "/f"]).is_err()
+                        || run_reg(&["add", capabilities, "/v", "ApplicationDescription", "/t", "REG_SZ", "/d", "Open supported files with RemoteHand plugins", "/f"]).is_err()
                         || run_reg(&["add", &format!("{}\\FileAssociations", capabilities), "/v", &format!(".{}", extension), "/t", "REG_SZ", "/d", &prog_id, "/f"]).is_err()
                         || run_reg(&["add", registered, "/v", "RemoteHand", "/t", "REG_SZ", "/d", "Software\\RemoteHand\\Capabilities", "/f"]).is_err()
                     {
