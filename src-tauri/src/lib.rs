@@ -1,3 +1,4 @@
+mod file_associations;
 mod global_shortcut;
 mod logging;
 mod native_file_drop;
@@ -16,8 +17,13 @@ use std::sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
     Arc,
 };
-use tauri::{webview::PageLoadEvent, Manager};
+use tauri::{webview::PageLoadEvent, Emitter, Manager};
 use terminal::TerminalState;
+
+#[tauri::command]
+fn startup_open_file_path() -> Option<String> {
+    file_associations::open_file_path_from_args(&std::env::args().collect::<Vec<_>>())
+}
 
 #[tauri::command]
 fn local_os() -> &'static str {
@@ -311,7 +317,10 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            if let Some(path) = file_associations::open_file_path_from_args(&args) {
+                let _ = app.emit("remotehand-open-file", path);
+            }
             if let Some(window) = app.get_webview_window("main") {
                 if let Ok(true) = window.is_minimized() {
                     let _ = window.unminimize();
@@ -335,6 +344,7 @@ pub fn run() {
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![
+            startup_open_file_path,
             storage::load_settings,
             storage::save_settings,
             storage::load_ui_contribution_layout,

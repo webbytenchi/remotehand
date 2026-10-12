@@ -145,6 +145,7 @@ apiVersion: number;
 author: string;
 description: string;
 permissions: string[];
+fileHandlers: { extensions: string[]; panel: string }[];
 contributes: {
 sidebar: PluginContribution[];
 panels: PluginContribution[];
@@ -804,6 +805,7 @@ const [workspaceReady, setWorkspaceReady] = useState(false);
 const [localOs, setLocalOs] = useState(() => (isTauri() ? "" : "linux"));
 const [appVersion, setAppVersion] = useState(() => isTauri() ? "—" : "Development");
 const apiRef = useRef<DockviewApi | null>(null);
+const startupFileHandled = useRef(false);
 const restoredRef = useRef(false);
 const layoutHistoryRef = useRef<string[]>([]);
 const layoutHistoryIndexRef = useRef(-1);
@@ -1157,6 +1159,43 @@ title: panel.title,
 params,
 });
 }, []);
+useEffect(() => {
+if (!isTauri()) return;
+let cancelled = false;
+let unlisten: (() => void) | undefined;
+const openFileInHandler = (path: string) => {
+const leaf = path.split(/[\\/]/).pop() || path;
+const dot = leaf.lastIndexOf(".");
+if (dot < 0) return;
+const extension = leaf.slice(dot + 1).toLowerCase();
+const plugin = plugins.find((item) => item.enabled &&
+item.manifest.fileHandlers.some((handler) => handler.extensions.some((value) => value.replace(/^\\./, "").toLowerCase() === extension)));
+if (!plugin) return;
+const handler = plugin.manifest.fileHandlers.find((item) => item.extensions.some((value) => value.replace(/^\\./, "").toLowerCase() === extension));
+if (handler) openPluginPanel(plugin, handler.panel, { path });
+};
+void listen<string>("remotehand-open-file", (event) => openFileInHandler(event.payload)).then((dispose) => {
+if (cancelled) dispose();
+else unlisten = dispose;
+});
+return () => { cancelled = true; unlisten?.(); };
+}, [openPluginPanel, plugins]);
+useEffect(() => {
+if (!isTauri() || startupFileHandled.current || plugins.length === 0) return;
+startupFileHandled.current = true;
+void invoke<string | null>("startup_open_file_path").then((path) => {
+if (!path) return;
+const leaf = path.split(/[\\/]/).pop() || path;
+const dot = leaf.lastIndexOf(".");
+if (dot < 0) return;
+const extension = leaf.slice(dot + 1).toLowerCase();
+const plugin = plugins.find((item) => item.enabled &&
+item.manifest.fileHandlers.some((handler) => handler.extensions.some((value) => value.replace(/^\\./, "").toLowerCase() === extension)));
+if (!plugin) return;
+const handler = plugin.manifest.fileHandlers.find((item) => item.extensions.some((value) => value.replace(/^\\./, "").toLowerCase() === extension));
+if (handler) openPluginPanel(plugin, handler.panel, { path });
+}).catch((error) => console.error("Could not route startup file to a plugin", error));
+}, [openPluginPanel, plugins]);
 useEffect(() => {
 if (!isTauri()) return;
 let cancelled = false;

@@ -898,7 +898,9 @@ pub fn plugin_set_enabled(
     let plugin = require_installed(&id)?;
     if enabled {
         runtime.start(&plugin)?;
+        crate::file_associations::sync_plugin_handlers(&plugin, true)?;
     } else {
+        crate::file_associations::sync_plugin_handlers(&plugin, false)?;
         runtime.stop(&id)?;
     }
     let mut state = load_state()?;
@@ -917,12 +919,17 @@ pub fn start_enabled_plugins(
 ) -> Result<(), String> {
     for plugin in discover_plugins()? {
         if plugin.enabled {
-            if let Err(error) = runtime.start(&plugin) {
-                log::error!(
+            match runtime.start(&plugin) {
+                Ok(()) => {
+                    if let Err(error) = crate::file_associations::sync_plugin_handlers(&plugin, true) {
+                        log::error!("Failed to register file handlers for {}: {}", plugin.manifest.id, error);
+                    }
+                }
+                Err(error) => log::error!(
                     "Failed to start enabled plugin {}: {}",
                     plugin.manifest.id,
                     error
-                );
+                ),
             }
         }
     }
