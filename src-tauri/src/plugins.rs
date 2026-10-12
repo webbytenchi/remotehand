@@ -54,6 +54,14 @@ pub struct PluginManifest {
     pub permissions: Vec<String>,
     #[serde(default)]
     pub contributes: PluginContributions,
+    #[serde(default)]
+    pub file_handlers: Vec<PluginFileHandler>,
+}
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PluginFileHandler {
+    pub extensions: Vec<String>,
+    pub panel: String,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -261,6 +269,28 @@ fn validate_manifest(manifest: &PluginManifest) -> Result<(), String> {
             return Err(format!("invalid plugin runtime target: {target}"));
         }
         validate_relative_package_path(entrypoint, "plugin runtime entrypoint")?;
+    }
+    if manifest.file_handlers.len() > 32 {
+        return Err("plugin declares too many file handlers".to_string());
+    }
+    let mut declared_extensions = BTreeSet::new();
+    for handler in &manifest.file_handlers {
+        if handler.extensions.is_empty() || handler.extensions.len() > 32 {
+            return Err("file handler must declare between 1 and 32 extensions".to_string());
+        }
+        if !manifest.contributes.panels.iter().any(|panel| panel.id == handler.panel) {
+            return Err(format!("file handler references unknown panel: {}", handler.panel));
+        }
+        for extension in &handler.extensions {
+            let normalized = extension.trim_start_matches('.').to_ascii_lowercase();
+            if normalized.is_empty() || normalized.len() > 16 ||
+                !normalized.bytes().all(|byte| byte.is_ascii_alphanumeric()) {
+                return Err(format!("invalid file handler extension: {extension}"));
+            }
+            if !declared_extensions.insert(normalized) {
+                return Err(format!("duplicate file handler extension: {extension}"));
+            }
+        }
     }
     if manifest.permissions.len() > 32 {
         return Err("plugin declares too many permissions".to_string());

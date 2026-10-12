@@ -163,6 +163,18 @@ At launch, the host picks the entrypoint matching the current host. If no entryp
 
 Paths are relative to the plugin package root. Absolute paths, traversal, and symlinks are rejected at install time.
 
+#### fileHandlers - array of objects, optional
+
+Declares file extensions the plugin can open through a contributed panel. This is an additive Plugin API v1 manifest field; existing manifests may omit it. Each entry has an `extensions` array (extension names without a dot, case-insensitive) and a `panel` id that must match a panel declared by this plugin.
+
+```json
+"fileHandlers": [
+  { "extensions": ["txt", "log", "md", "json", "csv"], "panel": "editor" }
+]
+```
+
+RemoteHand Core owns OS integration and passes the selected file path as the panel's generic `path` context. Plugins own file semantics and should only declare formats their panel can handle. Declaring a handler does not silently override the user's default OS application.
+
 #### permissions - array of string, optional
 
 Declared capabilities. Each string must be one of the recognized permissions (see the Permissions section). Unknown permission strings are rejected - the manifest will not load.
