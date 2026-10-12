@@ -1,3 +1,4 @@
+#[cfg(target_os = "windows")]
 use std::{env, process::Command};
 use crate::plugins::PluginInfo;
 
@@ -30,7 +31,7 @@ pub fn sync_plugin_handlers(plugin: &PluginInfo, enabled: bool) -> Result<(), St
             for extension in &handler.extensions {
                 let extension = extension.trim_start_matches('.').to_ascii_lowercase();
                 if enabled {
-                    let command_value = format!("\\\"{}\\\" --open-file \\\"%1\\\"", executable);
+                    let command_value = format!("\"{}\" --open-file \"%1\"", executable);
                     let label = format!("Open with RemoteHand ({})", plugin.manifest.name);
                     let commands = format!("HKCU\\Software\\Classes\\{}\\shell\\open\\command", prog_id);
                     if run_reg(&["add", &format!("HKCU\\Software\\Classes\\{}", prog_id), "/ve", "/t", "REG_SZ", "/d", &label, "/f"]).is_err()

@@ -1169,9 +1169,9 @@ const dot = leaf.lastIndexOf(".");
 if (dot < 0) return;
 const extension = leaf.slice(dot + 1).toLowerCase();
 const plugin = plugins.find((item) => item.enabled &&
-item.manifest.fileHandlers.some((handler) => handler.extensions.some((value) => value.replace(/^\\./, "").toLowerCase() === extension)));
+item.manifest.fileHandlers.some((handler) => handler.extensions.some((value) => (value.startsWith(".") ? value.slice(1) : value).toLowerCase() === extension)));
 if (!plugin) return;
-const handler = plugin.manifest.fileHandlers.find((item) => item.extensions.some((value) => value.replace(/^\\./, "").toLowerCase() === extension));
+const handler = plugin.manifest.fileHandlers.find((item) => item.extensions.some((value) => (value.startsWith(".") ? value.slice(1) : value).toLowerCase() === extension));
 if (handler) openPluginPanel(plugin, handler.panel, { path });
 };
 void listen<string>("remotehand-open-file", (event) => openFileInHandler(event.payload)).then((dispose) => {
@@ -1190,9 +1190,9 @@ const dot = leaf.lastIndexOf(".");
 if (dot < 0) return;
 const extension = leaf.slice(dot + 1).toLowerCase();
 const plugin = plugins.find((item) => item.enabled &&
-item.manifest.fileHandlers.some((handler) => handler.extensions.some((value) => value.replace(/^\\./, "").toLowerCase() === extension)));
+item.manifest.fileHandlers.some((handler) => handler.extensions.some((value) => (value.startsWith(".") ? value.slice(1) : value).toLowerCase() === extension)));
 if (!plugin) return;
-const handler = plugin.manifest.fileHandlers.find((item) => item.extensions.some((value) => value.replace(/^\\./, "").toLowerCase() === extension));
+const handler = plugin.manifest.fileHandlers.find((item) => item.extensions.some((value) => (value.startsWith(".") ? value.slice(1) : value).toLowerCase() === extension));
 if (handler) openPluginPanel(plugin, handler.panel, { path });
 }).catch((error) => console.error("Could not route startup file to a plugin", error));
 }, [openPluginPanel, plugins]);
