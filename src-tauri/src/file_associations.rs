@@ -3,6 +3,7 @@ use std::{env, process::Command};
 use crate::plugins::PluginInfo;
 
 const SETTINGS_KEY: &str = "file-associations-v1";
+const LEGACY_PROGID_PREFIX: &str = "RemoteHand.File.";
 
 pub fn open_file_path_from_args(args: &[String]) -> Option<String> {
     let mut index = 0;
@@ -56,40 +57,50 @@ pub fn sync_plugin_handlers(plugin: &PluginInfo, enabled: bool) -> Result<(), St
         };
         let executable = env::current_exe().map_err(|error| error.to_string())?;
         let executable = executable.to_string_lossy().to_string();
-        let prog_id = format!("RemoteHand.File.{}", plugin.manifest.id);
-        // Register only as an Open With candidate. Do not publish Windows
-        // Capabilities\FileAssociations, which can make Explorer treat RemoteHand
-        // as the file type's primary application and replace the existing icon.
-        let capabilities = "HKCU\\Software\\RemoteHand\\Capabilities";
-        let registered = "HKCU\\Software\\RegisteredApplications";
+        let app_key = "HKCU\\Software\\Classes\\Applications\\remotehand.exe";
+        let app_command_key = format!("{app_key}\\shell\\open\\command");
+        let supported_types = format!("{app_key}\\SupportedTypes");
+        let legacy_progid = format!("{LEGACY_PROGID_PREFIX}{}", plugin.manifest.id);
         let mut failures = Vec::new();
-        for extension in &extensions {
-            if enabled {
-                let command_value = format!("\"{}\" --open-file \"%1\"", executable);
-                let label = format!("Open with RemoteHand ({})", plugin.manifest.name);
-                let commands = format!("HKCU\\Software\\Classes\\{}\\shell\\open\\command", prog_id);
-                if run_reg(&["add", &format!("HKCU\\Software\\Classes\\{}", prog_id), "/ve", "/t", "REG_SZ", "/d", &label, "/f"]).is_err()
-                    || run_reg(&["add", &commands, "/ve", "/t", "REG_SZ", "/d", &command_value, "/f"]).is_err()
-                    || run_reg(&["add", &format!("HKCU\\Software\\Classes\\.{}\\OpenWithProgids", extension), "/v", &prog_id, "/t", "REG_NONE", "/f"]).is_err()
-                {
-                    failures.push(extension.clone());
-                }
-            } else {
-                let open_with = format!("HKCU\\Software\\Classes\\.{}\\OpenWithProgids", extension);
-                let file_associations = format!("{}\\FileAssociations", capabilities);
-                let _ = run_reg(&["delete", &open_with, "/v", &prog_id, "/f"]);
-                // Clean entries written by the previous registration implementation.
-                let _ = run_reg(&["delete", &file_associations, "/v", &format!(".{}", extension), "/f"]);
+
+        // Register RemoteHand as an application that can open these extensions,
+        // without making a RemoteHand-specific ProgID the file type itself.
+        if enabled {
+            let command_value = format!("\"{}\" --open-file \"%1\"", executable);
+            let friendly_name = "RemoteHand";
+            if run_reg(&["add", app_key, "/v", "FriendlyAppName", "/t", "REG_SZ", "/d", friendly_name, "/f"]).is_err()
+                || run_reg(&["add", &app_command_key, "/ve", "/t", "REG_SZ", "/d", &command_value, "/f"]).is_err()
+            {
+                failures.push("application registration".to_string());
             }
         }
-        // Remove the legacy application-level registration created by earlier
-        // builds. OpenWithProgids remains sufficient for "Open with" discovery.
-        let _ = run_reg(&["delete", registered, "/v", "RemoteHand", "/f"]);
-        let _ = run_reg(&["delete", capabilities, "/f"]);
-        if !enabled {
-            let _ = run_reg(&["delete", &format!("HKCU\\Software\\Classes\\{}", prog_id), "/f"]);
+
+        for extension in &extensions {
+            let dotted_extension = format!(".{extension}");
+            let open_with = format!("HKCU\\Software\\Classes\\{dotted_extension}\\OpenWithProgids");
+            if enabled {
+                // SupportedTypes makes RemoteHand discoverable in Open with while
+                // leaving the existing extension class and its friendly type name
+                // untouched. Remove the old ProgID that surfaced as the file type.
+                if run_reg(&["add", &supported_types, "/v", &dotted_extension, "/t", "REG_SZ", "/d", "", "/f"]).is_err() {
+                    failures.push(extension.clone());
+                }
+                let _ = run_reg(&["delete", &open_with, "/v", &legacy_progid, "/f"]);
+            } else {
+                let _ = run_reg(&["delete", &supported_types, "/v", &dotted_extension, "/f"]);
+                let _ = run_reg(&["delete", &open_with, "/v", &legacy_progid, "/f"]);
+            }
         }
-        if failures.is_empty() { Ok(()) } else {
+
+        // Remove the legacy ProgID and application-level association metadata
+        // created by earlier builds. Do not touch Windows' protected UserChoice.
+        let _ = run_reg(&["delete", &format!("HKCU\\Software\\Classes\\{legacy_progid}"), "/f"]);
+        let _ = run_reg(&["delete", "HKCU\\Software\\RegisteredApplications", "/v", "RemoteHand", "/f"]);
+        let _ = run_reg(&["delete", "HKCU\\Software\\RemoteHand\\Capabilities", "/f"]);
+
+        if failures.is_empty() {
+            Ok(())
+        } else {
             Err(format!("could not register Windows file handlers for: {}", failures.join(", ")))
         }
     }
