@@ -57,6 +57,9 @@ pub fn sync_plugin_handlers(plugin: &PluginInfo, enabled: bool) -> Result<(), St
         let executable = env::current_exe().map_err(|error| error.to_string())?;
         let executable = executable.to_string_lossy().to_string();
         let prog_id = format!("RemoteHand.File.{}", plugin.manifest.id);
+        // Register only as an Open With candidate. Do not publish Windows
+        // Capabilities\FileAssociations, which can make Explorer treat RemoteHand
+        // as the file type's primary application and replace the existing icon.
         let capabilities = "HKCU\\Software\\RemoteHand\\Capabilities";
         let registered = "HKCU\\Software\\RegisteredApplications";
         let mut failures = Vec::new();
@@ -68,10 +71,6 @@ pub fn sync_plugin_handlers(plugin: &PluginInfo, enabled: bool) -> Result<(), St
                 if run_reg(&["add", &format!("HKCU\\Software\\Classes\\{}", prog_id), "/ve", "/t", "REG_SZ", "/d", &label, "/f"]).is_err()
                     || run_reg(&["add", &commands, "/ve", "/t", "REG_SZ", "/d", &command_value, "/f"]).is_err()
                     || run_reg(&["add", &format!("HKCU\\Software\\Classes\\.{}\\OpenWithProgids", extension), "/v", &prog_id, "/t", "REG_NONE", "/f"]).is_err()
-                    || run_reg(&["add", capabilities, "/v", "ApplicationName", "/t", "REG_SZ", "/d", "RemoteHand", "/f"]).is_err()
-                    || run_reg(&["add", capabilities, "/v", "ApplicationDescription", "/t", "REG_SZ", "/d", "Open supported files with RemoteHand plugins", "/f"]).is_err()
-                    || run_reg(&["add", &format!("{}\\FileAssociations", capabilities), "/v", &format!(".{}", extension), "/t", "REG_SZ", "/d", &prog_id, "/f"]).is_err()
-                    || run_reg(&["add", registered, "/v", "RemoteHand", "/t", "REG_SZ", "/d", "Software\\RemoteHand\\Capabilities", "/f"]).is_err()
                 {
                     failures.push(extension.clone());
                 }
@@ -79,9 +78,14 @@ pub fn sync_plugin_handlers(plugin: &PluginInfo, enabled: bool) -> Result<(), St
                 let open_with = format!("HKCU\\Software\\Classes\\.{}\\OpenWithProgids", extension);
                 let file_associations = format!("{}\\FileAssociations", capabilities);
                 let _ = run_reg(&["delete", &open_with, "/v", &prog_id, "/f"]);
+                // Clean entries written by the previous registration implementation.
                 let _ = run_reg(&["delete", &file_associations, "/v", &format!(".{}", extension), "/f"]);
             }
         }
+        // Remove the legacy application-level registration created by earlier
+        // builds. OpenWithProgids remains sufficient for "Open with" discovery.
+        let _ = run_reg(&["delete", registered, "/v", "RemoteHand", "/f"]);
+        let _ = run_reg(&["delete", capabilities, "/f"]);
         if !enabled {
             let _ = run_reg(&["delete", &format!("HKCU\\Software\\Classes\\{}", prog_id), "/f"]);
         }
