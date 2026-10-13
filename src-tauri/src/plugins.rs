@@ -733,7 +733,7 @@ fn discover_plugins() -> Result<Vec<PluginInfo>, String> {
         if let Some(settings) = plugin_storage_get(&manifest.id, "file-associations-v1")? {
             let extensions = settings.get("extensions")
                 .and_then(serde_json::Value::as_array)
-                .map(|values| values.iter().filter_map(serde_json::Value::as_str).map(str::to_string).collect::<Vec<_>>())
+                .map(|values| values.iter().filter_map(serde_json::Value::as_str).map(|value| value.to_string()).collect::<Vec<_>>())
                 .unwrap_or_default();
             let panel = manifest.file_handlers.first().map(|handler| handler.panel.clone());
             manifest.file_handlers = match panel {
