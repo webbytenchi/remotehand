@@ -175,6 +175,8 @@ Declares file extensions the plugin can open through a contributed panel. This i
 
 RemoteHand Core owns OS integration and passes the selected file path as the panel's generic `path` context. Plugins own file semantics and should only declare formats their panel can handle. Declaring a handler does not silently override the user's default OS application.
 
+Associations are opt-in: declaring `fileHandlers` only identifies the supported panel and the initial choices. A plugin with declared handlers may call the generic host method `file_associations.set` with `{ "extensions": ["txt", "yaml"] }` to replace its selected extension list. Core validates the list, persists it in plugin-scoped storage, and synchronizes OS registration. The selected list is exposed through the plugin manifest information returned by Core so custom extensions route to the same declared panel. Sending an empty list clears associations managed by that plugin. The Editor exposes this capability through its File Associations gear button next to Save As.
+
 #### permissions - array of string, optional
 
 Declared capabilities. Each string must be one of the recognized permissions (see the Permissions section). Unknown permission strings are rejected - the manifest will not load.
