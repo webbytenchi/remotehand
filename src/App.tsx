@@ -903,6 +903,21 @@ useEffect(() => {
 if (!isTauri()) return;
 let cancelled = false;
 let unlisten: (() => void) | undefined;
+void listen<string>("remotehand-plugin-associations-changed", () => {
+void refreshPlugins();
+}).then((dispose) => {
+if (cancelled) dispose();
+else unlisten = dispose;
+}).catch((error) => console.error("Failed to listen for plugin association changes", error));
+return () => {
+cancelled = true;
+unlisten?.();
+};
+}, [refreshPlugins]);
+useEffect(() => {
+if (!isTauri()) return;
+let cancelled = false;
+let unlisten: (() => void) | undefined;
 void listen<PluginRuntimeEvent>("remotehand-plugin-event", (event) => {
 if (event.payload.event !== "sidebar.update") return;
 const payload = event.payload.payload;
