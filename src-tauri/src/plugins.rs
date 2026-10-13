@@ -721,13 +721,26 @@ fn discover_plugins() -> Result<Vec<PluginInfo>, String> {
         if !safe_directory_name(&directory) {
             continue;
         }
-        let manifest = match read_manifest(&entry.path()) {
+        let mut manifest = match read_manifest(&entry.path()) {
             Ok(manifest) => manifest,
             Err(error) => {
                 log::warn!("Ignoring invalid plugin directory {directory}: {error}");
                 continue;
             }
         };
+        // Once the user has applied file-association preferences, expose the
+        // persisted selection as active handlers without changing the installed manifest.
+        if let Some(settings) = plugin_storage_get(&manifest.id, "file-associations-v1")? {
+            let extensions = settings.get("extensions")
+                .and_then(serde_json::Value::as_array)
+                .map(|values| values.iter().filter_map(serde_json::Value::as_str).map(str::to_string).collect::<Vec<_>>())
+                .unwrap_or_default();
+            let panel = manifest.file_handlers.first().map(|handler| handler.panel.clone());
+            manifest.file_handlers = match panel {
+                Some(panel) if !extensions.is_empty() => vec![PluginFileHandler { extensions, panel }],
+                _ => Vec::new(),
+            };
+        }
         if !ids.insert(manifest.id.clone()) {
             log::warn!("Ignoring duplicate plugin id {}", manifest.id);
             continue;
@@ -795,6 +808,18 @@ pub(crate) fn plugin_has_permission(id: &str, permission: &str) -> Result<bool, 
             .permissions
             .iter()
             .any(|value| value == permission))
+}
+
+pub(crate) fn plugin_has_declared_file_handlers(id: &str) -> Result<bool, String> {
+    if !valid_identifier(id) {
+        return Ok(false);
+    }
+    let root = plugins_root_for_runtime()?;
+    let path = root.join(id);
+    if !path.is_dir() {
+        return Ok(false);
+    }
+    Ok(read_manifest(&path)?.file_handlers.len() > 0)
 }
 
 pub(crate) fn plugin_available(id: &str) -> Result<bool, String> {
