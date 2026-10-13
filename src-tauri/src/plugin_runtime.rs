@@ -569,6 +569,7 @@ fn validate_plugin_request(permissions: &[String], request: &PluginRequest) -> R
             }
             Ok(())
         }
+        "file_associations.set" => Ok(()),
         "storage.get" | "storage.set" => {
             if !permission_granted(permissions, "storage.plugin") {
                 return Err("plugin lacks storage.plugin permission".to_string());
@@ -677,6 +678,11 @@ fn handle_plugin_request(
     permissions: &[String],
     request: &PluginRequest,
 ) -> Result<serde_json::Value, String> {
+    if request.method == "file_associations.set"
+        && !crate::plugins::plugin_has_declared_file_handlers(plugin_id)?
+    {
+        return Err("plugin has not declared file handlers in its manifest".to_string());
+    }
     if let Err(error) = validate_plugin_request(permissions, request) {
         log_vault_audit(plugin_id, &request.method, "denied");
         return Err(error);
@@ -879,6 +885,38 @@ fn handle_plugin_request(
             )?;
             log_vault_audit(plugin_id, &request.method, "allowed");
             Ok(serde_json::json!({ "unlocked": true }))
+        }
+        "file_associations.set" => {
+            #[derive(serde::Deserialize)]
+            #[serde(rename_all = "camelCase")]
+            struct Params { extensions: Vec<String> }
+            let params: Params = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid file association settings: {error}"))?;
+            if params.extensions.len() > 64 {
+                return Err("at most 64 file extensions may be associated".to_string());
+            }
+            let mut seen = std::collections::BTreeSet::new();
+            let mut normalized = Vec::new();
+            for extension in params.extensions {
+                let extension = extension.trim_start_matches('.').to_ascii_lowercase();
+                if extension.is_empty() || extension.len() > 16 ||
+                    !extension.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_')) {
+                    return Err(format!("invalid file extension: {extension}"));
+                }
+                if !seen.insert(extension.clone()) {
+                    return Err(format!("duplicate file extension: {extension}"));
+                }
+                normalized.push(extension);
+            }
+            let old_plugin = crate::plugins::require_installed(plugin_id)?;
+            if !old_plugin.enabled {
+                return Err("plugin must be enabled to change file associations".to_string());
+            }
+            crate::file_associations::sync_plugin_handlers(&old_plugin, false)?;
+            crate::plugins::plugin_storage_set(plugin_id, "file-associations-v1", &serde_json::json!({ "extensions": normalized }))?;
+            let updated_plugin = crate::plugins::require_installed(plugin_id)?;
+            crate::file_associations::sync_plugin_handlers(&updated_plugin, true)?;
+            Ok(serde_json::json!({ "extensions": normalized }))
         }
         "storage.get" => {
             let params: StorageGetParams = serde_json::from_value(request.params.clone())
