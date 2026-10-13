@@ -916,6 +916,7 @@ fn handle_plugin_request(
             crate::plugins::plugin_storage_set(plugin_id, "file-associations-v1", &serde_json::json!({ "extensions": normalized }))?;
             let updated_plugin = crate::plugins::require_installed(plugin_id)?;
             crate::file_associations::sync_plugin_handlers(&updated_plugin, true)?;
+            let _ = app_handle.emit("remotehand-plugin-associations-changed", plugin_id.to_string());
             Ok(serde_json::json!({ "extensions": normalized }))
         }
         "storage.get" => {
