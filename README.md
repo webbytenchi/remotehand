@@ -204,6 +204,12 @@ RemoteHand supports out-of-process executable plugins that extend the app withou
 
 The plugin system is built on a simple rule: core owns infrastructure, plugins own functionality. RemoteHand core provides lifecycle, permissions, storage, IPC, and generic UI surfaces. Plugins provide protocol-specific behavior - for example, VNC, RDP, or host monitoring - that core does not need to know about.
 
+### Available Plugins
+
+- **[RemoteHand Editor](https://github.com/webbytenchi/remotehand-plugin-editor)** — A text editor plugin that adds editing capabilities to the RemoteHand workspace. Visit its repository for the source code, documentation, and latest release.
+
+More plugins and extensions are in the works — this is just the beginning of the RemoteHand plugin ecosystem!
+
 Plugin API v1 is documented in docs/PLUGINS.md. It covers package layout, the manifest, IPC, plugin-scoped storage, network/clipboard host services, panel hosting, top-bar contributions, system-tray contributions, native notifications, generic panel-context routing, scoped Vault access, Vault status events, and encrypted blob storage.
 
 RemoteHand v1.3.8 preserves the existing Plugin API v1 surface, including the 4 MiB generic `clipboard.write` limit, multi-file `file.open { multiple: true }`, and permission-gated HTTPS launching through `links.open` / `link.open`. The v1.3.x line also includes improvements to host-owned Vault startup coordination and native workspace/popout restoration.
