@@ -4,6 +4,10 @@ All notable changes to RemoteHand are documented here.
 
 ## Unreleased
 
+### Fixed
+
+- **Plugin popout navigation styling.** Refresh the repaired stylesheet when an embedded plugin replaces its HTML/CSS inside a detached Dockview window; this keeps Arcade Home and Compute Empire styled while navigating between them. Windows acceptance confirmed on 2026-10-31. Release packaging and broader regression tests remain pending.
+
 ## `1.3.8` - 2026-10-05
 
 ### Added
