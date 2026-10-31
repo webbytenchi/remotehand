@@ -208,6 +208,7 @@ The plugin system is built on a simple rule: core owns infrastructure, plugins o
 
 - **[RemoteHand Editor](https://github.com/webbytenchi/remotehand-plugin-editor)** — A text editor plugin that adds editing capabilities to the RemoteHand workspace. Visit its repository for the source code, documentation, and latest release.
 - **[RemoteHand File Manager](https://github.com/webbytenchi/remotehand-plugin-file-manager)** — A local file manager plugin with single- and dual-pane browsing, copy/move operations, drag-and-drop, and integration with RemoteHand Editor. Visit its repository for the source code, documentation, and latest published release.
+- **[RemoteHand Toolbox](https://github.com/webbytenchi/remotehand-plugin-toolbox)** — A collection of 12 built-in utilities for passwords, encoding, checksums, JSON, regular expressions, timestamps, network diagnostics, and image conversion. Visit its repository for the source code, documentation, and latest release.
 
 More plugins and extensions are in the works — this is just the beginning of the RemoteHand plugin ecosystem!
 
