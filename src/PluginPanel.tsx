@@ -597,6 +597,7 @@ unlisten?.();
 }, [pluginId, panelId]);
 const repairedDocumentRef = useRef<Document | null>(null);
 const repairSheetRef = useRef<CSSStyleSheet | null>(null);
+const repairCssRef = useRef<string | null>(null);
 const [popoutStylesReady, setPopoutStylesReady] = useState(api.location.type !== "popout");
 useLayoutEffect(() => {
 const markPopoutStylesReady = (doc: Document) => {
@@ -629,7 +630,7 @@ return;
 try {
 if (repairedDocumentRef.current === doc) {
 const sheet = repairSheetRef.current;
-if (sheet && doc.adoptedStyleSheets.includes(sheet)) {
+if (sheet && repairCssRef.current === css && doc.adoptedStyleSheets.includes(sheet)) {
 markPopoutStylesReady(doc);
 return;
 }
@@ -655,6 +656,7 @@ sheet.replaceSync(css);
 doc.adoptedStyleSheets = [...doc.adoptedStyleSheets, sheet];
 repairedDocumentRef.current = doc;
 repairSheetRef.current = sheet;
+repairCssRef.current = css;
 markPopoutStylesReady(doc);
 } catch (error) {
 console.error("RemoteHand plugin popout style repair failed", error);
