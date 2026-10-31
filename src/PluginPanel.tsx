@@ -628,17 +628,17 @@ markPopoutStylesReady(doc);
 return;
 }
 try {
+const css = styles.map((style) => style.textContent ?? "").join("\n");
+if (!css) {
+markPopoutStylesReady(doc);
+return;
+}
 if (repairedDocumentRef.current === doc) {
 const sheet = repairSheetRef.current;
 if (sheet && repairCssRef.current === css && doc.adoptedStyleSheets.includes(sheet)) {
 markPopoutStylesReady(doc);
 return;
 }
-}
-const css = styles.map((style) => style.textContent ?? "").join("\n");
-if (!css) {
-markPopoutStylesReady(doc);
-return;
 }
 const view = doc.defaultView;
 const FrameCSSStyleSheet = view
