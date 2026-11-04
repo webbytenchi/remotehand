@@ -765,6 +765,13 @@ type LocalIpv4Address = { address: string; interfaceName: string };
 const [apiIpv4LookupError, setApiIpv4LookupError] = useState("");
 const [apiAvailableIpv4, setApiAvailableIpv4] = useState<LocalIpv4Address[]>([]);
 const [pendingApiBinding, setPendingApiBinding] = useState<typeof apiDraft | null>(null);
+const [apiCopiedUrl, setApiCopiedUrl] = useState("");
+const [apiCopyError, setApiCopyError] = useState("");
+const copyApiAccessUrl = useCallback((url: string) => {
+void invoke("api_server_copy_url", { url })
+.then(() => { setApiCopiedUrl(url); setApiCopyError(""); })
+.catch((error) => { setApiCopiedUrl(""); setApiCopyError(String(error)); });
+}, []);
 const [apiStatus, setApiStatus] = useState<ApiStatus | null>(null);
 const [apiHistory, setApiHistory] = useState<ApiHistorySnapshot | null>(null);
 const [apiHistoryError, setApiHistoryError] = useState("");
@@ -2982,10 +2989,35 @@ apiTlsCertificatePath: candidate.certificatePath, apiTlsKeyPath: candidate.keyPa
 <span>Listening on: {apiStatus.bindAddress}:{apiStatus.port}{apiStatus.bindAddress === "0.0.0.0" ? " (all IPv4 interfaces)" : ""}</span>
 {apiStatus.bindAddress === "0.0.0.0" ? (
 <>
-<span>Local access: {apiStatus.url}</span>
-{apiAvailableIpv4.length > 0 ? <span>Network access: {apiAvailableIpv4.map((item) => `${apiStatus.tls ? "https" : "http"}://${item.address}:${apiStatus.port}`).join(" · ")}</span> : <span>Network access: use this machine's LAN or Tailnet IPv4 address and port {apiStatus.port}.</span>}
+<div className="api-status-access-row">
+<span>Local access:</span>
+{apiStatus.url ? <button type="button" className="api-url-copy" title="Copy local API address" onClick={() => copyApiAccessUrl(apiStatus.url!)}>
+{apiStatus.url} <span className="api-url-copy-hint">{apiCopiedUrl === apiStatus.url ? "Copied!" : "Copy"}</span>
+</button> : null}
+</div>
+{apiAvailableIpv4.length > 0 ? (
+<div className="api-status-access-row">
+<span>Network access:</span>
+<div className="api-status-url-list">
+{apiAvailableIpv4.map((item) => {
+const url = `${apiStatus.tls ? "https" : "http"}://${item.address}:${apiStatus.port}`;
+return <button type="button" className="api-url-copy" key={item.address} title={`Copy API address (${item.interfaceName})`} onClick={() => copyApiAccessUrl(url)}>
+{url} <span className="api-url-copy-hint">{apiCopiedUrl === url ? "Copied!" : "Copy"}</span>
+</button>;
+})}
+</div>
+</div>
+) : <span>Network access: use this machine's LAN or Tailnet IPv4 address and port {apiStatus.port}.</span>}
 </>
-) : <span>Access URL: {apiStatus.url}</span>}
+) : (
+<div className="api-status-access-row">
+<span>Access URL:</span>
+{apiStatus.url ? <button type="button" className="api-url-copy" title="Copy API address" onClick={() => copyApiAccessUrl(apiStatus.url!)}>
+{apiStatus.url} <span className="api-url-copy-hint">{apiCopiedUrl === apiStatus.url ? "Copied!" : "Copy"}</span>
+</button> : null}
+</div>
+)}
+{apiCopyError ? <span className="plugin-error" role="alert">{apiCopyError}</span> : null}
 </>
 ) : <span>Server is stopped. Enable the API Server to start listening.</span>}
 <span>{apiStatus?.tls ? "HTTPS is enabled for this listener." : apiStatus?.bindAddress === "127.0.0.1" ? "Localhost-only HTTP." : "WARNING: Remote HTTP is unencrypted; use only on isolated trusted networks."}</span>
