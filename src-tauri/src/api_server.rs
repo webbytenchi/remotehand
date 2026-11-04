@@ -264,6 +264,28 @@ impl ApiServerState {
         self.history.snapshot()
     }
 
+    pub fn set_history_limit(&self, limit: usize) -> Result<(), String> {
+        self.history.set_limit(limit)
+    }
+
+    pub fn history_csv(&self) -> Result<String, String> {
+        let entries = self.history.all_entries()?;
+        fn cell(value: &str) -> String {
+            // Prevent spreadsheet programs from treating untrusted route text as formulas.
+            let value = if value.starts_with(['=', '+', '-', '@', '\t', '\r', '\n']) {
+                format!("'{}", value)
+            } else { value.to_string() };
+            format!("\"{}\"", value.replace('"', "\"\""))
+        }
+        let mut csv = String::from("Timestamp (Unix ms),Client IP,Method,Route,Status,Duration (ms)\r\n");
+        for entry in entries {
+            csv.push_str(&format!("{},{},{},{},{},{}\r\n",
+                cell(&entry.timestamp), cell(&entry.ip), cell(&entry.method),
+                cell(&entry.route), entry.status, entry.duration_ms));
+        }
+        Ok(csv)
+    }
+
     pub fn clear_history(&self) -> Result<(), String> {
         self.history.clear()
     }
@@ -380,6 +402,27 @@ pub fn api_server_status(state: tauri::State<'_, ApiServerState>) -> Result<ApiS
 #[tauri::command]
 pub fn api_server_history(state: tauri::State<'_, ApiServerState>) -> Result<HistorySnapshot, String> {
     state.history()
+}
+
+#[tauri::command]
+pub fn api_server_history_set_limit(state: tauri::State<'_, ApiServerState>, limit: usize) -> Result<(), String> {
+    state.set_history_limit(limit)
+}
+
+#[tauri::command]
+pub async fn api_server_history_export(state: tauri::State<'_, ApiServerState>) -> Result<Option<String>, String> {
+    // Snapshot before the Save dialog so the exported history is stable.
+    let csv = state.history_csv()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let target = rfd::FileDialog::new()
+            .set_title("Export API access history")
+            .set_file_name("remotehand-api-history.csv")
+            .add_filter("CSV files", &["csv"])
+            .save_file();
+        let Some(path) = target else { return Ok(None); };
+        fs::write(&path, csv.as_bytes()).map_err(|error| format!("CSV export failed: {error}"))?;
+        Ok(Some(path.to_string_lossy().into_owned()))
+    }).await.map_err(|error| format!("CSV export dialog failed: {error}"))?
 }
 
 #[tauri::command]
