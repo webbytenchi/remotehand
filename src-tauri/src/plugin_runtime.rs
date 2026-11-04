@@ -1493,6 +1493,27 @@ impl PluginRuntimeState {
         method: &str,
         params: serde_json::Value,
     ) -> Result<serde_json::Value, String> {
+        self.call_internal(id, method, params, None)
+    }
+
+    // Bounded calls for external HTTP clients; existing UI calls remain unchanged.
+    pub fn call_with_timeout(
+        &self,
+        id: &str,
+        method: &str,
+        params: serde_json::Value,
+        timeout: Duration,
+    ) -> Result<serde_json::Value, String> {
+        self.call_internal(id, method, params, Some(timeout))
+    }
+
+    fn call_internal(
+        &self,
+        id: &str,
+        method: &str,
+        params: serde_json::Value,
+        timeout: Option<Duration>,
+    ) -> Result<serde_json::Value, String> {
         if !valid_message_name(method) {
             return Err("invalid plugin method".to_string());
         }
@@ -1558,9 +1579,12 @@ impl PluginRuntimeState {
             receiver
         };
 
-        let response = receiver
-            .recv()
-            .map_err(|_| "plugin response channel closed".to_string())??;
+        let response = match timeout {
+            Some(limit) => receiver.recv_timeout(limit)
+                .map_err(|error| format!("plugin response timed out or disconnected: {error}"))??,
+            None => receiver.recv()
+                .map_err(|_| "plugin response channel closed".to_string())??,
+        };
         if response.message_type != "plugin.response" {
             return Err("plugin returned an unexpected message type".to_string());
         }
