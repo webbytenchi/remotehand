@@ -2853,9 +2853,7 @@ void invoke<string>("api_server_rotate_token").then((token) => { setApiToken(tok
 </div>
 {apiTokenVisible ? <input aria-label="API access token" type="text" readOnly value={apiToken} onFocus={(event) => event.currentTarget.select()} /> : null}
 <button type="button" className="settings-reset" disabled={!apiStatus?.running || !apiStatus.url} onClick={() => {
-const url = apiStatus?.url;
-if (!url) return;
-void invoke("open_external_url", { url: url + "/api/docs" }).catch((error) => setApiError(String(error)));
+void invoke("api_server_open_docs").catch((error) => setApiError(String(error)));
 }}>Open API Documentation</button>
 <div className="settings-section-heading">
 <strong>Core routes</strong>
