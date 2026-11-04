@@ -13,6 +13,8 @@ Use **Listening network** to select:
 - **Specific IPv4 address** — bind only an address assigned to this host, such as a LAN or Tailnet IP.
   Selecting this mode automatically fills the first detected active, non-loopback IPv4 address (preferring normal LAN adapters over recognizable virtual adapters). The field stays fully editable; you can replace the suggested address. If no suitable address is found, the field remains blank and an explanation appears. Switching modes never applies a new binding until you click **Apply listening configuration**.
 
+The **Server status** panel shows the actual listening address and the available local/network URLs. Each displayed URL is a clickable **Copy** target, which uses the native clipboard and shows a **Copied!** confirmation; it does not open a browser or expose credentials. Only URLs for the running listener may be copied through this command.
+
 The separate **Transport security** selector supports:
 
 - **HTTP (unencrypted)** — no certificate required. Localhost is the default. Remote HTTP requires a clear security confirmation; passwords and API Bearer tokens are transmitted in cleartext and may be captured by anyone who can observe the path. Use this option **only on an isolated, fully trusted network**. Do not expose this endpoint on public networks, through internet port forwarding, or to untrusted users.
