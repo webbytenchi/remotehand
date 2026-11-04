@@ -8,11 +8,30 @@ Open **Settings → API Server**. The API is **disabled by default**. With the d
 
 Use **Listening network** to select:
 
-- **Localhost** (`127.0.0.1`) — default; HTTP permitted for local development.
-- **All IPv4 interfaces** (`0.0.0.0`) — TLS/HTTPS **required**.
-- **Specific IPv4 address** (such as a LAN or Tailnet IP present on this host) — TLS/HTTPS **required**.
+- **Localhost** (`127.0.0.1`) — default, no remote access.
+- **All IPv4 interfaces** (`0.0.0.0`) — reachable on all IPv4 interfaces when allowed by firewall.
+- **Specific IPv4 address** — bind only an address assigned to this host, such as a LAN or Tailnet IP.
 
-Remote bindings require paths to a readable PEM-encoded certificate (containing the certificate chain) and matching private key. These are supplied by the operator; RemoteHand does not create a CA, trust self-signed certificates, or configure firewall rules. The certificate must be valid for the hostname/IP used by remote clients, and must already be trusted by those clients. **Apply listening configuration** is an explicit action; non-loopback selections additionally require a security confirmation. Editing draft fields alone does not restart the server.
+The separate **Transport security** selector supports:
+
+- **HTTP (unencrypted)** — no certificate required. Localhost is the default. Remote HTTP requires a clear security confirmation; passwords and API Bearer tokens are transmitted in cleartext and may be captured by anyone who can observe the path. Use this option **only on an isolated, fully trusted network**. Do not expose this endpoint on public networks, through internet port forwarding, or to untrusted users.
+- **HTTPS (TLS)** — requires readable PEM certificate and matching PEM private key. Recommended for LAN/Tailnet and required wherever traffic crosses an untrusted network. The certificate must cover the DNS name or IP used by clients and be trusted by those clients.
+
+**Apply listening configuration** changes the binding explicitly rather than on every keystroke. Non-loopback selections require confirmation; Windows Firewall is never changed automatically. The private key's file **path** is stored in settings, not its contents; protect the actual private key on disk. TLS is implemented directly in the Rust API listener.
+
+### Create a free HTTPS certificate
+
+For development or a private home lab, the free open-source [mkcert utility](https://github.com/FiloSottile/mkcert) can issue local certificates without buying one. Install mkcert from its official release instructions on the RemoteHand machine. In PowerShell (replace the sample IP with the actual RemoteHand machine's address):
+
+```powershell
+New-Item -ItemType Directory -Force C:\certs | Out-Null
+mkcert -install
+mkcert -cert-file C:\certs\remotehand.crt -key-file C:\certs\remotehand.key 192.168.1.100 localhost 127.0.0.1
+```
+
+Then choose **HTTPS** in Settings and enter `C:\certs\remotehand.crt` and `C:\certs\remotehand.key` in the certificate/key fields. Connect using the IP or hostname covered by the certificate. Each separate client machine (including a Raspberry Pi running DisplayHand) needs to trust the **mkcert local CA certificate**. Use `mkcert -CAROOT` to locate the CA directory on the issuing machine, then distribute **only `rootCA.pem`**, never the CA private key (`rootCA-key.pem`). A certificate made with mkcert is not automatically trusted on other devices and is intended for development, not public production.
+
+Alternatively, use a certificate issued by an already-trusted internal or public CA. Public TLS certificates can often be obtained free of charge through an ACME provider for a suitable domain.
 
 The first enable creates a cryptographically random 256-bit access token under the portable `data/config/api-server-token` file. It is **not included** in normal settings JSON, public endpoint responses, or logs. Use **Reveal Token** to enter it into authorized API clients; **Rotate Token** immediately invalidates previous credentials. Protect the token, key file, and portable data backups. On Unix the token file is created with mode 0600; on Windows it uses the enclosing folder ACL.
 
@@ -55,7 +74,7 @@ Invoke-RestMethod "$Base/api/v1/routes" -Headers $Headers
 
 Expected: health and core status report `ok`, plugins returns `data: []`, and routes lists the six paths (four core routes and two documentation routes). Open `http://127.0.0.1:8765/api/docs`, verify it loads without an internet connection, and test an authorized call using a token pasted into the browser session. Open `/api/openapi.json` and verify `openapi: 3.0.3`. Accessing `/core/status` without authorization must fail with 401. Minimize RemoteHand to tray: API should remain accessible. Disable API: HTTP connection should fail. Re-enable API: it should work again. Rotate the token: the previous token should return 401. Exit RemoteHand fully: the listener must disappear.
 
-The listener now supports explicit LAN/Tailnet IPv4 binding **only when a readable TLS certificate and key are configured**. Remote TLS behavior has not yet been operator-accepted. For DisplayHand, configure a trusted certificate matching the endpoint address and verify the connection using its generic HTTPS JSON source. Never forward this API port openly to an untrusted network.
+The listener supports explicit LAN/Tailnet IPv4 binding using either opt-in unencrypted HTTP (trusted isolated networks only) or HTTPS with a valid certificate and key. Remote HTTP and HTTPS behavior have not yet been operator-accepted. For DisplayHand, configure a trusted certificate matching the endpoint address and verify the connection using its generic HTTPS JSON source. Never forward this API port openly to an untrusted network.
 
 ## Later milestones
 
@@ -78,8 +97,8 @@ After building, with RemoteHand enabled and bound to localhost:
 
 1. Open **Settings → API Server** and verify Access History lists previous requests or the new ones you generate. Call health and protected status; refresh history and confirm timestamp, `127.0.0.1`, route, status (200), and duration. Call a protected endpoint without a token and verify 401 is recorded.
 2. Click **Clear history**, confirm, and verify the records are gone. Generate a new request and verify it appears. Exit and relaunch RemoteHand; the new record should remain.
-3. Change binding mode to **All interfaces** with blank certificate/key paths, then click **Apply**. Verify the action is rejected and the existing listener remains in its original state.
-4. If you have a trusted TLS certificate and matching private key, set a specific local LAN/Tailnet IPv4 address and provide paths. Apply and confirm; verify HTTPS from another trusted client and verify HTTP is not accepted at that address. Use the certificate's actual host/IP SAN. Confirm the new source IP appears in history.
+3. Select **All interfaces** and HTTPS with blank certificate/key paths, then click **Apply**. Verify the action is rejected and the existing listener remains in its original state. Next choose HTTP, apply with explicit warning confirmation, and verify the URL shows HTTP and the remote client can reach it from an isolated test network. Restore localhost after the test.
+4. If you have a trusted TLS certificate and matching private key, set a specific local LAN/Tailnet IPv4 address, choose HTTPS and provide paths. Apply and confirm; verify HTTPS from another trusted client and verify HTTP is not accepted at that address. Use the certificate's actual host/IP SAN. Confirm the new source IP appears in history.
 5. Restore binding to localhost and verify prior HTTP behavior and port. Disable the API and confirm the listener closes; fully exit and verify the same.
 
 Do not expose the server over public internet or broadly open Windows Firewall. A certificate alone does not enforce network trust; use appropriate firewall rules and network access controls for the chosen interface.
