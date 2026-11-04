@@ -2923,7 +2923,7 @@ setApiIpv4LookupError("");
 <div className="settings-field">
 <label htmlFor="api-tls-certificate">TLS certificate path (PEM)</label>
 <div className="api-tls-file-row">
-<input id="api-tls-certificate" value={apiDraft.certificatePath} onChange={(event) => setApiDraft((current) => ({ ...current, certificatePath: event.target.value }))} placeholder="C:\\certs\\remotehand.crt" spellCheck={false} />
+<input id="api-tls-certificate" value={apiDraft.certificatePath} onChange={(event) => setApiDraft((current) => ({ ...current, certificatePath: event.target.value }))} placeholder="C:\certs\remotehand.crt" spellCheck={false} />
 <button type="button" className="settings-reset" onClick={() => {
 void invoke<string | null>("api_server_pick_tls_file", { kind: "certificate" })
 .then((selected) => { if (selected) { setApiDraft((current) => ({ ...current, certificatePath: selected })); setApiError(""); } })
@@ -2934,7 +2934,7 @@ void invoke<string | null>("api_server_pick_tls_file", { kind: "certificate" })
 <div className="settings-field">
 <label htmlFor="api-tls-key">TLS private key path (PEM)</label>
 <div className="api-tls-file-row">
-<input id="api-tls-key" value={apiDraft.keyPath} onChange={(event) => setApiDraft((current) => ({ ...current, keyPath: event.target.value }))} placeholder="C:\\certs\\remotehand.key" spellCheck={false} />
+<input id="api-tls-key" value={apiDraft.keyPath} onChange={(event) => setApiDraft((current) => ({ ...current, keyPath: event.target.value }))} placeholder="C:\certs\remotehand.key" spellCheck={false} />
 <button type="button" className="settings-reset" onClick={() => {
 void invoke<string | null>("api_server_pick_tls_file", { kind: "key" })
 .then((selected) => { if (selected) { setApiDraft((current) => ({ ...current, keyPath: selected })); setApiError(""); } })
@@ -2954,7 +2954,7 @@ void invoke<string | null>("api_server_pick_tls_file", { kind: "key" })
 <button type="button" className="settings-reset" style={{ justifySelf: "start", padding: "9px 12px" }}
 onClick={() => {
 const candidate = { ...apiDraft, bindAddress: apiDraft.bindAddress.trim(), certificatePath: apiDraft.certificatePath.trim(), keyPath: apiDraft.keyPath.trim() };
-if (!/^(?:\\d{1,3}\\.){3}\\d{1,3}$/.test(candidate.bindAddress) || candidate.bindAddress.split(".").some((part) => Number(part) > 255)) {
+if (!/^(?:\d{1,3}\.){3}\d{1,3}$/.test(candidate.bindAddress) || candidate.bindAddress.split(".").some((part) => Number(part) > 255)) {
 setApiError("Enter a valid IPv4 address assigned to this machine.");
 return;
 }
