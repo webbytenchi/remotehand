@@ -341,6 +341,7 @@ pub fn run() {
             storage::load_settings,
             api_server::api_server_configure,
             api_server::api_server_status,
+            api_server::api_server_ipv4_addresses,
             api_server::api_server_history,
             api_server::api_server_history_clear,
             api_server::api_server_token,
