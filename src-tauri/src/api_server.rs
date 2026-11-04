@@ -185,16 +185,36 @@ impl ApiServerState {
             .spawn(move || {
                 while !stopping.load(Ordering::Acquire) {
                     match listener.accept() {
-                        Ok((stream, peer)) => {
-                            let _ = stream.set_read_timeout(Some(Duration::from_millis(700)));
-                            let _ = stream.set_write_timeout(Some(Duration::from_millis(700)));
+                        Ok((mut stream, peer)) => {
+                            // The listener is nonblocking so shutdown remains responsive.
+                            // On Windows the accepted socket may inherit that mode; a
+                            // TLS handshake needs multiple reads/writes and would fail
+                            // immediately with WouldBlock if we leave it nonblocking.
+                            if let Err(error) = stream.set_nonblocking(false) {
+                                log::warn!("API socket setup failed for {peer}: {error}");
+                                continue;
+                            }
+                            let timeout = if tls.is_some() { 5_000 } else { 1_000 };
+                            let _ = stream.set_read_timeout(Some(Duration::from_millis(timeout)));
+                            let _ = stream.set_write_timeout(Some(Duration::from_millis(timeout)));
                             if let Some(config) = &tls {
                                 match ServerConnection::new(config.clone()) {
-                                    Ok(connection) => {
-                                        let secured = StreamOwned::new(connection, stream);
-                                        serve_connection(secured, peer, &credentials, since, &history);
+                                    Ok(mut connection) => {
+                                        let handshake = (|| -> std::io::Result<()> {
+                                            while connection.is_handshaking() {
+                                                connection.complete_io(&mut stream)?;
+                                            }
+                                            Ok(())
+                                        })();
+                                        match handshake {
+                                            Ok(()) => {
+                                                let secured = StreamOwned::new(connection, stream);
+                                                serve_connection(secured, peer, &credentials, since, &history);
+                                            }
+                                            Err(error) => log::warn!("API TLS handshake failed for {peer}: {error}"),
+                                        }
                                     }
-                                    Err(error) => log::warn!("API TLS setup failed: {error}"),
+                                    Err(error) => log::warn!("API TLS setup failed for {peer}: {error}"),
                                 }
                             } else {
                                 serve_connection(stream, peer, &credentials, since, &history);
@@ -578,7 +598,10 @@ fn serve_connection<S: Read + Write>(
 ) {
     let started = Instant::now();
     let mut buf = [0u8; 4096];
-    let size = match stream.read(&mut buf) { Ok(size) => size, Err(_) => return };
+    let size = match stream.read(&mut buf) {
+        Ok(size) => size,
+        Err(error) => { log::warn!("API request read failed for {peer}: {error}"); return; }
+    };
     let request = match std::str::from_utf8(&buf[..size]) { Ok(value) => value, Err(_) => return };
     let mut lines = request.split("\r\n");
     let first = lines.next().unwrap_or("");
