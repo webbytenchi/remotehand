@@ -641,15 +641,14 @@ fn response_for(path: &str, auth: Option<&str>, expected: &str, since: Instant)
                 "uptimeSeconds": since.elapsed().as_secs()
             }
         })),
-        "/api/v1/plugins" => (200, json!({
-            "status": "ok", "data": {
-                let mut ids: Vec<String> = crate::api_gateway::published_routes()
-                    .into_iter().map(|r| r.plugin_id).collect();
-                ids.sort();
-                ids.dedup();
-                ids
-            }
-        })),
+        "/api/v1/plugins" => {
+            let mut ids: Vec<String> = crate::api_gateway::published_routes()
+                .into_iter().map(|r| r.plugin_id).collect();
+            ids.sort();
+            ids.dedup();
+            (200, json!({"status":"ok","data": ids.into_iter()
+                .map(|id| json!({"id":id})).collect::<Vec<_>>()}))
+        },
         "/api/v1/routes" => {
             let mut routes = ROUTES.iter().map(|path| json!({
                 "method": "GET", "path": path,
