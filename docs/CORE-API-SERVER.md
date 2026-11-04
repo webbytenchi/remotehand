@@ -14,12 +14,16 @@ The API runs in the same RemoteHand application process and stops at process exi
 
 | Method | Path | Authentication | Response |
 | --- | --- | --- | --- |
+| GET | `/api/docs` | No (localhost only) | Offline interactive API explorer (HTML) |
+| GET | `/api/openapi.json` | No (localhost only) | OpenAPI 3.0.3 JSON specification |
 | GET | `/api/v1/health` | No (localhost only) | `status: ok`, service identity |
 | GET | `/api/v1/core/status` | Bearer token | Application name, version, platform, uptimeSeconds |
 | GET | `/api/v1/plugins` | Bearer token | Empty list until plugin API providers are supported |
 | GET | `/api/v1/routes` | Bearer token | Currently registered core routes and auth requirements |
 
-All replies are JSON, with `Cache-Control: no-store`. Missing or invalid credentials on protected routes return HTTP 401. Unknown authenticated routes return HTTP 404. Non-GET requests return HTTP 405. HTTP request parsing is intentionally minimal for this bounded localhost-only milestone.
+API replies are JSON except the HTML documentation at `/api/docs`. The bundled explorer loads its OpenAPI schema from the running server, provides in-memory Bearer authorization, and supports GET requests through **Try it out**. This is a lightweight locally bundled **OpenAPI explorer**, not the upstream Swagger UI distribution; it requires no CDN and never stores the token in localStorage or cookies. The `Open API Documentation` button in Settings opens only the local API server. The documentation and schema are public *on localhost*; neither contains secrets. The two documentation routes are also listed by route discovery.
+
+All replies include `Cache-Control: no-store`. Missing or invalid credentials on protected routes return HTTP 401. Unknown authenticated routes return HTTP 404. Non-GET requests return HTTP 405. HTTP request parsing is intentionally minimal for this bounded localhost-only milestone.
 
 ## Windows acceptance smoke test
 
@@ -35,7 +39,7 @@ Invoke-RestMethod "$Base/api/v1/plugins" -Headers $Headers
 Invoke-RestMethod "$Base/api/v1/routes" -Headers $Headers
 ```
 
-Expected: health and core status report `ok`, plugins returns `data: []`, and routes lists the four paths. Accessing `/core/status` without authorization must fail with 401. Minimize RemoteHand to tray: API should remain accessible. Disable API: HTTP connection should fail. Re-enable API: it should work again. Rotate the token: the previous token should return 401. Exit RemoteHand fully: the listener must disappear.
+Expected: health and core status report `ok`, plugins returns `data: []`, and routes lists the six paths (four core routes and two documentation routes). Open `http://127.0.0.1:8765/api/docs`, verify it loads without an internet connection, and test an authorized call using a token pasted into the browser session. Open `/api/openapi.json` and verify `openapi: 3.0.3`. Accessing `/core/status` without authorization must fail with 401. Minimize RemoteHand to tray: API should remain accessible. Disable API: HTTP connection should fail. Re-enable API: it should work again. Rotate the token: the previous token should return 401. Exit RemoteHand fully: the listener must disappear.
 
 The listener **does not accept LAN/Tailnet requests** in this initial implementation. For use with DisplayHand on another machine, we should design and separately validate authenticated remote access (for example TLS and Tailnet binding/proxy) before enabling it. Do not forward this local HTTP port openly to an untrusted network.
 
