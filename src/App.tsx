@@ -761,6 +761,8 @@ const [apiDraft, setApiDraft] = useState({
 port: 8765, bindAddress: "127.0.0.1", tlsEnabled: false,
 certificatePath: "", keyPath: ""
 });
+type LocalIpv4Address = { address: string; interfaceName: string };
+const [apiIpv4LookupError, setApiIpv4LookupError] = useState("");
 const [pendingApiBinding, setPendingApiBinding] = useState<typeof apiDraft | null>(null);
 const [apiStatus, setApiStatus] = useState<ApiStatus | null>(null);
 const [apiHistory, setApiHistory] = useState<ApiHistorySnapshot | null>(null);
@@ -2872,8 +2874,20 @@ if (Number.isInteger(port) && port >= 1024 && port <= 65535) setApiDraft((curren
 <div className="settings-field">
 <label htmlFor="api-bind-mode">Listening network</label>
 <select id="api-bind-mode" value={apiDraft.bindAddress === "127.0.0.1" ? "localhost" : apiDraft.bindAddress === "0.0.0.0" ? "all" : "custom"} onChange={(event) => {
-const address = event.target.value === "localhost" ? "127.0.0.1" : event.target.value === "all" ? "0.0.0.0" : "192.168.1.100";
-setApiDraft((current) => ({ ...current, bindAddress: address }));
+if (event.target.value === "custom") {
+setApiIpv4LookupError("");
+setApiDraft((current) => ({ ...current, bindAddress: "" }));
+void invoke<LocalIpv4Address[]>("api_server_ipv4_addresses")
+.then((addresses) => {
+setApiDraft((current) => current.bindAddress === ""
+? { ...current, bindAddress: addresses[0]?.address ?? "" } : current);
+if (addresses.length === 0) setApiIpv4LookupError("No active non-loopback IPv4 address detected. Enter an address assigned to this machine.");
+})
+.catch((error) => setApiIpv4LookupError("Couldn't detect a local IPv4 address: " + String(error)));
+} else {
+setApiDraft((current) => ({ ...current, bindAddress: event.target.value === "localhost" ? "127.0.0.1" : "0.0.0.0" }));
+setApiIpv4LookupError("");
+}
 }}>
 <option value="localhost">Localhost only — 127.0.0.1 (recommended)</option>
 <option value="all">All IPv4 interfaces — 0.0.0.0</option>
@@ -2883,7 +2897,8 @@ setApiDraft((current) => ({ ...current, bindAddress: address }));
 {apiDraft.bindAddress !== "127.0.0.1" && apiDraft.bindAddress !== "0.0.0.0" ? (
 <label className="settings-field">
 <span>Specific IPv4 listening address</span>
-<input value={apiDraft.bindAddress} onChange={(event) => setApiDraft((current) => ({ ...current, bindAddress: event.target.value }))} placeholder="192.168.1.100" />
+<input value={apiDraft.bindAddress} onChange={(event) => setApiDraft((current) => ({ ...current, bindAddress: event.target.value }))} placeholder="Enter an IPv4 address on this machine" />
+{apiIpv4LookupError ? <small className="plugin-error">{apiIpv4LookupError}</small> : null}
 </label>
 ) : null}
 <div className="settings-field">
@@ -2925,6 +2940,10 @@ setApiDraft((current) => ({ ...current, bindAddress: address }));
 <button type="button" className="settings-reset" style={{ justifySelf: "start", padding: "9px 12px" }}
 onClick={() => {
 const candidate = { ...apiDraft, bindAddress: apiDraft.bindAddress.trim(), certificatePath: apiDraft.certificatePath.trim(), keyPath: apiDraft.keyPath.trim() };
+if (!/^(?:\\d{1,3}\\.){3}\\d{1,3}$/.test(candidate.bindAddress) || candidate.bindAddress.split(".").some((part) => Number(part) > 255)) {
+setApiError("Enter a valid IPv4 address assigned to this machine.");
+return;
+}
 if (candidate.tlsEnabled && (!candidate.certificatePath || !candidate.keyPath)) {
 setApiError("HTTPS requires a TLS certificate and matching private key.");
 return;
