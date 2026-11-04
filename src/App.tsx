@@ -91,6 +91,7 @@ apiBindAddress: string;
 apiTlsEnabled: boolean;
 apiTlsCertificatePath: string;
 apiTlsKeyPath: string;
+apiHistoryMaxEntries: number;
 };
 type WorkspaceLayout = Parameters<DockviewApi["fromJSON"]>[0];
 const WORKSPACE_KEY = "remotehand.workspace";
@@ -123,6 +124,7 @@ apiBindAddress: "127.0.0.1",
 apiTlsEnabled: false,
 apiTlsCertificatePath: "",
 apiTlsKeyPath: "",
+apiHistoryMaxEntries: 1000,
 };
 const UI_FONT_OPTIONS = ["Inter", "IBM Plex Sans", "Segoe UI", "System Default"] as const;
 const TERMINAL_FONT_OPTIONS = ["JetBrains Mono", "IBM Plex Mono", "Cascadia Mono", "Consolas", "System Monospace"] as const;
@@ -776,6 +778,34 @@ void invoke("api_server_copy_url", { url })
 const [apiStatus, setApiStatus] = useState<ApiStatus | null>(null);
 const [apiHistory, setApiHistory] = useState<ApiHistorySnapshot | null>(null);
 const [apiHistoryError, setApiHistoryError] = useState("");
+const [apiHistoryLimitDraft, setApiHistoryLimitDraft] = useState("1000");
+const [apiHistoryActionBusy, setApiHistoryActionBusy] = useState(false);
+const [apiHistoryExportMessage, setApiHistoryExportMessage] = useState("");
+const exportApiHistory = useCallback(() => {
+setApiHistoryActionBusy(true);
+setApiHistoryExportMessage("");
+void invoke<string | null>("api_server_history_export")
+.then((path) => { if (path) { setApiHistoryExportMessage("Exported to " + path); setApiHistoryError(""); } })
+.catch((error) => setApiHistoryError(String(error)))
+.finally(() => setApiHistoryActionBusy(false));
+}, []);
+const applyApiHistoryLimit = useCallback(() => {
+const limit = Number(apiHistoryLimitDraft);
+if (!Number.isInteger(limit) || limit < 100 || limit > 10000) {
+setApiHistoryError("Enter a maximum between 100 and 10,000 requests.");
+return;
+}
+setApiHistoryActionBusy(true);
+void invoke("api_server_history_set_limit", { limit })
+.then(() => {
+setSettings((current) => ({ ...current, apiHistoryMaxEntries: limit }));
+setApiHistoryError("");
+void invoke<ApiHistorySnapshot>("api_server_history")
+.then(setApiHistory).catch((error) => setApiHistoryError(String(error)));
+})
+.catch((error) => setApiHistoryError(String(error)))
+.finally(() => setApiHistoryActionBusy(false));
+}, [apiHistoryLimitDraft]);
 const refreshApiHistory = useCallback(() => {
 if (!isTauri()) return;
 void invoke<ApiHistorySnapshot>("api_server_history").then((snapshot) => { setApiHistory(snapshot); setApiHistoryError(""); }).catch((error) => setApiHistoryError(String(error)));
@@ -1453,6 +1483,7 @@ console.error("Failed to load startup preference", error);
 }
 const nextSettings = { ...DEFAULT_SETTINGS, ...saved, startWithSystem };
 setSettings(nextSettings);
+setApiHistoryLimitDraft(String(nextSettings.apiHistoryMaxEntries));
 setApiDraft({ port: nextSettings.apiPort, bindAddress: nextSettings.apiBindAddress,
 tlsEnabled: nextSettings.apiTlsEnabled,
 certificatePath: nextSettings.apiTlsCertificatePath, keyPath: nextSettings.apiTlsKeyPath });
@@ -1520,6 +1551,12 @@ void invoke("save_settings", { settings }).catch((error) =>
 console.error("Failed to save settings", error),
 );
 }, [settings, settingsLoaded]);
+useEffect(() => {
+if (!settingsLoaded || !isTauri()) return;
+void invoke("api_server_history_set_limit", { limit: settings.apiHistoryMaxEntries })
+.then(() => refreshApiHistory())
+.catch((error) => setApiHistoryError(String(error)));
+}, [settingsLoaded, settings.apiHistoryMaxEntries, refreshApiHistory]);
 useEffect(() => {
 if (!settingsLoaded || !isTauri()) return;
 void invoke<ApiStatus>(
@@ -3052,13 +3089,20 @@ void invoke("api_server_open_docs").catch((error) => setApiError(String(error)))
 </div>
 <section className="api-access-history">
 <div className="api-history-toolbar">
-<div><strong>API Access History</strong><div className="app-modal-muted">Latest 100 requests · Latest first · Retains up to 1,000 on disk</div></div>
+<div><strong>API Access History</strong><div className="app-modal-muted">Latest 100 requests · Latest first · Retains up to {settings.apiHistoryMaxEntries.toLocaleString()} on disk</div></div>
 <div className="api-history-actions">
-<button type="button" className="settings-reset" onClick={refreshApiHistory}>Refresh</button>
+<button type="button" className="settings-reset" disabled={apiHistoryActionBusy} onClick={refreshApiHistory}>Refresh</button>
+<button type="button" className="settings-reset" disabled={apiHistoryActionBusy || !apiHistory?.total} onClick={exportApiHistory}>Export CSV</button>
 <button type="button" className="settings-reset" onClick={() => {
 setPendingApiAction("clear-history");
 }}>Clear history</button>
 </div>
+</div>
+<div className="api-history-retention">
+<label htmlFor="api-history-max">Maximum saved requests</label>
+<input id="api-history-max" type="number" min={100} max={10000} step={100} value={apiHistoryLimitDraft} onChange={(event) => setApiHistoryLimitDraft(event.target.value)} />
+<button type="button" className="settings-reset" disabled={apiHistoryActionBusy || apiHistoryLimitDraft === String(settings.apiHistoryMaxEntries)} onClick={applyApiHistoryLimit}>Apply</button>
+<span className="app-modal-muted">100–10,000 · Lowering the limit deletes oldest entries</span>
 </div>
 <div className="api-history-stats">Total: {apiHistory?.total ?? 0} · Successful: {apiHistory?.succeeded ?? 0} · Failed: {apiHistory?.failed ?? 0}</div>
 <div className="api-history-scroll">
@@ -3079,6 +3123,7 @@ setPendingApiAction("clear-history");
 </table>
 </div>
 {apiHistoryError ? <div className="plugin-error">{apiHistoryError}</div> : null}
+{apiHistoryExportMessage ? <div className="app-modal-muted">{apiHistoryExportMessage}</div> : null}
 </section>
 {apiError || apiStatus?.error ? <div className="plugin-error">{apiError || apiStatus?.error}</div> : null}
 </div>
