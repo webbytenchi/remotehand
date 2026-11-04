@@ -1,3 +1,4 @@
+mod api_server;
 mod global_shortcut;
 mod logging;
 mod native_file_drop;
@@ -323,6 +324,7 @@ pub fn run() {
                 }
             }
         }))
+        .manage(api_server::ApiServerState::default())
         .manage(TerminalState::default())
         .manage(plugin_runtime::PluginRuntimeState::default())
         .manage(sftp_native::PersistentSftpState::default())
@@ -336,6 +338,10 @@ pub fn run() {
         )
         .invoke_handler(tauri::generate_handler![
             storage::load_settings,
+            api_server::api_server_configure,
+            api_server::api_server_status,
+            api_server::api_server_token,
+            api_server::api_server_rotate_token,
             storage::save_settings,
             storage::load_ui_contribution_layout,
             storage::save_ui_contribution_layout,
@@ -506,6 +512,11 @@ pub fn run() {
             startup_tray::install(&app.handle().clone(), &startup_tray_state)
                 .map_err(std::io::Error::other)?;
             let saved = storage::load_settings().map_err(std::io::Error::other)?;
+            if let Some(api) = app.try_state::<api_server::ApiServerState>() {
+                if let Err(error) = api.configure(saved.api_enabled, saved.api_port) {
+                    log::warn!("API server did not start: {error}");
+                }
+            }
             vault_state.set_auto_lock_minutes(saved.vault_auto_lock_minutes);
             vault_state.start_auto_lock_worker(app.handle().clone());
             startup_tray_state.set_close_to_tray(saved.minimize_to_tray_on_close);
