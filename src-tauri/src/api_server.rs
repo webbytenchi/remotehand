@@ -228,6 +228,22 @@ pub fn api_server_rotate_token(state: tauri::State<'_, ApiServerState>) -> Resul
     state.rotate_token()
 }
 
+#[tauri::command]
+pub fn api_server_open_docs(state: tauri::State<'_, ApiServerState>) -> Result<(), String> {
+    let status = state.status()?;
+    let url = status.url.ok_or("API server is not running")? + "/api/docs";
+    #[cfg(target_os = "windows")]
+    let mut command = std::process::Command::new("explorer.exe");
+    #[cfg(target_os = "linux")]
+    let mut command = std::process::Command::new("xdg-open");
+    #[cfg(target_os = "macos")]
+    let mut command = std::process::Command::new("open");
+    #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+    return Err("opening documentation is not supported on this platform".into());
+    command.arg(url).spawn().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 fn authorized(provided: Option<&str>, expected: &str) -> bool {
     let Some(provided) = provided else { return false; };
     let Some(provided) = provided.strip_prefix("Bearer ") else { return false; };
