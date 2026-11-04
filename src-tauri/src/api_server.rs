@@ -532,4 +532,20 @@ mod tests {
         assert_eq!(response_for("/api/v1/unknown", Some("Bearer secret"), "secret", since).0, 404);
         assert!(!authorized(Some("Bearer secrex"), "secret"));
     }
+
+    #[test]
+    fn remote_binding_requires_tls_material() {
+        let api = ApiServerState::default();
+        let error = api.configure(true, 8765, "0.0.0.0", "", "")
+            .err().expect("remote binding without TLS must fail");
+        assert!(error.contains("TLS certificate"));
+        assert!(!api.status().unwrap().running);
+        assert!(api.configure(false, 8765, "0.0.0.0", "", "").is_ok());
+    }
+
+    #[test]
+    fn invalid_ipv4_address_is_rejected() {
+        let api = ApiServerState::default();
+        assert!(api.configure(true, 8765, "not-an-address", "", "").is_err());
+    }
 }
