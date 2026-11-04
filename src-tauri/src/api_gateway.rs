@@ -373,6 +373,22 @@ mod tests {
         assert!(parse_descriptor(r#"{"version":1,"basePath":"/api/v1/x","routes":[{"path":"/{id}","view":"a","summary":"One"},{"path":"/static","view":"b","summary":"Two"}]}"#, "p").is_err());
         assert!(parse_descriptor(r#"{"version":1,"basePath":"/api/v1/x","routes":[{"path":"/../secret","view":"x","summary":"Bad"}]}"#, "p").is_err());
     }
+    #[test] fn api_publication_switch_is_independent_of_route_definitions() {
+        let routes = parse_descriptor(DESCRIPTOR, "remotehand.target-monitor").unwrap();
+        let mut preferences = ApiPublicationPreferences::default();
+        assert!(publication_allowed("remotehand.target-monitor", &preferences));
+        assert_eq!(routes.len(), 3);
+        preferences.disabled_plugins.insert("remotehand.target-monitor".to_owned());
+        assert!(!publication_allowed("remotehand.target-monitor", &preferences));
+        assert!(publication_allowed("remotehand.system-monitor", &preferences));
+        // Disabling HTTP publication does not change the plugin descriptor or saved target data.
+        assert_eq!(routes.len(), 3);
+        preferences.disabled_plugins.remove("remotehand.target-monitor");
+        assert!(publication_allowed("remotehand.target-monitor", &preferences));
+        let serialized = serde_json::to_string(&preferences).unwrap();
+        let restored: ApiPublicationPreferences = serde_json::from_str(&serialized).unwrap();
+        assert!(publication_allowed("remotehand.target-monitor", &restored));
+    }
     #[test] fn old_plugins_without_api_descriptor_have_no_routes() {
         assert!(parse_descriptor(DESCRIPTOR, "remotehand.target-monitor").is_ok());
         assert!(match_route("/api/v1/unknown", &[]).is_none());
