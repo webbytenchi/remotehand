@@ -7,7 +7,7 @@ use serde_json::{json, Value};
 use std::{
     fs,
     io::{BufReader, Read, Write},
-    net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream},
+    net::{Ipv4Addr, SocketAddr, TcpListener},
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
