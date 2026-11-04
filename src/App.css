@@ -2697,3 +2697,54 @@ html[data-theme="light"] .vault-prompt input {
   background: #ffffff;
   color: #29313d;
 }
+
+/* Core API request audit: readable in both themes and bounded to the dialog. */
+.api-access-history {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #2b3747;
+}
+.api-history-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+.api-history-toolbar > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+.api-history-toolbar strong { font-size: 13px; }
+.api-history-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.api-history-actions button { padding: 7px 10px; }
+.api-history-stats { font-size: 12px; color: #94a3b8; }
+.api-history-scroll {
+  min-width: 0;
+  max-height: 245px;
+  overflow: auto;
+  border: 1px solid #303c4c;
+  border-radius: 8px;
+}
+.api-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  text-align: left;
+}
+.api-history-table th,
+.api-history-table td {
+  padding: 8px;
+  border-bottom: 1px solid #283344;
+  white-space: nowrap;
+}
+.api-history-table td:nth-child(4) {
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.api-history-table th { position: sticky; top: 0; background: #151d28; color: #b9c5d7; }
+.api-history-ok { color: #65c98b; font-weight: 600; }
+.api-history-failed { color: #ff8c8c; font-weight: 600; }
+html[data-theme="light"] .api-history-table th { background: #ecf0f6; color: #334155; }
