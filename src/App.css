@@ -2775,3 +2775,24 @@ html[data-theme="light"] .api-history-table th { background: #ecf0f6; color: #33
   user-select: text;
 }
 html[data-theme="light"] .api-certificate-guide pre { background: #f5f7fb; color: #334155; }
+
+/* Remote API binding confirmation uses the same modal surface as RemoteHand. */
+.api-bind-confirm-content {
+  display: grid;
+  gap: 12px;
+  line-height: 1.55;
+}
+.api-bind-confirm-content > strong {
+  font-size: 14px;
+}
+.api-bind-confirm-content p {
+  margin: 0;
+  color: #b7c3d4;
+}
+.api-bind-confirm-content .plugin-security-note {
+  display: grid;
+  gap: 5px;
+}
+html[data-theme="light"] .api-bind-confirm-content p {
+  color: #475569;
+}
