@@ -14,7 +14,7 @@ const MAX_DESCRIPTION_BYTES: usize = 512;
 const MAX_PATH_PARAM_BYTES: usize = 128;
 const RESERVED: &[&str] = &[
     "/api/docs", "/api/openapi.json", "/api/v1/health",
-    "/api/v1/core/status", "/api/v1/plugins", "/api/v1/routes"
+    "/api/v1/core", "/api/v1/plugins", "/api/v1/routes"
 ];
 
 #[derive(Clone, Debug, Deserialize)]
