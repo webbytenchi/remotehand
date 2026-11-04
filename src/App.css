@@ -2825,3 +2825,45 @@ html[data-theme="light"] .api-tls-file-row input {
   color: #1e293b;
   border-color: #cbd5e1;
 }
+
+/* Copyable API URLs in Server Status. Each address copies independently. */
+.api-status-access-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.api-status-url-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  min-width: 0;
+}
+.api-url-copy {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  max-width: 100%;
+  padding: 2px 5px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--accent, #80b7ff);
+  font: inherit;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.api-url-copy:hover,
+.api-url-copy:focus-visible {
+  border-color: var(--accent-border);
+  background: var(--accent-surface);
+  outline-offset: 2px;
+}
+.api-url-copy-hint {
+  color: #95a4b7;
+  font-size: 11px;
+  white-space: nowrap;
+}
+html[data-theme="light"] .api-url-copy-hint { color: #526376; }
