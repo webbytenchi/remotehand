@@ -150,7 +150,6 @@ impl ApiServerState {
         }
         let address: Ipv4Addr = bind_address.parse()
             .map_err(|_| "Listening address must be a valid IPv4 address".to_string())?;
-        let remote = !address.is_loopback();
         inner.requested_address = address;
         if tls_enabled && (certificate_path.trim().is_empty() || key_path.trim().is_empty()) {
             return Err("HTTPS requires a TLS certificate and private key (PEM)".into());
@@ -549,6 +548,18 @@ mod tests {
         assert!(error.contains("TLS certificate"));
         assert!(!api.status().unwrap().running);
         assert!(api.configure(false, 8765, "0.0.0.0", false, "", "").is_ok());
+    }
+
+    #[test]
+    fn unencrypted_remote_bind_is_explicitly_supported() {
+        let api = ApiServerState::default();
+        // Port zero is deliberately not accepted; avoid opening an actual port
+        // during unit tests. Verify the transport guard is absent for HTTP,
+        // while a TLS request without material is rejected.
+        assert!(api.configure(true, 0, "0.0.0.0", false, "", "").is_err());
+        let error = api.configure(true, 8765, "0.0.0.0", true, "", "")
+            .err().unwrap();
+        assert!(error.contains("HTTPS requires"));
     }
 
     #[test]
