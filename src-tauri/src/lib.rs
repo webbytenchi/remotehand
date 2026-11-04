@@ -1,3 +1,4 @@
+mod api_history;
 mod api_server;
 mod global_shortcut;
 mod logging;
