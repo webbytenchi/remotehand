@@ -42,6 +42,8 @@ struct Running {
     port: u16,
     address: Ipv4Addr,
     tls: bool,
+    certificate_path: String,
+    key_path: String,
     stop: Arc<AtomicBool>,
     worker: JoinHandle<()>,
 }
@@ -138,24 +140,24 @@ impl ApiServerState {
         if !(1024..=65535).contains(&port) {
             return Err("API port must be between 1024 and 65535".into());
         }
-        let address: Ipv4Addr = bind_address.parse()
-            .map_err(|_| "Listening address must be a valid IPv4 address".to_string())?;
-        let remote = !address.is_loopback();
         let mut inner = self.inner.lock().map_err(|e| e.to_string())?;
         inner.requested_port = port;
-        inner.requested_address = address;
         if !enabled {
             stop_server(&mut inner);
             inner.error = None;
             return Ok(self.status_inner(&inner));
         }
+        let address: Ipv4Addr = bind_address.parse()
+            .map_err(|_| "Listening address must be a valid IPv4 address".to_string())?;
+        let remote = !address.is_loopback();
+        inner.requested_address = address;
         if remote && (certificate_path.trim().is_empty() || key_path.trim().is_empty()) {
             return Err("Remote API binding requires a TLS certificate and private key (PEM)".into());
         }
         let tls = if remote {
             Some(load_tls_config(certificate_path, key_path)?)
         } else { None };
-        if inner.server.as_ref().is_some_and(|running| running.port == port && running.address == address && running.tls == remote) {
+        if inner.server.as_ref().is_some_and(|running| running.port == port && running.address == address && running.tls == remote && running.certificate_path == certificate_path && running.key_path == key_path) {
             return Ok(self.status_inner(&inner));
         }
         stop_server(&mut inner);
@@ -209,7 +211,7 @@ impl ApiServerState {
                 }
             })
             .map_err(|e| e.to_string())?;
-        inner.server = Some(Running { port, address, tls: remote, stop, worker });
+        inner.server = Some(Running { port, address, tls: remote, certificate_path: certificate_path.to_owned(), key_path: key_path.to_owned(), stop, worker });
         inner.error = None;
         Ok(self.status_inner(&inner))
     }
