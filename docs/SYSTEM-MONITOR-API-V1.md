@@ -1,56 +1,79 @@
-# System Monitor HTTP API v1 — implementation candidate
+# Generic Plugin API Gateway v1 — implementation candidate
 
-**Status:** feature-branch implementation; not released or Windows-accepted. Do not merge, tag, or publish before operator build and manual acceptance.
+**Status:** unmerged feature branches, not yet Windows-tested or released. One Core upgrade supplies a generic route gateway. Adding compatible future plugin APIs requires **no further RemoteHand Core code changes**.
 
-## Dependency and architecture
+## Design rationale and backward compatibility
 
-- Core branch: `webbytenchi/remotehand` / `emma/monitoring-api-v1`.
-- Compatible plugin candidate: `webbytenchi/remotehand-plugin-system-monitor` / `emma/system-monitor-api-v1`.
-- The already released System Monitor v0.5.1 does **not** provide `system.api.read`. Both candidate builds are required for live responses.
-- API server remains opt-in, process-bound, and bearer authenticated. Host checks installed/enabled status, routes the request through the existing plugin IPC session with a bounded deadline, and records HTTP access history.
-- Plugin method: `system.api.read`, parameter `{"view":"summary|metrics|gpus|disks|history|alerts"}`. This is explicitly **not** `system.status`: the latter exposes configuration and extra internal state.
-- All API responses are wrapped as `{"status":"ok","data":{...}}`.
-- Unknown paths are 404 (after authentication); missing/invalid bearer tokens are 401; missing, disabled, old, or unresponsive plugin yields 503. An oversized response (>256 KiB serialized JSON) yields 502. No raw plugin errors in response body.
+The initial six System Monitor routes were hardcoded into Core and have been replaced with dynamic discovery.
 
-## Authenticated read-only routes
+- **Core**: `webbytenchi/remotehand`, branch `emma/monitoring-api-v1`.
+- **System Monitor**: `webbytenchi/remotehand-plugin-system-monitor`, branch `emma/system-monitor-api-v1`.
+- **Plugin API v1 is unchanged**: `plugin.json` remains unchanged and retains `apiVersion: 1`. The API contract lives in an **optional, separate `api.json`** file in the plugin package root. Older RemoteHand versions ignore that extra file; they must still be smoke-tested before release.
+- **Core** discovers the enabled plugins' `api.json` declarations dynamically on each request, validates them and publishes their GET routes. There is no hardcoded System Monitor or Target Monitor knowledge.
+- **Plugin** handles the generic `api.read` IPC method with `{"view":"...","pathParams":{...}}`, returns an explicitly sanitized object. Core forwards no raw tokens, headers, bodies, or query strings.
+- A plugin that has no `api.json` continues functioning normally in its UI without HTTP publishing. An enabled API plugin whose runtime is not available returns HTTP 503. Disabled plugin routes disappear from discovery.
+- `/api/openapi.json`, `/api/docs`, `/api/v1/routes`, and `/api/v1/plugins` dynamically enumerate registered APIs.
+- Existing Core API auth settings, HTTP(S) listener, access history and token rotation remain in Core; API is opt-in and disabled by default. The endpoint remains read-only GET.
+- Core enforces descriptor version, restricted base paths, GET-only publication, path segment and parameter bounds, route count caps, duplicate/conflict rejection, symlink/size checks, IPC response deadline, JSON object responses and 256 KiB reply ceiling. The plugin author is responsible for selecting explicitly safe response fields and implementing `api.read` without leaking private settings or user data.
 
-| Method | Path | Data allowlist |
-| --- | --- | --- |
-| GET | `/api/v1/system-monitor` | timestamp, CPU %, memory %, optional temperature, GPU and disk counts |
-| GET | `/api/v1/system-monitor/metrics` | timestamp, CPU % and per-core %, memory bytes and %, optional CPU temperature |
-| GET | `/api/v1/system-monitor/gpus` | timestamp, numbered GPU telemetry: utilization, dedicated/shared memory bytes, optional temperature |
-| GET | `/api/v1/system-monitor/disks` | timestamp, numbered disk capacity, usage and read/write throughput |
-| GET | `/api/v1/system-monitor/history` | latest **120** timestamped CPU %, memory %, optional temperature samples |
-| GET | `/api/v1/system-monitor/alerts` | **active** warning/critical alert metric and state only |
+## api.json declaration example
 
-No process data, GPU LUID, drive letters, disk mount points, names, filesystem identities, HTTP secrets, settings/config, full alert history, sound paths or private internal state are included. The plugin intentionally emits index-based device references rather than stable hardware identifiers; confirm suitability with Papa before final release. The history endpoint caps records rather than accepting unbounded queries. Alert events that have recovered are not returned by the active-alert endpoint.
-
-## Operator acceptance sequence
-
-1. **Build the plugin candidate** on Windows, with `cargo test` and its usual optimized executable/package workflow; confirm added API projection tests and existing regressions pass.
-2. **Build RemoteHand** from its candidate branch using `npm.cmd ci`, `npm.cmd run tauri build` or a focused `cargo test` as appropriate. No CI/build success is claimed from GitHub editing.
-3. Install the **candidate** plugin into the candidate RemoteHand; confirm it is enabled and its runtime is started.
-4. Enable API in Settings, obtain bearer token locally without posting the token in chat. Confirm all six protected endpoints return schema-shaped safe data; confirm OpenAPI and route discovery reflect them.
-5. Test 401 without/with bad token; 503 if plugin disabled/outdated; history `<=120` points, no private paths/config/process data, active alerts only; check Access History captures requests.
-6. Verify tray/disable/exit still behave correctly and no host/UI freeze when the plugin is unresponsive. Verify bounded calls under concurrent UI requests.
-
-### Example PowerShell smoke test (after building both candidates)
-
-```powershell
-$Base = 'http://127.0.0.1:8765'
-$Token = Read-Host 'Paste API bearer token locally'
-$Headers = @{ Authorization = "Bearer $Token" }
-Invoke-RestMethod "$Base/api/v1/system-monitor" -Headers $Headers
-Invoke-RestMethod "$Base/api/v1/system-monitor/metrics" -Headers $Headers
-Invoke-RestMethod "$Base/api/v1/system-monitor/gpus" -Headers $Headers
-Invoke-RestMethod "$Base/api/v1/system-monitor/disks" -Headers $Headers
-Invoke-RestMethod "$Base/api/v1/system-monitor/history" -Headers $Headers
-Invoke-RestMethod "$Base/api/v1/system-monitor/alerts" -Headers $Headers
+```json
+{
+  "version": 1,
+  "basePath": "/api/v1/system-monitor",
+  "routes": [
+    {"path": "/", "view": "summary", "summary": "System Monitor overview"},
+    {"path": "/metrics", "view": "metrics", "summary": "System metrics"},
+    {"path": "/gpus", "view": "gpus", "summary": "GPU telemetry"},
+    {"path": "/disks", "view": "disks", "summary": "Disk telemetry"},
+    {"path": "/history", "view": "history", "summary": "System metrics history"},
+    {"path": "/alerts", "view": "alerts", "summary": "Active system alerts"}
+  ]
+}
 ```
 
-## Deferred before acceptance
+Only a plugin's own `api.json` defines routes, so adding a future plugin requires implementing `api.read`, packaging `api.json`, and installing/enabling the plugin. No Core build or route registration edits should be needed.
 
-- No Target Monitor integration in this slice.
-- Review safe DTO semantics, device identifiers, alert naming, and empty/unavailable data on actual Windows hardware.
-- The existing plugin runtime has synchronous IPC; HTTP calls have a limited timeout for queue acquisition and response receive. Revisit write-path stall scenarios and HTTP concurrency during extended validation.
-- Keep `/api/v1/plugins` as its existing empty placeholder until the general plugin publication contract is accepted.
+For Target Monitor, the same descriptor contract supports future routes such as `/targets/{id}` and `/targets/{id}/alerts`. The named parameters are delivered as `pathParams`, with strict input characters and length checks; no raw request path is forwarded to plugins.
+
+## Expected System Monitor routes
+
+| Method | Route | Sanitized response |
+| --- | --- | --- |
+| GET | `/api/v1/system-monitor` | CPU/memory/temperature and device counts |
+| GET | `/api/v1/system-monitor/metrics` | CPU, cores, memory, temperature |
+| GET | `/api/v1/system-monitor/gpus` | Numbered utilization/memory/temperature without LUIDs |
+| GET | `/api/v1/system-monitor/disks` | Numbered capacity/usage/throughput without mount paths |
+| GET | `/api/v1/system-monitor/history` | Last 120 CPU/memory/temperature points |
+| GET | `/api/v1/system-monitor/alerts` | Only currently active warning/critical alert states |
+
+## HTTP responses
+
+- 200: authorized successful response, shaped as `{"status":"ok","data":{...}}`.
+- 401: missing or invalid bearer token for protected endpoints.
+- 404: unknown route or disabled/absent plugin API.
+- 405: method other than GET.
+- 502: invalid or oversized plugin response.
+- 503: plugin advertised an API but its runtime is unavailable, incompatible, failed, or timed out.
+
+The existing `/api/v1/plugins` endpoint now enumerates enabled API-publishing plugins by id, rather than the previous empty placeholder. It is **not** a full list of installed plugins.
+
+## Windows verification
+
+Before installing any new Core build:
+1. Check clean branches and SHA/ref of both feature candidates.
+2. Test `cargo test --locked` and `cargo check --locked` in Core; note the earlier test-executable Windows error `0xc0000139 STATUS_ENTRYPOINT_NOT_FOUND` (a loader problem to troubleshoot separately). A passing compilation alone is not a passing test run.
+3. On System Monitor plugin branch: `cargo test`, then run the existing Windows packaging script using process-scoped execution policy as needed. **Rebuild the ZIP after the addition of `api.json`**. The candidate retains its existing `v0.5.1` label until a deliberate release bump; distinguish it from the published v0.5.1 ZIP by hash and contents.
+4. Smoke test older RemoteHand v1.3.8 `7c0c778` with rebuilt candidate plugin. Initial prior candidate UI load passed but predates adding `api.json`; check installation and UI again.
+5. After approval/test build Core and plugin, verify route discovery and OpenAPI reflect six routes, correct bearer 401, active-only alerts, bounded history, empty/unavailable plugin behavior, and that disabling the plugin removes its routes.
+6. Verify restart with API enabled starts the plugin gateway with correct app context, as well as normal Settings enable, HTTPS, tray and exit.
+7. Test dynamic path parameter contract with a suitable future plugin; unit tests currently cover Target Monitor-like declarations.
+8. Do not merge, tag, release or claim Windows runtime acceptance until Papa reviews results.
+
+## Constraints and caveats
+
+- The gateway protocol is **v1** (GET + JSON object responses + sanitized DTOs); future protocol changes may require a Core upgrade. New plugins adhering to v1 need no new Core update.
+- Read-only HTTP does not intrinsically make a plugin response safe; plugin authors must explicitly sanitize the returned DTO. Core guards size and shape, not the semantic safety of arbitrary plugin-chosen fields.
+- Plugin IPC writes still use the existing synchronous transport; Core bounds queue wait and reply receive, and cleans pending calls after timeout. Further hostile-plugin hang testing is advisable before public exposure.
+- Currently the Core API listener serves connections sequentially; a slow plugin can delay other HTTP requests for up to the bounded IPC deadline. Production concurrency can be a later gateway-protocol-compatible optimization, not a requirement for new plugin APIs.
