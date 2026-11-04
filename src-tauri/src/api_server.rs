@@ -540,7 +540,7 @@ fn openapi_spec() -> Value {
         "info": {
             "title": "RemoteHand Core API",
             "version": "1.0.0",
-            "description": "Opt-in, localhost-only read API. Runs only while RemoteHand is running. Plugin API publication and LAN access are not implemented yet."
+            "description": "Opt-in read-only API for localhost or explicitly selected IPv4 interfaces. Runs only while RemoteHand is running. Plugin API publication is not implemented yet."
         },
         "servers": [{ "url": "/", "description": "Current RemoteHand API listener" }],
         "components": {
@@ -568,7 +568,7 @@ fn openapi_spec() -> Value {
                 }
             },
             "/api/v1/health": { "get": operation(
-                "Service health", "Public localhost-only availability check.", false,
+                "Service health", "Unauthenticated availability check on the configured listener.", false,
                 json!({ "type": "object", "properties": { "service": { "type": "string", "example": "remotehand-api" } } })
             )},
             "/api/v1/core/status": { "get": operation(
