@@ -22,6 +22,13 @@ pub struct Settings {
     pub global_shortcut: String,
     pub function_key_shortcuts: BTreeMap<String, String>,
     pub vault_auto_lock_minutes: u64,
+    pub api_enabled: bool,
+    pub api_port: u16,
+    pub api_bind_address: String,
+    pub api_tls_enabled: bool,
+    pub api_tls_certificate_path: String,
+    pub api_tls_key_path: String,
+    pub api_history_max_entries: usize,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -47,6 +54,13 @@ impl Default for Settings {
                 "Ctrl+F12".to_string(),
             )]),
             vault_auto_lock_minutes: 15,
+            api_enabled: false,
+            api_port: 8765,
+            api_bind_address: "127.0.0.1".to_string(),
+            api_tls_enabled: false,
+            api_tls_certificate_path: String::new(),
+            api_tls_key_path: String::new(),
+            api_history_max_entries: 1000,
         }
     }
 }
@@ -108,7 +122,20 @@ pub fn load_settings() -> Result<Settings, String> {
         return Ok(Settings::default());
     }
     let contents = fs::read_to_string(&path).map_err(|error| error.to_string())?;
-    serde_json::from_str(&contents).map_err(|error| error.to_string())
+    let mut settings: Settings = serde_json::from_str(&contents).map_err(|error| error.to_string())?;
+    // Existing TLS-only feature builds did not persist apiTlsEnabled.
+    // Preserve their remote HTTPS configuration instead of silently
+    // downgrading a previously encrypted remote listener to HTTP.
+    if let Ok(raw) = serde_json::from_str::<serde_json::Value>(&contents) {
+        if raw.get("apiTlsEnabled").is_none()
+            && settings.api_bind_address != "127.0.0.1"
+            && !settings.api_tls_certificate_path.trim().is_empty()
+            && !settings.api_tls_key_path.trim().is_empty()
+        {
+            settings.api_tls_enabled = true;
+        }
+    }
+    Ok(settings)
 }
 #[tauri::command]
 pub fn save_settings(settings: Settings) -> Result<(), String> {

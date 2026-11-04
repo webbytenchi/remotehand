@@ -279,6 +279,10 @@ Planned areas include:
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the current sequencing.
 
+## Core API Server (experimental)
+
+An optional read-only API is available for testing on the `emma/core-api-server-v1` feature branch. It provides health, application status, route discovery, offline OpenAPI documentation, and persistent access history. Hosting is disabled by default and runs only while RemoteHand is running. Localhost HTTP is the default; deliberately selected LAN/Tailnet IPv4 bindings can use explicitly acknowledged unencrypted HTTP for trusted isolated networks, or HTTPS with a configured TLS certificate and key (recommended). The Settings tab includes instructions for generating free local certificates. Plugin API publication is not yet supported. The new binding/history changes require Windows build and acceptance testing. See [Core API Server](docs/CORE-API-SERVER.md) for route contracts, security restrictions, and Windows acceptance steps.
+
 ## Documentation
 
 - [Requirements](docs/REQUIREMENTS.md)

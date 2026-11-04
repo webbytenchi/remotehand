@@ -1992,6 +1992,42 @@ html[data-theme="light"] .terminal-paste-preview {
   display: grid;
   gap: 8px;
 }
+.api-server-config-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  column-gap: 32px;
+  row-gap: 12px;
+}
+.api-server-enable,
+.api-server-port {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: #aeb8c6;
+  font-size: 12px;
+  font-weight: 600;
+}
+.api-server-enable input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex: 0 0 auto;
+  accent-color: var(--accent);
+}
+.api-server-port input[type="number"] {
+  width: 110px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid #2b3747;
+  border-radius: 7px;
+  background: #0d141d;
+  color: #d2dae5;
+}
+.api-server-port input[type="number"]:focus {
+  outline: 1px solid var(--accent-border);
+}
 .settings-field > label,
 .settings-field > span {
   color: #aeb8c6;
@@ -2661,3 +2697,192 @@ html[data-theme="light"] .vault-prompt input {
   background: #ffffff;
   color: #29313d;
 }
+
+/* Core API request audit: readable in both themes and bounded to the dialog. */
+.api-access-history {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #2b3747;
+}
+.api-history-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+.api-history-toolbar > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+.api-history-toolbar strong { font-size: 13px; }
+.api-history-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.api-history-actions button { padding: 7px 10px; }
+.api-history-retention {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: #aeb8c6;
+  font-size: 12px;
+}
+.api-history-retention input[type="number"] {
+  width: 112px;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid #2b3747;
+  border-radius: 7px;
+  background: #0d141d;
+  color: #d2dae5;
+}
+.api-history-retention input[type="number"]:focus { outline: 1px solid var(--accent-border); }
+.api-history-retention button { padding: 7px 10px; }
+.api-history-stats { font-size: 12px; color: #94a3b8; }
+.api-history-scroll {
+  min-width: 0;
+  max-height: 245px;
+  overflow: auto;
+  border: 1px solid #303c4c;
+  border-radius: 8px;
+}
+.api-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  text-align: left;
+}
+.api-history-table th,
+.api-history-table td {
+  padding: 8px;
+  border-bottom: 1px solid #283344;
+  white-space: nowrap;
+}
+.api-history-table td:nth-child(4) {
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.api-history-table th { position: sticky; top: 0; background: #151d28; color: #b9c5d7; }
+.api-history-ok { color: #65c98b; font-weight: 600; }
+.api-history-failed { color: #ff8c8c; font-weight: 600; }
+html[data-theme="light"] .api-history-table th { background: #ecf0f6; color: #334155; }
+
+.api-certificate-guide {
+  min-width: 0;
+  border: 1px solid #303c4c;
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: #aeb8c6;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.api-certificate-guide summary {
+  color: #9ec5ff;
+  font-weight: 600;
+  cursor: pointer;
+}
+.api-certificate-guide p { margin: 10px 0 0; }
+.api-certificate-guide pre {
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 10px;
+  background: #111823;
+  border: 1px solid #303c4c;
+  border-radius: 6px;
+  user-select: text;
+}
+html[data-theme="light"] .api-certificate-guide pre { background: #f5f7fb; color: #334155; }
+
+/* Remote API binding confirmation uses the same modal surface as RemoteHand. */
+.api-bind-confirm-content {
+  display: grid;
+  gap: 12px;
+  line-height: 1.55;
+}
+.api-bind-confirm-content > strong {
+  font-size: 14px;
+}
+.api-bind-confirm-content p {
+  margin: 0;
+  color: #b7c3d4;
+}
+.api-bind-confirm-content .plugin-security-note {
+  display: grid;
+  gap: 5px;
+}
+html[data-theme="light"] .api-bind-confirm-content p {
+  color: #475569;
+}
+
+/* TLS paths stay editable; native Browse buttons share the same field row. */
+.api-tls-file-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.api-tls-file-row input {
+  flex: 1 1 240px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #2b3747;
+  border-radius: 7px;
+  background: #0d141d;
+  color: #d2dae5;
+  outline: none;
+}
+.api-tls-file-row input:focus { border-color: var(--accent-border); }
+.api-tls-file-row button {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+}
+html[data-theme="light"] .api-tls-file-row input {
+  background: #fff;
+  color: #1e293b;
+  border-color: #cbd5e1;
+}
+
+/* Copyable API URLs in Server Status. Each address copies independently. */
+.api-status-access-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.api-status-url-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  min-width: 0;
+}
+.api-url-copy {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  max-width: 100%;
+  padding: 2px 5px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--accent, #80b7ff);
+  font: inherit;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.api-url-copy:hover,
+.api-url-copy:focus-visible {
+  border-color: var(--accent-border);
+  background: var(--accent-surface);
+  outline-offset: 2px;
+}
+.api-url-copy-hint {
+  color: #95a4b7;
+  font-size: 11px;
+  white-space: nowrap;
+}
+html[data-theme="light"] .api-url-copy-hint { color: #526376; }
