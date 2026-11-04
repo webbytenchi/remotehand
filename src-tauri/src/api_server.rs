@@ -12,7 +12,7 @@ use std::{
         Arc, Mutex,
     },
     thread::{self, JoinHandle},
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant},
 };
 
 const ROUTES: &[&str] = &[
@@ -186,7 +186,8 @@ impl ApiServerState {
     }
 
     pub fn status(&self) -> Result<ApiStatus, String> {
-        Ok(self.status_inner(&self.inner.lock().map_err(|e| e.to_string())?))
+        let inner = self.inner.lock().map_err(|e| e.to_string())?;
+        Ok(self.status_inner(&inner))
     }
 
     pub fn token(&self) -> Result<String, String> {
