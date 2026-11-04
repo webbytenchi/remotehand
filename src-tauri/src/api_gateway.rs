@@ -176,7 +176,7 @@ pub fn published_routes() -> Vec<PublishedRoute> {
 
 fn decode_segment(s: &str) -> Option<String> {
     // Exact path segments only; percent-encoding is deliberately unsupported in v1.
-    (s.len() <= MAX_PATH_PARAM_BYTES && !s.is_empty() &&
+    (s.len() <= MAX_PATH_PARAM_BYTES && !s.is_empty() && s != "." && s != ".." &&
         s.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.')))
         .then(|| s.to_string())
 }
