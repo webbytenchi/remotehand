@@ -1992,6 +1992,42 @@ html[data-theme="light"] .terminal-paste-preview {
   display: grid;
   gap: 8px;
 }
+.api-server-config-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  column-gap: 32px;
+  row-gap: 12px;
+}
+.api-server-enable,
+.api-server-port {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: #aeb8c6;
+  font-size: 12px;
+  font-weight: 600;
+}
+.api-server-enable input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex: 0 0 auto;
+  accent-color: var(--accent);
+}
+.api-server-port input[type="number"] {
+  width: 110px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid #2b3747;
+  border-radius: 7px;
+  background: #0d141d;
+  color: #d2dae5;
+}
+.api-server-port input[type="number"]:focus {
+  outline: 1px solid var(--accent-border);
+}
 .settings-field > label,
 .settings-field > span {
   color: #aeb8c6;
