@@ -87,6 +87,9 @@ functionKeyShortcuts: Record<string, string>;
 vaultAutoLockMinutes: number;
 apiEnabled: boolean;
 apiPort: number;
+apiBindAddress: string;
+apiTlsCertificatePath: string;
+apiTlsKeyPath: string;
 };
 type WorkspaceLayout = Parameters<DockviewApi["fromJSON"]>[0];
 const WORKSPACE_KEY = "remotehand.workspace";
@@ -115,6 +118,9 @@ functionKeyShortcuts: { "core.commandPalette": "Ctrl+F12" },
 vaultAutoLockMinutes: 15,
 apiEnabled: false,
 apiPort: 8765,
+apiBindAddress: "127.0.0.1",
+apiTlsCertificatePath: "",
+apiTlsKeyPath: "",
 };
 const UI_FONT_OPTIONS = ["Inter", "IBM Plex Sans", "Segoe UI", "System Default"] as const;
 const TERMINAL_FONT_OPTIONS = ["JetBrains Mono", "IBM Plex Mono", "Cascadia Mono", "Consolas", "System Monospace"] as const;
@@ -746,7 +752,16 @@ const [vaultPromptPassphraseConfirm, setVaultPromptPassphraseConfirm] = useState
 const [vaultPromptError, setVaultPromptError] = useState("");
 const [vaultPromptBusy, setVaultPromptBusy] = useState(false);
 const [settingsTab, setSettingsTab] = useState<"appearance" | "layout" | "startup" | "vault" | "plugins" | "shortcuts" | "about" | "api" | "papa">("appearance");
-const [apiStatus, setApiStatus] = useState<{ enabled: boolean; running: boolean; port: number; url: string | null; error: string | null } | null>(null);
+type ApiStatus = { enabled: boolean; running: boolean; port: number; bindAddress: string; tls: boolean; url: string | null; error: string | null };
+type ApiHistoryEntry = { timestamp: string; ip: string; method: string; route: string; status: number; durationMs: number };
+type ApiHistorySnapshot = { entries: ApiHistoryEntry[]; total: number; succeeded: number; failed: number };
+const [apiStatus, setApiStatus] = useState<ApiStatus | null>(null);
+const [apiHistory, setApiHistory] = useState<ApiHistorySnapshot | null>(null);
+const [apiHistoryError, setApiHistoryError] = useState("");
+const refreshApiHistory = useCallback(() => {
+if (!isTauri()) return;
+void invoke<ApiHistorySnapshot>("api_server_history").then((snapshot) => { setApiHistory(snapshot); setApiHistoryError(""); }).catch((error) => setApiHistoryError(String(error)));
+}, []);
 const [apiError, setApiError] = useState("");
 const [apiToken, setApiToken] = useState("");
 const [apiTokenVisible, setApiTokenVisible] = useState(false);
@@ -1484,15 +1499,23 @@ console.error("Failed to save settings", error),
 }, [settings, settingsLoaded]);
 useEffect(() => {
 if (!settingsLoaded || !isTauri()) return;
-void invoke<{ enabled: boolean; running: boolean; port: number; url: string | null; error: string | null }>(
-"api_server_configure", { enabled: settings.apiEnabled, port: settings.apiPort })
+void invoke<ApiStatus>(
+"api_server_configure", {
+enabled: settings.apiEnabled, port: settings.apiPort,
+bindAddress: settings.apiBindAddress,
+certificatePath: settings.apiTlsCertificatePath,
+keyPath: settings.apiTlsKeyPath,
+})
 .then((status) => { setApiStatus(status); setApiError(""); })
 .catch((error) => { setApiError(String(error)); void invoke<typeof apiStatus>("api_server_status").then(setApiStatus).catch(() => {}); });
-}, [settingsLoaded, settings.apiEnabled, settings.apiPort]);
+}, [settingsLoaded, settings.apiEnabled, settings.apiPort, settings.apiBindAddress, settings.apiTlsCertificatePath, settings.apiTlsKeyPath]);
 useEffect(() => {
 if (!settingsOpen || settingsTab !== "api" || !isTauri()) return;
-void invoke<typeof apiStatus>("api_server_status").then(setApiStatus).catch((error) => setApiError(String(error)));
-}, [settingsOpen, settingsTab]);
+void invoke<ApiStatus>("api_server_status").then(setApiStatus).catch((error) => setApiError(String(error)));
+refreshApiHistory();
+const poll = window.setInterval(refreshApiHistory, 5000);
+return () => window.clearInterval(poll);
+}, [settingsOpen, settingsTab, refreshApiHistory]);
 const shortcutFromKeyboardEvent = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
 if (event.key === "Escape") {
 event.preventDefault();
@@ -2827,17 +2850,50 @@ return <div key={id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1
 <input type="checkbox" checked={settings.apiEnabled} onChange={(event) => setSettings((current) => ({ ...current, apiEnabled: event.target.checked }))} />
 </label>
 <label className="api-server-port">
-<span>Localhost port (1024–65535)</span>
+<span>Port (1024–65535)</span>
 <input type="number" min={1024} max={65535} value={settings.apiPort} onChange={(event) => {
 const port = Number(event.target.value);
 if (Number.isInteger(port) && port >= 1024 && port <= 65535) setSettings((current) => ({ ...current, apiPort: port }));
 }} />
 </label>
 </div>
+<div className="settings-field">
+<label htmlFor="api-bind-mode">Listening network</label>
+<select id="api-bind-mode" value={settings.apiBindAddress === "127.0.0.1" ? "localhost" : settings.apiBindAddress === "0.0.0.0" ? "all" : "custom"} onChange={(event) => {
+const address = event.target.value === "localhost" ? "127.0.0.1" : event.target.value === "all" ? "0.0.0.0" : "192.168.1.100";
+setSettings((current) => ({ ...current, apiBindAddress: address }));
+}}>
+<option value="localhost">Localhost only — 127.0.0.1 (recommended)</option>
+<option value="all">All IPv4 interfaces — 0.0.0.0 (requires TLS)</option>
+<option value="custom">Specific IPv4 address (requires TLS)</option>
+</select>
+</div>
+{settings.apiBindAddress !== "127.0.0.1" && settings.apiBindAddress !== "0.0.0.0" ? (
+<label className="settings-field">
+<span>Specific IPv4 listening address</span>
+<input value={settings.apiBindAddress} onChange={(event) => setSettings((current) => ({ ...current, apiBindAddress: event.target.value }))} placeholder="192.168.1.100" />
+</label>
+) : null}
+{settings.apiBindAddress !== "127.0.0.1" ? (
+<>
+<div className="plugin-security-note">
+<strong>HTTPS required for remote listening</strong>
+<span>Non-local bindings use TLS with a trusted PEM certificate and matching private key. Use an address present on this computer and a certificate trusted by your API clients. Do not publicly expose the port or share the access token.</span>
+</div>
+<label className="settings-field">
+<span>TLS certificate path (PEM)</span>
+<input value={settings.apiTlsCertificatePath} onChange={(event) => setSettings((current) => ({ ...current, apiTlsCertificatePath: event.target.value }))} placeholder="C:\\certs\\remotehand.crt" spellCheck={false} />
+</label>
+<label className="settings-field">
+<span>TLS private key path (PEM)</span>
+<input value={settings.apiTlsKeyPath} onChange={(event) => setSettings((current) => ({ ...current, apiTlsKeyPath: event.target.value }))} placeholder="C:\\certs\\remotehand.key" spellCheck={false} />
+</label>
+</>
+) : null}
 <div className="plugin-security-note">
 <strong>Server status: {apiStatus?.running ? "Running" : "Stopped"}</strong>
 <span>{apiStatus?.url || "Localhost only — disabled until enabled."}</span>
-<span>For this first release the HTTP API binds only to 127.0.0.1. Direct LAN or Tailnet access is not enabled.</span>
+<span>{apiStatus?.tls ? "HTTPS is enabled for this listener." : "Localhost-only HTTP. Remote bindings require TLS."}</span>
 </div>
 <div className="settings-section-heading">
 <strong>API Access Token</strong>
@@ -2862,6 +2918,37 @@ void invoke("api_server_open_docs").catch((error) => setApiError(String(error)))
 <span>GET /api/docs · GET /api/openapi.json · GET /api/v1/health · GET /api/v1/core/status · GET /api/v1/plugins · GET /api/v1/routes</span>
 <span>Plugin route publication is reserved for a later milestone. The plugin list is empty until explicitly supported.</span>
 </div>
+<section className="api-access-history">
+<div className="api-history-toolbar">
+<div><strong>API Access History</strong><div className="app-modal-muted">Latest 100 requests · Latest first · Retains up to 1,000 on disk</div></div>
+<div className="api-history-actions">
+<button type="button" className="settings-reset" onClick={refreshApiHistory}>Refresh</button>
+<button type="button" className="settings-reset" onClick={() => {
+if (!window.confirm("Clear saved API access history?")) return;
+void invoke("api_server_history_clear").then(() => refreshApiHistory()).catch((error) => setApiHistoryError(String(error)));
+}}>Clear history</button>
+</div>
+</div>
+<div className="api-history-stats">Total: {apiHistory?.total ?? 0} · Successful: {apiHistory?.succeeded ?? 0} · Failed: {apiHistory?.failed ?? 0}</div>
+<div className="api-history-scroll">
+<table className="api-history-table">
+<thead><tr><th>Date / Time</th><th>Client IP</th><th>Method</th><th>Route</th><th>Status</th><th>ms</th></tr></thead>
+<tbody>
+{apiHistory?.entries.length ? apiHistory.entries.map((entry, index) => (
+<tr key={entry.timestamp + "-" + index}>
+<td>{new Date(Number(entry.timestamp)).toLocaleString()}</td>
+<td>{entry.ip}</td>
+<td>{entry.method}</td>
+<td title={entry.route}>{entry.route}</td>
+<td className={entry.status >= 400 ? "api-history-failed" : "api-history-ok"}>{entry.status}</td>
+<td>{entry.durationMs}</td>
+</tr>
+)) : <tr><td colSpan={6}>No API requests recorded yet.</td></tr>}
+</tbody>
+</table>
+</div>
+{apiHistoryError ? <div className="plugin-error">{apiHistoryError}</div> : null}
+</section>
 {apiError || apiStatus?.error ? <div className="plugin-error">{apiError || apiStatus?.error}</div> : null}
 </div>
 ) : settingsTab === "shortcuts" ? (
