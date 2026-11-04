@@ -617,6 +617,16 @@ fn openapi_spec() -> Value {
             json!({"description":"Plugin runtime unavailable or incompatible"});
         spec["paths"][&route.path]["get"]["responses"]["502"] =
             json!({"description":"Invalid or oversized plugin response"});
+        let parameters = route.path.split('/').filter_map(|segment| {
+            segment.strip_prefix('{').and_then(|name| name.strip_suffix('}'))
+                .map(|name| json!({
+                    "name": name, "in": "path", "required": true,
+                    "schema": {"type": "string", "minLength": 1, "maxLength": 128}
+                }))
+        }).collect::<Vec<_>>();
+        if !parameters.is_empty() {
+            spec["paths"][&route.path]["get"]["parameters"] = json!(parameters);
+        }
     }
     spec
 }
