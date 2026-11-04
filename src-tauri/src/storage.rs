@@ -24,6 +24,9 @@ pub struct Settings {
     pub vault_auto_lock_minutes: u64,
     pub api_enabled: bool,
     pub api_port: u16,
+    pub api_bind_address: String,
+    pub api_tls_certificate_path: String,
+    pub api_tls_key_path: String,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -51,6 +54,9 @@ impl Default for Settings {
             vault_auto_lock_minutes: 15,
             api_enabled: false,
             api_port: 8765,
+            api_bind_address: "127.0.0.1".to_string(),
+            api_tls_certificate_path: String::new(),
+            api_tls_key_path: String::new(),
         }
     }
 }
