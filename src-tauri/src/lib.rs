@@ -342,6 +342,7 @@ pub fn run() {
             api_server::api_server_configure,
             api_server::api_server_status,
             api_server::api_server_ipv4_addresses,
+            api_server::api_server_copy_url,
             api_server::api_server_history,
             api_server::api_server_history_clear,
             api_server::api_server_token,
