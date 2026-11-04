@@ -2821,17 +2821,19 @@ return <div key={id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1
 <strong>RemoteHand Core API</strong>
 <span>Read-only JSON endpoints for approved monitoring clients. The server runs only while RemoteHand runs, including when minimized to the tray.</span>
 </div>
-<label className="settings-field">
+<div className="api-server-config-row">
+<label className="api-server-enable">
 <span>Enable API Server</span>
 <input type="checkbox" checked={settings.apiEnabled} onChange={(event) => setSettings((current) => ({ ...current, apiEnabled: event.target.checked }))} />
 </label>
-<label className="settings-field">
+<label className="api-server-port">
 <span>Localhost port (1024–65535)</span>
 <input type="number" min={1024} max={65535} value={settings.apiPort} onChange={(event) => {
 const port = Number(event.target.value);
 if (Number.isInteger(port) && port >= 1024 && port <= 65535) setSettings((current) => ({ ...current, apiPort: port }));
 }} />
 </label>
+</div>
 <div className="plugin-security-note">
 <strong>Server status: {apiStatus?.running ? "Running" : "Stopped"}</strong>
 <span>{apiStatus?.url || "Localhost only — disabled until enabled."}</span>
