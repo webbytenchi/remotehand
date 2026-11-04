@@ -2,6 +2,10 @@
 
 **Status:** integrated and Windows-tested with System Monitor v0.5.2 and Target Monitor v0.7.12; included in the RemoteHand v1.4.0 release source. Final exact-main build, packaging and tag verification are required before public release. One Core upgrade supplies a generic route gateway. Compatible future plugin API routes require **no further RemoteHand Core changes**.
 
+## Operator controls
+
+Settings → API Server → **Plugin API Routes** lists enabled plugins with validated descriptors, their GET routes and independent **API enabled** switches. Turning one off removes its HTTP routes from route discovery and OpenAPI immediately without disabling the plugin itself; other plugins remain available. Re-enable API exposure from the same list. Choices persist in `data/config/plugin-api-routes.json` alongside portable Core configuration. Existing API publications default to enabled unless opted out. This is independent from globally enabling/disabling the Core API Server and from Plugin Manager's plugin enabled state.
+
 ## Design rationale and backward compatibility
 
 The initial six System Monitor routes were hardcoded into Core and have been replaced with dynamic discovery.
