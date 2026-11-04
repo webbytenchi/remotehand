@@ -7,7 +7,7 @@ use serde_json::{json, Value};
 use std::{
     fs,
     io::{BufReader, Read, Write},
-    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream},
+    net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream},
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -141,12 +141,6 @@ impl ApiServerState {
         let address: Ipv4Addr = bind_address.parse()
             .map_err(|_| "Listening address must be a valid IPv4 address".to_string())?;
         let remote = !address.is_loopback();
-        if remote && (certificate_path.trim().is_empty() || key_path.trim().is_empty()) {
-            return Err("Remote API binding requires a TLS certificate and private key (PEM)".into());
-        }
-        let tls = if remote {
-            Some(load_tls_config(certificate_path, key_path)?)
-        } else { None };
         let mut inner = self.inner.lock().map_err(|e| e.to_string())?;
         inner.requested_port = port;
         inner.requested_address = address;
@@ -155,6 +149,12 @@ impl ApiServerState {
             inner.error = None;
             return Ok(self.status_inner(&inner));
         }
+        if remote && (certificate_path.trim().is_empty() || key_path.trim().is_empty()) {
+            return Err("Remote API binding requires a TLS certificate and private key (PEM)".into());
+        }
+        let tls = if remote {
+            Some(load_tls_config(certificate_path, key_path)?)
+        } else { None };
         if inner.server.as_ref().is_some_and(|running| running.port == port && running.address == address && running.tls == remote) {
             return Ok(self.status_inner(&inner));
         }
