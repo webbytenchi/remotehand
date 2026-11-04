@@ -337,6 +337,9 @@ fn openapi_spec() -> Value {
 fn response_for(path: &str, auth: Option<&str>, expected: &str, since: Instant)
     -> (u16, Value)
 {
+    if path == "/api/docs" {
+        return (200, json!({ "status": "ok" }));
+    }
     if path == "/api/openapi.json" {
         return (200, openapi_spec());
     }
@@ -361,7 +364,7 @@ fn response_for(path: &str, auth: Option<&str>, expected: &str, since: Instant)
         "/api/v1/routes" => (200, json!({
             "status": "ok", "data": ROUTES.iter().map(|path| json!({
                 "method": "GET", "path": path,
-                "authRequired": *path != "/api/v1/health"
+                "authRequired": *path != "/api/v1/health" && *path != "/api/docs" && *path != "/api/openapi.json"
             })).collect::<Vec<_>>()
         })),
         _ => (404, json!({ "status": "error", "error": "not_found" })),
@@ -391,8 +394,7 @@ fn serve_connection(mut stream: TcpStream, credentials: &Arc<Mutex<String>>, sin
         response_for(parts[1], auth, &expected, since)
     };
     let is_docs = parts.len() == 3 && parts[0] == "GET" && parts[1] == "/api/docs"
-        && request.contains("\\r\\n\\r\\n");
-    let is_docs = is_docs && code == 401;
+        && request.contains("\r\n\r\n") && code == 200;
     let (code, body, content_type) = if is_docs {
         (200, include_str!("api_docs.html").to_owned(), "text/html; charset=utf-8")
     } else {
@@ -416,6 +418,7 @@ mod tests {
             assert_eq!(response_for(path, None, "secret", since).0, 401);
             assert_eq!(response_for(path, Some("Bearer secret"), "secret", since).0, 200);
         }
+        assert_eq!(response_for("/api/docs", None, "secret", since).0, 200);
         assert_eq!(response_for("/api/openapi.json", None, "secret", since).0, 200);
         let spec = openapi_spec();
         for route in ROUTES {
