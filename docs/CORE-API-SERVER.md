@@ -111,3 +111,9 @@ After building, with RemoteHand enabled and bound to localhost:
 5. Restore binding to localhost and verify prior HTTP behavior and port. Disable the API and confirm the listener closes; fully exit and verify the same.
 
 Do not expose the server over public internet or broadly open Windows Firewall. A certificate alone does not enforce network trust; use appropriate firewall rules and network access controls for the chosen interface.
+
+## HTTPS handshake troubleshooting (Windows)
+
+Windows acceptance found the API listener reporting HTTPS running while `curl.exe -vk https://127.0.0.1:8765/api/v1/health` failed with `Recv failure: Connection was aborted` during TLS negotiation. The fix explicitly switches each accepted socket to blocking mode (a nonblocking listening socket may produce nonblocking accepted sockets on Windows), completes the Rustls handshake before reading the HTTP request, and logs handshake/read failures. This change requires a fresh Windows build and operator re-test.
+
+Smoke-test on the RemoteHand machine with `curl.exe -vk https://127.0.0.1:8765/api/v1/health`, then from the client using the real LAN IP. `-k` is for TLS diagnosis only: remove it once the client trusts the mkcert root CA, and verify without disabling TLS validation. Do not consider HTTPS accepted until both handshake and authenticated routes work.
