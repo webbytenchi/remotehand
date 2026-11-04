@@ -340,6 +340,8 @@ pub fn run() {
             storage::load_settings,
             api_server::api_server_configure,
             api_server::api_server_status,
+            api_server::api_server_history,
+            api_server::api_server_history_clear,
             api_server::api_server_token,
             api_server::api_server_rotate_token,
             api_server::api_server_open_docs,
@@ -514,7 +516,7 @@ pub fn run() {
                 .map_err(std::io::Error::other)?;
             let saved = storage::load_settings().map_err(std::io::Error::other)?;
             if let Some(api) = app.try_state::<api_server::ApiServerState>() {
-                if let Err(error) = api.configure(saved.api_enabled, saved.api_port) {
+                if let Err(error) = api.configure(saved.api_enabled, saved.api_port, &saved.api_bind_address, &saved.api_tls_certificate_path, &saved.api_tls_key_path) {
                     log::warn!("API server did not start: {error}");
                 }
             }
