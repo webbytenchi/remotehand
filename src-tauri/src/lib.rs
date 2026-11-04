@@ -570,6 +570,12 @@ pub fn run() {
                     return;
                 }
 
+                if let Some(server) = window.app_handle().try_state::<api_server::ApiServerState>() {
+                    if let Err(error) = server.flush_history() {
+                        log::warn!("Could not flush API access history on exit: {error}");
+                    }
+                }
+
                 // The main window is actually exiting. Dockview popouts are
                 // independent native windows, so close them explicitly rather
                 // than leaving empty shells behind after the main webview exits.
