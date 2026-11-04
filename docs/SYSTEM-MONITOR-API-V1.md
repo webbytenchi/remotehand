@@ -1,14 +1,14 @@
-# Generic Plugin API Gateway v1 — implementation candidate
+# Generic Plugin API Gateway v1 — RemoteHand v1.4.0
 
-**Status:** unmerged feature branches, not yet Windows-tested or released. One Core upgrade supplies a generic route gateway. Adding compatible future plugin APIs requires **no further RemoteHand Core code changes**.
+**Status:** integrated and Windows-tested with System Monitor v0.5.2 and Target Monitor v0.7.12; included in the RemoteHand v1.4.0 release source. Final exact-main build, packaging and tag verification are required before public release. One Core upgrade supplies a generic route gateway. Compatible future plugin API routes require **no further RemoteHand Core changes**.
 
 ## Design rationale and backward compatibility
 
 The initial six System Monitor routes were hardcoded into Core and have been replaced with dynamic discovery.
 
 - **Core**: `webbytenchi/remotehand`, branch `emma/monitoring-api-v1`.
-- **System Monitor**: `webbytenchi/remotehand-plugin-system-monitor`, branch `emma/system-monitor-api-v1`.
-- **Plugin API v1 is unchanged**: `plugin.json` remains unchanged and retains `apiVersion: 1`. The API contract lives in an **optional, separate `api.json`** file in the plugin package root. Older RemoteHand versions ignore that extra file; they must still be smoke-tested before release.
+- **System Monitor**: `webbytenchi/remotehand-plugin-system-monitor`, released **v0.5.2**, seven routes.
+- **Plugin API v1 is unchanged**: `plugin.json` remains unchanged and retains `apiVersion: 1`. The API contract lives in an **optional, separate `api.json`** file in the plugin package root. Older RemoteHand versions ignore that extra file and preserve the existing plugin UI.
 - **Core** discovers the enabled plugins' `api.json` declarations dynamically on each request, validates them and publishes their GET routes. There is no hardcoded System Monitor or Target Monitor knowledge.
 - **Plugin** handles the generic `api.read` IPC method with `{"view":"...","pathParams":{...}}`, returns an explicitly sanitized object. Core forwards no raw tokens, headers, bodies, or query strings.
 - A plugin that has no `api.json` continues functioning normally in its UI without HTTP publishing. An enabled API plugin whose runtime is not available returns HTTP 503. Disabled plugin routes disappear from discovery.
@@ -35,9 +35,9 @@ The initial six System Monitor routes were hardcoded into Core and have been rep
 
 Only a plugin's own `api.json` defines routes, so adding a future plugin requires implementing `api.read`, packaging `api.json`, and installing/enabling the plugin. No Core build or route registration edits should be needed.
 
-For Target Monitor, the same descriptor contract supports future routes such as `/targets/{id}` and `/targets/{id}/alerts`. The named parameters are delivered as `pathParams`, with strict input characters and length checks; no raw request path is forwarded to plugins.
+Target Monitor **v0.7.12** uses the same contract for seven routes including `/targets/{id}`, `/targets/{id}/checks` and `/targets/{id}/history`. The OpenAPI explorer renders a separate input for every declared path parameter, substitutes values when trying the endpoint, and validates them against the gateway's restricted ASCII path-segment rules. Multiple named parameters are supported by design; one variable per endpoint has been live-tested. Named parameters arrive in plugin IPC as `pathParams`, never a raw request path.
 
-## Expected System Monitor routes
+## Released System Monitor routes
 
 | Method | Route | Sanitized response |
 | --- | --- | --- |
@@ -47,6 +47,7 @@ For Target Monitor, the same descriptor contract supports future routes such as 
 | GET | `/api/v1/system-monitor/disks` | Numbered capacity/usage/throughput without mount paths |
 | GET | `/api/v1/system-monitor/history` | Last 120 CPU/memory/temperature points |
 | GET | `/api/v1/system-monitor/alerts` | Only currently active warning/critical alert states |
+| GET | `/api/v1/system-monitor/catalog` | Dashboard-ready metric labels, units and data sources |
 
 ## HTTP responses
 
@@ -59,17 +60,13 @@ For Target Monitor, the same descriptor contract supports future routes such as 
 
 The existing `/api/v1/plugins` endpoint now enumerates enabled API-publishing plugins by id, rather than the previous empty placeholder. It is **not** a full list of installed plugins.
 
-## Windows verification
+## Windows acceptance and release validation
 
-Before installing any new Core build:
-1. Check clean branches and SHA/ref of both feature candidates.
-2. Test `cargo test --locked` and `cargo check --locked` in Core; note the earlier test-executable Windows error `0xc0000139 STATUS_ENTRYPOINT_NOT_FOUND` (a loader problem to troubleshoot separately). A passing compilation alone is not a passing test run.
-3. On System Monitor plugin branch: `cargo test`, then run the existing Windows packaging script using process-scoped execution policy as needed. **Rebuild the ZIP after the addition of `api.json`**. The candidate retains its existing `v0.5.1` label until a deliberate release bump; distinguish it from the published v0.5.1 ZIP by hash and contents.
-4. Smoke test older RemoteHand v1.3.8 `7c0c778` with rebuilt candidate plugin. Initial prior candidate UI load passed but predates adding `api.json`; check installation and UI again.
-5. After approval/test build Core and plugin, verify route discovery and OpenAPI reflect six routes, correct bearer 401, active-only alerts, bounded history, empty/unavailable plugin behavior, and that disabling the plugin removes its routes.
-6. Verify restart with API enabled starts the plugin gateway with correct app context, as well as normal Settings enable, HTTPS, tray and exit.
-7. Test dynamic path parameter contract with a suitable future plugin; unit tests currently cover Target Monitor-like declarations.
-8. Do not merge, tag, release or claim Windows runtime acceptance until Papa reviews results.
+- RemoteHand generic API Gateway on `emma/monitoring-api-v1` compiled with a successful optimized Windows Tauri release build on TENCHI at commit `80ddaf9a0ca816eac8d1ac9e4fb17238cf90e3a1`. The updated API explorer accepted the `{id}` input and routed real target values.
+- **System Monitor v0.5.2**: seven authenticated routes returned HTTP 200, invalid bearer authentication failed, and disabling the plugin removed its API routes. The plugin is independently released.
+- **Target Monitor v0.7.12**: seven authenticated routes returned HTTP 200, including current Ping status/history and live TCP + HTTP checks; `/targets/{id}`, `/checks` and `/history` worked after entering the target ID in the explorer. Missing bearer tokens returned HTTP 401. Disabling Target Monitor removed its routes while System Monitor stayed available; the operator re-enabled Target Monitor. The plugin is independently released.
+- The Core Rust **unit-test executable** previously failed to start on the Windows test machine with `0xc0000139 STATUS_ENTRYPOINT_NOT_FOUND`; `cargo check` and the optimized release build succeeded. **Do not claim Core Rust unit tests passed** until an executable test run succeeds; report this validation limitation in the v1.4.0 release notes.
+- The final v1.4.0 tagged build must be produced and smoke-tested from the exact merged `main` source, with all release assets and checksums verified before publication. The existing Windows API listener is opt-in, disabled by default.
 
 ## Constraints and caveats
 
