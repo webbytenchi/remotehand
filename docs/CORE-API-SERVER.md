@@ -8,6 +8,10 @@ The v1.4.0 Core API Server dynamically discovers enabled plugins' optional `api.
 
 System Monitor v0.5.2 and Target Monitor v0.7.12 have been live-tested with the gateway on Windows, including authorized requests, HTTP 401 for missing credentials, Target Monitor's `{id}` paths, live TCP/HTTP checks, and enabled/disabled plugin route isolation. A gateway-enabled Core release is required for these plugin endpoints; older Core builds continue running the existing plugin UIs. See [Generic Plugin API Gateway v1](SYSTEM-MONITOR-API-V1.md).
 
+## Per-plugin API publication controls
+
+Open **Settings → API Server → Plugin API Routes** to view each installed, enabled plugin with a valid API descriptor and expand its list of GET routes. The **API enabled** switch independently controls whether that plugin's routes are published by the Core HTTP server. Switching it off removes the plugin's routes from `/api/v1/routes`, OpenAPI, and the explorer, and requests to those routes return HTTP 404. It does **not** stop the plugin, Ping/TCP/HTTP monitoring, its UI, or other plugins' routes. Settings persist between restarts in `data/config/plugin-api-routes.json`; existing registrations default to enabled until explicitly switched off. This is separate from the global API Server enable switch and Plugin Manager's plugin enable/disable.
+
 ## Settings and network bindings
 
 Open **Settings → API Server**. The API is **disabled by default**. With the default localhost binding it listens on `127.0.0.1:8765` using HTTP; a configurable port in the range 1024–65535 is supported. Its status remains available even when minimized or in the system tray, but the server stops on full process exit or when disabled.
