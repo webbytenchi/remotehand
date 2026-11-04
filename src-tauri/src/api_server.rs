@@ -277,6 +277,54 @@ pub fn api_server_configure(
     state.configure(enabled, port, &bind_address, tls_enabled, &certificate_path, &key_path)
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalIpv4Address {
+    address: String,
+    interface_name: String,
+}
+
+fn local_ipv4_addresses() -> Result<Vec<LocalIpv4Address>, String> {
+    use getifaddrs::{getifaddrs, InterfaceFlags};
+    use std::net::IpAddr;
+
+    let mut addresses: Vec<(bool, u32, LocalIpv4Address)> = Vec::new();
+    for interface in getifaddrs().map_err(|e| e.to_string())? {
+        if !interface.flags.contains(InterfaceFlags::UP)
+            || interface.flags.contains(InterfaceFlags::LOOPBACK) {
+            continue;
+        }
+        let Some(IpAddr::V4(ip)) = interface.address.ip_addr() else { continue; };
+        if ip.is_loopback() || ip.is_unspecified() || ip.is_link_local() || ip.is_multicast() {
+            continue;
+        }
+        let name = interface.name.to_lowercase();
+        let virtual_interface = ["vmware", "vbox", "virtual", "hyper-v", "vethernet", "docker", "wsl", "tailscale", "warp", "tun", "tap"]
+            .iter().any(|keyword| name.contains(keyword));
+        addresses.push((
+            virtual_interface,
+            interface.index.unwrap_or(u32::MAX),
+            LocalIpv4Address { address: ip.to_string(), interface_name: interface.name },
+        ));
+    }
+    // Prefer an active physical LAN interface over virtual adapters. Keep a
+    // deterministic ordering within each tier and remove duplicate addresses.
+    addresses.sort_by(|a, b| (a.0, a.1, &a.2.interface_name, &a.2.address)
+        .cmp(&(b.0, b.1, &b.2.interface_name, &b.2.address)));
+    let mut result: Vec<LocalIpv4Address> = Vec::new();
+    for (_, _, item) in addresses {
+        if !result.iter().any(|existing| existing.address == item.address) {
+            result.push(item);
+        }
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn api_server_ipv4_addresses() -> Result<Vec<LocalIpv4Address>, String> {
+    local_ipv4_addresses()
+}
+
 #[tauri::command]
 pub fn api_server_status(state: tauri::State<'_, ApiServerState>) -> Result<ApiStatus, String> {
     state.status()
