@@ -2852,9 +2852,14 @@ void invoke<string>("api_server_rotate_token").then((token) => { setApiToken(tok
 }}>Rotate Token</button>
 </div>
 {apiTokenVisible ? <input aria-label="API access token" type="text" readOnly value={apiToken} onFocus={(event) => event.currentTarget.select()} /> : null}
+<button type="button" className="settings-reset" disabled={!apiStatus?.running || !apiStatus.url} onClick={() => {
+const url = apiStatus?.url;
+if (!url) return;
+void invoke("open_external_url", { url: url + "/api/docs" }).catch((error) => setApiError(String(error)));
+}}>Open API Documentation</button>
 <div className="settings-section-heading">
 <strong>Core routes</strong>
-<span>GET /api/v1/health (public) · GET /api/v1/core/status · GET /api/v1/plugins · GET /api/v1/routes</span>
+<span>GET /api/docs · GET /api/openapi.json · GET /api/v1/health · GET /api/v1/core/status · GET /api/v1/plugins · GET /api/v1/routes</span>
 <span>Plugin route publication is reserved for a later milestone. The plugin list is empty until explicitly supported.</span>
 </div>
 {apiError || apiStatus?.error ? <div className="plugin-error">{apiError || apiStatus?.error}</div> : null}
