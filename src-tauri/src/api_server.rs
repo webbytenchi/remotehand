@@ -16,6 +16,8 @@ use std::{
 };
 
 const ROUTES: &[&str] = &[
+    "/api/docs",
+    "/api/openapi.json",
     "/api/v1/health",
     "/api/v1/core/status",
     "/api/v1/plugins",
@@ -234,9 +236,110 @@ fn authorized(provided: Option<&str>, expected: &str) -> bool {
         .fold(0u8, |acc, (left, right)| acc | (left ^ right)) == 0
 }
 
+fn openapi_spec() -> Value {
+    let response = json!({
+        "type": "object",
+        "required": ["status", "data"],
+        "properties": {
+            "status": { "type": "string", "enum": ["ok"] },
+            "data": { "type": "object" }
+        }
+    });
+    let operation = |summary: &str, description: &str, authenticated: bool, data: Value| {
+        let mut value = json!({
+            "summary": summary,
+            "description": description,
+            "responses": {
+                "200": {
+                    "description": "Successful JSON response",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "allOf": [response.clone(), {
+                                    "type": "object",
+                                    "properties": { "data": data }
+                                }]
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        if authenticated {
+            value["security"] = json!([{ "bearerAuth": [] }]);
+            value["responses"]["401"] = json!({ "description": "Missing or invalid bearer token" });
+        }
+        value
+    };
+    json!({
+        "openapi": "3.0.3",
+        "info": {
+            "title": "RemoteHand Core API",
+            "version": "1.0.0",
+            "description": "Opt-in, localhost-only read API. Runs only while RemoteHand is running. Plugin API publication and LAN access are not implemented yet."
+        },
+        "servers": [{ "url": "/", "description": "Current RemoteHand API listener" }],
+        "components": {
+            "securitySchemes": {
+                "bearerAuth": {
+                    "type": "http",
+                    "scheme": "bearer",
+                    "description": "Token from RemoteHand Settings > API Server"
+                }
+            }
+        },
+        "paths": {
+            "/api/docs": {
+                "get": {
+                    "summary": "Interactive API documentation",
+                    "description": "Local browser-based API explorer. No external assets or CDN.",
+                    "responses": { "200": { "description": "HTML documentation page" } }
+                }
+            },
+            "/api/openapi.json": {
+                "get": {
+                    "summary": "OpenAPI specification",
+                    "description": "Machine-readable OpenAPI 3.0 specification, suitable for client code generators.",
+                    "responses": { "200": { "description": "OpenAPI JSON document" } }
+                }
+            },
+            "/api/v1/health": { "get": operation(
+                "Service health", "Public localhost-only availability check.", false,
+                json!({ "type": "object", "properties": { "service": { "type": "string", "example": "remotehand-api" } } })
+            )},
+            "/api/v1/core/status": { "get": operation(
+                "Core application status", "RemoteHand version, operating system, and application uptime.", true,
+                json!({ "type": "object", "properties": {
+                    "application": { "type": "string", "example": "RemoteHand" },
+                    "version": { "type": "string", "example": env!("CARGO_PKG_VERSION") },
+                    "platform": { "type": "string", "example": "windows" },
+                    "uptimeSeconds": { "type": "integer", "format": "int64", "minimum": 0 }
+                } })
+            )},
+            "/api/v1/plugins": { "get": operation(
+                "API-enabled plugins", "Currently returns an empty list until plugin API publication is implemented.", true,
+                json!({ "type": "array", "items": { "type": "object" } })
+            )},
+            "/api/v1/routes": { "get": operation(
+                "Route discovery", "Lists the currently active HTTP paths and their authentication requirements.", true,
+                json!({ "type": "array", "items": {
+                    "type": "object", "properties": {
+                        "method": { "type": "string" },
+                        "path": { "type": "string" },
+                        "authRequired": { "type": "boolean" }
+                    }
+                } })
+            )}
+        }
+    })
+}
+
 fn response_for(path: &str, auth: Option<&str>, expected: &str, since: Instant)
     -> (u16, Value)
 {
+    if path == "/api/openapi.json" {
+        return (200, openapi_spec());
+    }
     if path == "/api/v1/health" {
         return (200, json!({ "status": "ok", "data": { "service": "remotehand-api" } }));
     }
@@ -287,10 +390,17 @@ fn serve_connection(mut stream: TcpStream, credentials: &Arc<Mutex<String>>, sin
         let expected = match credentials.lock() { Ok(token) => token.clone(), Err(_) => return };
         response_for(parts[1], auth, &expected, since)
     };
-    let body = body.to_string();
+    let is_docs = parts.len() == 3 && parts[0] == "GET" && parts[1] == "/api/docs"
+        && request.contains("\\r\\n\\r\\n");
+    let is_docs = is_docs && code == 401;
+    let (code, body, content_type) = if is_docs {
+        (200, include_str!("api_docs.html").to_owned(), "text/html; charset=utf-8")
+    } else {
+        (code, body.to_string(), "application/json; charset=utf-8")
+    };
     let reason = match code { 200 => "OK", 400 => "Bad Request", 401 => "Unauthorized",
         404 => "Not Found", 405 => "Method Not Allowed", _ => "Error" };
-    let headers = format!("HTTP/1.1 {code} {reason}\r\nContent-Type: application/json; charset=utf-8\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\nContent-Length: {}\r\n\r\n", body.len());
+    let headers = format!("HTTP/1.1 {code} {reason}\r\nContent-Type: {content_type}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\nContent-Length: {}\r\n\r\n", body.len());
     let _ = stream.write_all(headers.as_bytes());
     let _ = stream.write_all(body.as_bytes());
 }
@@ -302,10 +412,16 @@ mod tests {
     fn routes_are_read_only_and_protected() {
         let since = Instant::now();
         assert_eq!(response_for("/api/v1/health", None, "secret", since).0, 200);
-        for path in &ROUTES[1..] {
+        for path in &ROUTES[3..] {
             assert_eq!(response_for(path, None, "secret", since).0, 401);
             assert_eq!(response_for(path, Some("Bearer secret"), "secret", since).0, 200);
         }
+        assert_eq!(response_for("/api/openapi.json", None, "secret", since).0, 200);
+        let spec = openapi_spec();
+        for route in ROUTES {
+            assert!(spec["paths"].get(route).is_some(), "Missing OpenAPI path: {route}");
+        }
+        assert_eq!(spec["openapi"], "3.0.3");
         assert_eq!(response_for("/api/v1/unknown", Some("Bearer secret"), "secret", since).0, 404);
         assert!(!authorized(Some("Bearer secrex"), "secret"));
     }
