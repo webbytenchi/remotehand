@@ -761,6 +761,7 @@ const [apiDraft, setApiDraft] = useState({
 port: 8765, bindAddress: "127.0.0.1", tlsEnabled: false,
 certificatePath: "", keyPath: ""
 });
+const [pendingApiBinding, setPendingApiBinding] = useState<typeof apiDraft | null>(null);
 const [apiStatus, setApiStatus] = useState<ApiStatus | null>(null);
 const [apiHistory, setApiHistory] = useState<ApiHistorySnapshot | null>(null);
 const [apiHistoryError, setApiHistoryError] = useState("");
@@ -780,6 +781,7 @@ setGlobalShortcutCapturing(false);
 setGlobalShortcutError("");
 setApiToken("");
 setApiTokenVisible(false);
+setPendingApiBinding(null);
 setSettingsOpen(false);
 }, [settings.globalShortcut]);
 const [papaTabUnlocked, setPapaTabUnlocked] = useState(false);
@@ -2922,23 +2924,20 @@ setApiDraft((current) => ({ ...current, bindAddress: address }));
 ) : null}
 <button type="button" className="settings-reset" style={{ justifySelf: "start", padding: "9px 12px" }}
 onClick={() => {
-if (apiDraft.tlsEnabled && (!apiDraft.certificatePath.trim() || !apiDraft.keyPath.trim())) {
+const candidate = { ...apiDraft, bindAddress: apiDraft.bindAddress.trim(), certificatePath: apiDraft.certificatePath.trim(), keyPath: apiDraft.keyPath.trim() };
+if (candidate.tlsEnabled && (!candidate.certificatePath || !candidate.keyPath)) {
 setApiError("HTTPS requires a TLS certificate and matching private key.");
 return;
 }
-if (apiDraft.bindAddress !== "127.0.0.1") {
-const warning = apiDraft.tlsEnabled
-? "Enable RemoteHand HTTPS access on this network interface? Confirm the certificate is trusted and firewall rules restrict access to trusted clients."
-: "SECURITY WARNING: This exposes your API and Bearer tokens over UNENCRYPTED HTTP. Anyone observing this network could steal access credentials. Only use an isolated, trusted network; never expose this port publicly. Continue?";
-if (!window.confirm(warning)) return;
+if (candidate.bindAddress !== "127.0.0.1") {
+setPendingApiBinding(candidate);
+return;
 }
 setApiError("");
-setSettings((current) => ({ ...current,
-apiPort: apiDraft.port,
-apiBindAddress: apiDraft.bindAddress.trim(),
-apiTlsEnabled: apiDraft.tlsEnabled,
-apiTlsCertificatePath: apiDraft.certificatePath.trim(),
-apiTlsKeyPath: apiDraft.keyPath.trim()
+setSettings((current) => ({
+...current, apiPort: candidate.port, apiBindAddress: candidate.bindAddress,
+apiTlsEnabled: candidate.tlsEnabled,
+apiTlsCertificatePath: candidate.certificatePath, apiTlsKeyPath: candidate.keyPath
 }));
 }}>Apply listening configuration</button>
 <div className="plugin-security-note">
@@ -3091,6 +3090,44 @@ Reset shortcuts
 </div>
 </div>
 )}
+</AppModal>
+<AppModal
+open={pendingApiBinding !== null}
+title="Confirm API network access"
+className="api-bind-confirm-modal"
+confirmLabel="Apply configuration"
+cancelLabel="Cancel"
+danger={!pendingApiBinding?.tlsEnabled}
+focusDialog
+restoreFocus
+elevated
+onCancel={() => setPendingApiBinding(null)}
+onConfirm={() => {
+if (!pendingApiBinding) return;
+setSettings((current) => ({
+...current,
+apiPort: pendingApiBinding.port,
+apiBindAddress: pendingApiBinding.bindAddress,
+apiTlsEnabled: pendingApiBinding.tlsEnabled,
+apiTlsCertificatePath: pendingApiBinding.certificatePath,
+apiTlsKeyPath: pendingApiBinding.keyPath,
+}));
+setApiError("");
+setPendingApiBinding(null);
+}}
+>
+<div className="api-bind-confirm-content">
+<strong>{pendingApiBinding?.tlsEnabled ? "Enable HTTPS network access?" : "Security warning: unencrypted API access"}</strong>
+<p>{pendingApiBinding?.tlsEnabled
+? "RemoteHand will accept HTTPS connections on the selected network interface. Confirm that your certificate is trusted by clients and the firewall limits access to approved devices."
+: "RemoteHand will expose API data and Bearer tokens over unencrypted HTTP. Anyone able to observe the network traffic could capture an access token. Use this only on an isolated, trusted network. Never expose this port publicly."}</p>
+<div className="plugin-security-note">
+<span>Listening address: {pendingApiBinding?.bindAddress}</span>
+<span>Port: {pendingApiBinding?.port}</span>
+<span>Transport: {pendingApiBinding?.tlsEnabled ? "HTTPS (TLS)" : "HTTP (unencrypted)"}</span>
+</div>
+<p>RemoteHand will not modify Windows Firewall rules automatically. The API stops when RemoteHand exits.</p>
+</div>
 </AppModal>
 {paletteOpen && (
 <div className="palette-backdrop" role="presentation" onMouseDown={() => setPaletteOpen(false)}>
