@@ -11,7 +11,9 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-const MAX_ENTRIES: usize = 1000;
+pub const DEFAULT_MAX_ENTRIES: usize = 1000;
+pub const MIN_MAX_ENTRIES: usize = 100;
+pub const MAX_MAX_ENTRIES: usize = 10000;
 const PERSIST_INTERVAL: Duration = Duration::from_millis(500);
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -38,6 +40,7 @@ enum Message {
     Append(HistoryEntry),
     Clear(SyncSender<Result<(), String>>),
     Flush(SyncSender<Result<(), String>>),
+    SetLimit(usize, SyncSender<Result<(), String>>),
 }
 
 #[derive(Clone)]
@@ -59,8 +62,8 @@ fn load() -> VecDeque<HistoryEntry> {
         log::warn!("API history is unreadable; starting a new in-memory history");
         return VecDeque::new();
     };
-    if entries.len() > MAX_ENTRIES {
-        entries.drain(..entries.len() - MAX_ENTRIES);
+    if entries.len() > MAX_MAX_ENTRIES {
+        entries.drain(..entries.len() - MAX_MAX_ENTRIES);
     }
     entries.into()
 }
@@ -87,14 +90,27 @@ fn save(entries: &VecDeque<HistoryEntry>) -> Result<(), String> {
 
 fn writer(entries: Arc<Mutex<VecDeque<HistoryEntry>>>, rx: Receiver<Message>) {
     let mut dirty = false;
+    let mut max_entries = DEFAULT_MAX_ENTRIES;
     loop {
         match rx.recv_timeout(PERSIST_INTERVAL) {
             Ok(Message::Append(entry)) => {
                 if let Ok(mut history) = entries.lock() {
                     history.push_back(entry);
-                    while history.len() > MAX_ENTRIES { history.pop_front(); }
+                    while history.len() > max_entries { history.pop_front(); }
                     dirty = true;
                 }
+            }
+            Ok(Message::SetLimit(limit, reply)) => {
+                max_entries = limit;
+                let result = match entries.lock() {
+                    Ok(mut history) => {
+                        while history.len() > max_entries { history.pop_front(); }
+                        save(&history)
+                    }
+                    Err(error) => Err(error.to_string()),
+                };
+                if result.is_ok() { dirty = false; }
+                let _ = reply.send(result);
             }
             Ok(Message::Flush(reply)) => {
                 let result = match entries.lock() { Ok(history) => save(&history), Err(error) => Err(error.to_string()) };
@@ -172,6 +188,23 @@ impl ApiHistory {
             entries: entries.iter().rev().take(100).cloned().collect(),
             total, succeeded, failed: total - succeeded,
         })
+    }
+
+    pub fn all_entries(&self) -> Result<Vec<HistoryEntry>, String> {
+        // Flush queued appends before snapshotting so export includes all
+        // accepted requests, rather than only those visible in the UI.
+        self.flush()?;
+        let entries = self.entries.lock().map_err(|e| e.to_string())?;
+        Ok(entries.iter().rev().cloned().collect())
+    }
+
+    pub fn set_limit(&self, limit: usize) -> Result<(), String> {
+        if !(MIN_MAX_ENTRIES..=MAX_MAX_ENTRIES).contains(&limit) {
+            return Err(format!("History retention must be between {MIN_MAX_ENTRIES} and {MAX_MAX_ENTRIES}"));
+        }
+        let (tx, rx) = mpsc::sync_channel(1);
+        self.tx.send(Message::SetLimit(limit, tx)).map_err(|e| e.to_string())?;
+        rx.recv_timeout(Duration::from_secs(5)).map_err(|e| e.to_string())?
     }
 
     pub fn flush(&self) -> Result<(), String> {
