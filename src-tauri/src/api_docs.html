@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<title>RemoteHand API Documentation</title>
+<style>
+:root{color-scheme:dark;font:14px system-ui,Segoe UI,sans-serif;background:#0b1018;color:#e2e8f0}*{box-sizing:border-box}
+body{margin:0}header{padding:24px max(24px,calc((100vw - 1050px)/2));background:#131c29;border-bottom:1px solid #28374c}
+main{max-width:1050px;margin:0 auto;padding:24px}h1{font-size:27px;margin:0 0 7px}h2{font-size:18px}p,.muted{color:#aab8c9;line-height:1.6}
+a{color:#83b6ff}button{cursor:pointer;background:#203c63;border:1px solid #4978b7;color:#fff;padding:9px 13px;border-radius:6px}
+button:hover{background:#305685}input{width:100%;padding:10px;background:#0c1420;color:#fff;border:1px solid #44566d;border-radius:6px}
+.toolbar{border:1px solid #34445b;border-radius:10px;padding:16px;margin-bottom:24px;background:#152031;display:grid;gap:12px}
+.toolbar div{display:flex;justify-content:space-between;gap:12px;align-items:center}.toolbar label{font-weight:600}
+.endpoint{margin:12px 0;border:1px solid #364861;border-radius:8px;background:#121b29;overflow:hidden}
+.endpoint summary{list-style:none;display:flex;align-items:center;gap:14px;padding:13px;cursor:pointer}
+.endpoint summary::-webkit-details-marker{display:none}.method{font-weight:800;color:#7adab9;background:#104935;padding:5px 10px;border-radius:4px}
+.path{font:600 14px ui-monospace,SFMono-Regular,Consolas,monospace}.desc{margin-left:auto;color:#a2b3c8;font-size:13px}
+.content{padding:16px;border-top:1px solid #364861}pre{white-space:pre-wrap;word-break:break-word;overflow:auto;padding:14px;background:#070c14;border-radius:6px;border:1px solid #26354a}
+.code{font-family:ui-monospace,Consolas,monospace}small{color:#aab8c9}#notice{color:#ffd18b}
+@media(max-width:600px){.desc{display:none}.toolbar div{align-items:start;flex-direction:column}}
+</style>
+</head>
+<body>
+<header><h1>RemoteHand API</h1><p>OpenAPI 3.0 · Local, read-only service · <a href="/api/openapi.json">View OpenAPI JSON</a></p></header>
+<main>
+<section class="toolbar">
+  <div><label for="token">Authorization — Bearer token</label><button id="clear" type="button">Clear token</button></div>
+  <input id="token" type="password" placeholder="Paste the token from RemoteHand Settings → API Server" autocomplete="off" spellcheck="false">
+  <small>Token stays in this page's memory only. It is not saved to browser storage or inserted into the URL. Only run this page on your own trusted computer.</small>
+</section>
+<p id="notice" role="status"></p><div id="endpoints"></div>
+</main>
+<script>
+(async()=>{
+const root=document.getElementById('endpoints');
+const notice=document.getElementById('notice');
+const token=document.getElementById('token');
+document.getElementById('clear').addEventListener('click',()=>token.value='');
+function el(tag,cls,text){const node=document.createElement(tag);if(cls)node.className=cls;if(text!==undefined)node.textContent=text;return node;}
+try{
+ const request=await fetch('/api/openapi.json',{cache:'no-store'});
+ if(!request.ok)throw Error('Specification HTTP '+request.status);
+ const spec=await request.json();
+ for(const [path,methods] of Object.entries(spec.paths)){
+  for(const [method,operation] of Object.entries(methods)){
+   const item=el('details','endpoint');const summary=el('summary');item.append(summary);
+   summary.append(el('span','method',method.toUpperCase()),el('span','path',path),el('span','desc',operation.summary||''));
+   const content=el('div','content');item.append(content);
+   content.append(el('p','',operation.description||operation.summary||''));
+   content.append(el('small','',operation.security?.length?'Requires a Bearer token':'No authorization required'));
+   const actions=el('div');const run=el('button','','Try it out');run.type='button';actions.append(run);content.append(actions);
+   const output=el('pre','code','Select "Try it out" to call this endpoint.');content.append(output);
+   run.addEventListener('click',async()=>{
+    run.disabled=true;output.textContent='Loading…';
+    const headers={};if(operation.security?.length&&token.value)headers.Authorization='Bearer '+token.value;
+    try{
+     const response=await fetch(path,{headers,cache:'no-store'});
+     const raw=await response.text();
+     let formatted=raw;try{formatted=JSON.stringify(JSON.parse(raw),null,2);}catch{}
+     output.textContent='HTTP '+response.status+' '+response.statusText+'\n'+formatted;
+    }catch(e){output.textContent='Request failed: '+String(e);}finally{run.disabled=false;}
+   });
+  root.append(item);
+  }
+ }
+}catch(e){notice.textContent='Could not load OpenAPI specification: '+String(e);}
+})();
+</script>
+</body></html>
