@@ -1,9 +1,9 @@
 //! Manifest-driven read-only plugin API gateway.
 //! A plugin opts in via a separate api.json file; legacy plugin.json stays unchanged
 //! so older RemoteHand hosts can still install the plugin.
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::{collections::{BTreeMap, BTreeSet}, fs, path::PathBuf, time::Duration};
+use std::{collections::{BTreeMap, BTreeSet}, fs, path::PathBuf, sync::{Mutex, OnceLock}, time::Duration};
 use tauri::{AppHandle, Manager};
 
 const MAX_DESCRIPTOR_BYTES: u64 = 64 * 1024;
@@ -42,6 +42,117 @@ pub struct PublishedRoute {
     pub view: String,
     pub summary: String,
     pub description: String,
+}
+
+// API exposure is an independent, persistent opt-out: disabling it never stops a plugin.
+ // Existing installed APIs remain enabled until the operator disables publication.
+#[derive(Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ApiPublicationPreferences {
+    #[serde(default)]
+    disabled_plugins: BTreeSet<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginApiRegistration {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub enabled: bool,
+    pub routes: Vec<String>,
+}
+
+fn preferences_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
+fn preferences_path() -> Result<PathBuf, String> {
+    let exe = std::env::current_exe().map_err(|error| error.to_string())?;
+    Ok(exe.parent().ok_or("missing executable directory")?
+        .join("data").join("config").join("plugin-api-routes.json"))
+}
+
+fn load_preferences() -> Result<ApiPublicationPreferences, String> {
+    let path = preferences_path()?;
+    let metadata = match fs::symlink_metadata(&path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(ApiPublicationPreferences::default())
+        }
+        Err(error) => return Err(error.to_string()),
+    };
+    if !metadata.file_type().is_file() || metadata.file_type().is_symlink() || metadata.len() > 64 * 1024 {
+        return Err("invalid API publication preferences file".to_owned());
+    }
+    let text = fs::read_to_string(&path).map_err(|error| error.to_string())?;
+    serde_json::from_str(&text).map_err(|_| "invalid API publication preferences JSON".to_owned())
+}
+
+fn save_preferences(preferences: &ApiPublicationPreferences) -> Result<(), String> {
+    let path = preferences_path()?;
+    let parent = path.parent().ok_or("invalid preferences path")?;
+    fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    let contents = serde_json::to_vec_pretty(preferences).map_err(|error| error.to_string())?;
+    match fs::symlink_metadata(&path) {
+        Ok(metadata) if !metadata.file_type().is_file() || metadata.file_type().is_symlink() =>
+            return Err("unsafe API publication preferences file".to_owned()),
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound =>
+            return Err(error.to_string()),
+        _ => {}
+    }
+    // Never delete the existing deny-list before writing: a missing file enables
+    // legacy API routes by default. An interrupted write instead fails closed.
+    fs::write(path, contents).map_err(|error| error.to_string())
+}
+
+fn publication_allowed(plugin_id: &str, preferences: &ApiPublicationPreferences) -> bool {
+    !preferences.disabled_plugins.contains(plugin_id)
+}
+
+/// Provides all valid API registrations even if HTTP publication is switched off.
+pub fn plugin_api_registrations() -> Result<Vec<PluginApiRegistration>, String> {
+    let _guard = preferences_lock().lock().map_err(|error| error.to_string())?;
+    let preferences = load_preferences()?;
+    let plugins = crate::plugins::plugin_list()?;
+    let all = discover_routes(false);
+    let mut results = Vec::new();
+    for plugin in plugins.into_iter().filter(|p| p.enabled) {
+        let paths: Vec<_> = all.iter().filter(|route| route.plugin_id == plugin.manifest.id)
+            .map(|route| route.path.clone()).collect();
+        if paths.is_empty() { continue; }
+        results.push(PluginApiRegistration {
+            id: plugin.manifest.id.clone(),
+            name: plugin.manifest.name.clone(),
+            version: plugin.manifest.version.clone(),
+            enabled: publication_allowed(&plugin.manifest.id, &preferences),
+            routes: paths,
+        });
+    }
+    results.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.id.cmp(&b.id)));
+    Ok(results)
+}
+
+#[tauri::command]
+pub fn api_server_plugin_routes() -> Result<Vec<PluginApiRegistration>, String> {
+    plugin_api_registrations()
+}
+
+#[tauri::command]
+pub fn api_server_set_plugin_routes_enabled(plugin_id: String, enabled: bool) -> Result<Vec<PluginApiRegistration>, String> {
+    let _guard = preferences_lock().lock().map_err(|error| error.to_string())?;
+    // Only an installed, enabled, valid API-publishing plugin can be modified.
+    let routes = discover_routes(false);
+    if !routes.iter().any(|route| route.plugin_id == plugin_id) {
+        return Err("plugin has no enabled API registration".to_owned());
+    }
+    let mut preferences = load_preferences()?;
+    if enabled { preferences.disabled_plugins.remove(&plugin_id); }
+    else { preferences.disabled_plugins.insert(plugin_id); }
+    save_preferences(&preferences)?;
+    drop(_guard);
+    plugin_api_registrations()
 }
 
 fn valid_segment(s: &str) -> bool {
@@ -133,13 +244,20 @@ fn descriptor_path(plugin: &crate::plugins::PluginInfo) -> Result<PathBuf, Strin
 
 /// Discovers enabled plugin API routes on demand, with no host release for new plugins.
 /// A malformed descriptor excludes its plugin's routes without breaking other plugins.
-pub fn published_routes() -> Vec<PublishedRoute> {
+fn discover_routes(include_publication_filter: bool) -> Vec<PublishedRoute> {
     let plugins = match crate::plugins::plugin_list() {
         Ok(plugins) => plugins,
         Err(error) => { log::warn!("API plugin discovery failed: {error}"); return vec![]; }
     };
+    let preferences = if include_publication_filter {
+        match load_preferences() {
+            Ok(preferences) => preferences,
+            Err(error) => { log::warn!("API publication preferences invalid: {error}"); return vec![]; }
+        }
+    } else { ApiPublicationPreferences::default() };
     let mut routes = Vec::new();
     for plugin in plugins.into_iter().filter(|p| p.enabled) {
+        if !publication_allowed(&plugin.manifest.id, &preferences) { continue; }
         let path = match descriptor_path(&plugin) {
             Ok(path) => path,
             Err(_) => continue,
@@ -172,6 +290,10 @@ pub fn published_routes() -> Vec<PublishedRoute> {
         }
     }
     routes
+}
+
+pub fn published_routes() -> Vec<PublishedRoute> {
+    discover_routes(true)
 }
 
 fn decode_segment(s: &str) -> Option<String> {
@@ -253,6 +375,22 @@ mod tests {
         assert!(parse_descriptor(r#"{"version":1,"basePath":"/api/v1/core","routes":[{"path":"/status","view":"x","summary":"Bad"}]}"#, "p").is_err());
         assert!(parse_descriptor(r#"{"version":1,"basePath":"/api/v1/x","routes":[{"path":"/{id}","view":"a","summary":"One"},{"path":"/static","view":"b","summary":"Two"}]}"#, "p").is_err());
         assert!(parse_descriptor(r#"{"version":1,"basePath":"/api/v1/x","routes":[{"path":"/../secret","view":"x","summary":"Bad"}]}"#, "p").is_err());
+    }
+    #[test] fn api_publication_switch_is_independent_of_route_definitions() {
+        let routes = parse_descriptor(DESCRIPTOR, "remotehand.target-monitor").unwrap();
+        let mut preferences = ApiPublicationPreferences::default();
+        assert!(publication_allowed("remotehand.target-monitor", &preferences));
+        assert_eq!(routes.len(), 3);
+        preferences.disabled_plugins.insert("remotehand.target-monitor".to_owned());
+        assert!(!publication_allowed("remotehand.target-monitor", &preferences));
+        assert!(publication_allowed("remotehand.system-monitor", &preferences));
+        // Disabling HTTP publication does not change the plugin descriptor or saved target data.
+        assert_eq!(routes.len(), 3);
+        preferences.disabled_plugins.remove("remotehand.target-monitor");
+        assert!(publication_allowed("remotehand.target-monitor", &preferences));
+        let serialized = serde_json::to_string(&preferences).unwrap();
+        let restored: ApiPublicationPreferences = serde_json::from_str(&serialized).unwrap();
+        assert!(publication_allowed("remotehand.target-monitor", &restored));
     }
     #[test] fn old_plugins_without_api_descriptor_have_no_routes() {
         assert!(parse_descriptor(DESCRIPTOR, "remotehand.target-monitor").is_ok());

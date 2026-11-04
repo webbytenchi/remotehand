@@ -342,6 +342,8 @@ pub fn run() {
             storage::load_settings,
             api_server::api_server_configure,
             api_server::api_server_status,
+            api_gateway::api_server_plugin_routes,
+            api_gateway::api_server_set_plugin_routes_enabled,
             api_server::api_server_ipv4_addresses,
             api_server::api_server_copy_url,
             api_server::api_server_history,

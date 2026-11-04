@@ -757,6 +757,7 @@ const [vaultPromptError, setVaultPromptError] = useState("");
 const [vaultPromptBusy, setVaultPromptBusy] = useState(false);
 const [settingsTab, setSettingsTab] = useState<"appearance" | "layout" | "startup" | "vault" | "plugins" | "shortcuts" | "about" | "api" | "papa">("appearance");
 type ApiStatus = { enabled: boolean; running: boolean; port: number; bindAddress: string; tls: boolean; url: string | null; error: string | null };
+type PluginApiRegistration = { id: string; name: string; version: string; enabled: boolean; routes: string[] };
 type ApiHistoryEntry = { timestamp: string; ip: string; method: string; route: string; status: number; durationMs: number };
 type ApiHistorySnapshot = { entries: ApiHistoryEntry[]; total: number; succeeded: number; failed: number };
 const [apiDraft, setApiDraft] = useState({
@@ -777,6 +778,22 @@ void invoke("api_server_copy_url", { url })
 }, []);
 const [apiStatus, setApiStatus] = useState<ApiStatus | null>(null);
 const [apiHistory, setApiHistory] = useState<ApiHistorySnapshot | null>(null);
+const [pluginApiRegistrations, setPluginApiRegistrations] = useState<PluginApiRegistration[]>([]);
+const [pluginApiError, setPluginApiError] = useState("");
+const [pluginApiBusyId, setPluginApiBusyId] = useState("");
+const refreshPluginApiRegistrations = useCallback(() => {
+if (!isTauri()) return;
+void invoke<PluginApiRegistration[]>("api_server_plugin_routes")
+.then((items) => { setPluginApiRegistrations(items); setPluginApiError(""); })
+.catch((error) => setPluginApiError(String(error)));
+}, []);
+const changePluginApiPublication = useCallback((pluginId: string, enabled: boolean) => {
+setPluginApiBusyId(pluginId);
+void invoke<PluginApiRegistration[]>("api_server_set_plugin_routes_enabled", { pluginId, enabled })
+.then((items) => { setPluginApiRegistrations(items); setPluginApiError(""); })
+.catch((error) => setPluginApiError(String(error)))
+.finally(() => setPluginApiBusyId(""));
+}, []);
 const [apiHistoryError, setApiHistoryError] = useState("");
 const [apiHistoryLimitDraft, setApiHistoryLimitDraft] = useState("1000");
 const [apiHistoryActionBusy, setApiHistoryActionBusy] = useState(false);
@@ -1575,9 +1592,10 @@ if (!settingsOpen || settingsTab !== "api" || !isTauri()) return;
 void invoke<ApiStatus>("api_server_status").then(setApiStatus).catch((error) => setApiError(String(error)));
 void invoke<LocalIpv4Address[]>("api_server_ipv4_addresses").then(setApiAvailableIpv4).catch(() => setApiAvailableIpv4([]));
 refreshApiHistory();
-const poll = window.setInterval(refreshApiHistory, 5000);
+refreshPluginApiRegistrations();
+const poll = window.setInterval(() => { refreshApiHistory(); refreshPluginApiRegistrations(); }, 5000);
 return () => window.clearInterval(poll);
-}, [settingsOpen, settingsTab, refreshApiHistory]);
+}, [settingsOpen, settingsTab, refreshApiHistory, refreshPluginApiRegistrations]);
 const shortcutFromKeyboardEvent = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
 if (event.key === "Escape") {
 event.preventDefault();
@@ -3085,7 +3103,33 @@ void invoke("api_server_open_docs").catch((error) => setApiError(String(error)))
 <div className="settings-section-heading">
 <strong>Core routes</strong>
 <span>GET /api/docs · GET /api/openapi.json · GET /api/v1/health · GET /api/v1/core/status · GET /api/v1/plugins · GET /api/v1/routes</span>
-<span>Plugin route publication is reserved for a later milestone. The plugin list is empty until explicitly supported.</span>
+<span>Plugin routes are discovered dynamically from enabled plugins. API publishing is controlled separately from the plugin's own enabled state.</span>
+</div>
+<div className="settings-section-heading">
+<strong>Plugin API Routes</strong>
+<span>Switch off a plugin's API without stopping monitoring or its UI. Disabled API routes disappear from discovery and OpenAPI immediately.</span>
+</div>
+<div className="api-plugin-list">
+<div className="api-plugin-list-header">
+<span>{pluginApiRegistrations.length} registered plugin{pluginApiRegistrations.length === 1 ? "" : "s"}</span>
+<button type="button" className="settings-reset" disabled={Boolean(pluginApiBusyId)} onClick={refreshPluginApiRegistrations}>Refresh</button>
+</div>
+{pluginApiError ? <div className="plugin-error" role="alert">{pluginApiError}</div> : null}
+{pluginApiRegistrations.length === 0 ? <p className="app-modal-muted">No enabled plugins with valid API routes are registered.</p> : pluginApiRegistrations.map((plugin) => (
+<div className="api-plugin-entry" key={plugin.id}>
+<div className="api-plugin-entry-header">
+<div><strong>{plugin.name}</strong><div className="app-modal-muted">{plugin.id} · v{plugin.version} · {plugin.routes.length} GET route{plugin.routes.length === 1 ? "" : "s"}</div></div>
+<label className="api-plugin-toggle">
+<span>{plugin.enabled ? "API enabled" : "API disabled"}</span>
+<input type="checkbox" checked={plugin.enabled} disabled={Boolean(pluginApiBusyId)}
+onChange={(event) => changePluginApiPublication(plugin.id, event.target.checked)} aria-label={`Publish API routes for ${plugin.name}`} />
+</label>
+</div>
+<details><summary>View registered routes</summary>
+<ul>{plugin.routes.map((route) => <li key={route}><code>GET {route}</code></li>)}</ul>
+</details>
+</div>
+))}
 </div>
 <section className="api-access-history">
 <div className="api-history-toolbar">

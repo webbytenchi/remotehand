@@ -2886,3 +2886,30 @@ html[data-theme="light"] .api-tls-file-row input {
   white-space: nowrap;
 }
 html[data-theme="light"] .api-url-copy-hint { color: #526376; }
+
+
+/* Per-plugin HTTP exposure controls; independent of Plugin Manager. */
+.api-plugin-list { display: grid; gap: 10px; min-width: 0; }
+.api-plugin-list-header, .api-plugin-entry-header {
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 10px;
+}
+.api-plugin-list-header { color: #9caac0; font-size: 12px; }
+.api-plugin-entry {
+  min-width: 0; padding: 12px 14px; border: 1px solid #2c394b;
+  border-radius: 9px; background: #111925;
+}
+.api-plugin-entry strong { display: block; margin-bottom: 3px; font-size: 13px; }
+.api-plugin-entry .app-modal-muted { overflow-wrap: anywhere; font-size: 11px; }
+.api-plugin-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; white-space: nowrap; }
+.api-plugin-toggle input { accent-color: var(--accent, #af8cf5); width: 16px; height: 16px; cursor: pointer; }
+.api-plugin-toggle input:disabled { cursor: wait; }
+.api-plugin-entry details { margin-top: 9px; border-top: 1px solid #2c394b; padding-top: 7px; }
+.api-plugin-entry summary { cursor: pointer; font-size: 12px; color: #a6bdde; }
+.api-plugin-entry ul { margin: 8px 0 0; padding-left: 20px; }
+.api-plugin-entry li { margin: 4px 0; overflow-wrap: anywhere; font-size: 11px; }
+.api-plugin-entry code { font-family: ui-monospace, Consolas, monospace; }
+html[data-theme="light"] .api-plugin-entry { background: #f8fafc; border-color: #cbd5e1; }
+html[data-theme="light"] .api-plugin-entry details { border-color: #dbe3ed; }
+html[data-theme="light"] .api-plugin-entry summary { color: #39516e; }
+html[data-theme="light"] .api-plugin-list-header { color: #64748b; }
