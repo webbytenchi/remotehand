@@ -1550,7 +1550,7 @@ impl PluginRuntimeState {
                 .map_err(|_| "plugin call lock poisoned".to_string())?,
         };
 
-        let receiver = {
+        let (receiver, request_id) = {
             let mut sessions = self
                 .sessions
                 .lock()
@@ -1593,12 +1593,25 @@ impl PluginRuntimeState {
                 }
                 return Err(error);
             }
-            receiver
+            (receiver, request_id)
         };
 
         let response = match timeout {
-            Some(limit) => receiver.recv_timeout(limit.saturating_sub(started.elapsed()))
-                .map_err(|error| format!("plugin response timed out or disconnected: {error}"))??,
+            Some(limit) => match receiver.recv_timeout(limit.saturating_sub(started.elapsed())) {
+                Ok(result) => result?,
+                Err(error) => {
+                    // Drop the pending slot on timeout/disconnect; prevent unbounded
+                    // accumulation when clients repeatedly poll an unresponsive plugin.
+                    if let Ok(sessions) = self.sessions.lock() {
+                        if let Some(session) = sessions.get(id) {
+                            if let Ok(mut pending) = session.pending.lock() {
+                                pending.remove(&request_id);
+                            }
+                        }
+                    }
+                    return Err(format!("plugin response timed out or disconnected: {error}"));
+                }
+            },
             None => receiver.recv()
                 .map_err(|_| "plugin response channel closed".to_string())??,
         };
