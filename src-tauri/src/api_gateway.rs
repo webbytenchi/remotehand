@@ -94,14 +94,15 @@ fn save_preferences(preferences: &ApiPublicationPreferences) -> Result<(), Strin
     let path = preferences_path()?;
     let parent = path.parent().ok_or("invalid preferences path")?;
     fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    let temporary = path.with_extension("json.tmp");
     let contents = serde_json::to_vec_pretty(preferences).map_err(|error| error.to_string())?;
-    fs::write(&temporary, contents).map_err(|error| error.to_string())?;
-    // Windows cannot rename over a pre-existing destination.
-    if path.exists() {
-        fs::remove_file(&path).map_err(|error| error.to_string())?;
+    if let Ok(metadata) = fs::symlink_metadata(&path) {
+        if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
+            return Err("unsafe API publication preferences file".to_owned());
+        }
     }
-    fs::rename(&temporary, path).map_err(|error| error.to_string())
+    // Never delete the existing deny-list before writing: a missing file enables
+    // legacy API routes by default. An interrupted write instead fails closed.
+    fs::write(path, contents).map_err(|error| error.to_string())
 }
 
 fn publication_allowed(plugin_id: &str, preferences: &ApiPublicationPreferences) -> bool {
