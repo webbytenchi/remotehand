@@ -1,3 +1,4 @@
+mod api_gateway;
 mod api_history;
 mod api_server;
 mod global_shortcut;
@@ -522,6 +523,7 @@ pub fn run() {
                 .map_err(std::io::Error::other)?;
             let saved = storage::load_settings().map_err(std::io::Error::other)?;
             if let Some(api) = app.try_state::<api_server::ApiServerState>() {
+                api.set_app_handle(app.handle().clone()).map_err(std::io::Error::other)?;
                 if let Err(error) = api.configure(saved.api_enabled, saved.api_port, &saved.api_bind_address, saved.api_tls_enabled, &saved.api_tls_certificate_path, &saved.api_tls_key_path) {
                     log::warn!("API server did not start: {error}");
                 }

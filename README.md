@@ -4,9 +4,15 @@ RemoteHand is an open-source, portable remote workstation manager designed for W
 
 RemoteHand V1 is intentionally focused on the workflows needed for day-to-day terminal and file-based remote administration. Later protocols such as RDP, VNC, and X11 remain roadmap items.
 
+## Generic Plugin API Gateway (v1.4.0)
+
+RemoteHand v1.4.0 introduces a reusable, authenticated **GET-only** gateway for plugin-defined monitoring APIs. Enabled plugins can ship an optional `api.json` descriptor to publish their own routes under `/api/v1/<plugin-path>`, and implement the generic `api.read` IPC method. RemoteHand discovers routes dynamically, so plugins using this v1 contract need no per-plugin Core code changes. The built-in OpenAPI JSON and `/api/docs` explorer list plugin routes automatically and provide inputs for each named path variable (such as `{id}`). Valid parameter values are bounded to ASCII letters, digits, underscore, period and hyphen; raw URLs, query strings, credentials and arbitrary request bodies are not sent to plugins.
+
+The Core API Server remains opt-in and disabled by default. Its existing bearer-token authorization, local/LAN binding controls, HTTPS support and read-only behavior remain in effect. The plugin is solely responsible for sanitizing its returned JSON; a plugin disabling or stopping removes its published routes without altering other plugins. API access through Core requires compatible plugin versions such as **System Monitor v0.5.2** and **Target Monitor v0.7.12**. See [Generic Plugin API Gateway v1](docs/SYSTEM-MONITOR-API-V1.md) and [Core API Server](docs/CORE-API-SERVER.md).
+
 ## Downloads
 
-Get the latest published release from the [GitHub Releases page](https://github.com/webbytenchi/remotehand/releases/latest). The current v1.3.8 release provides Windows x64 builds: a standalone `.exe`, a portable `.zip`, and `SHA256SUMS.txt` for checksum verification. These are portable builds, not an installer.
+Get the latest published release from the [GitHub Releases page](https://github.com/webbytenchi/remotehand/releases/latest). The v1.4.0 release includes the generic read-only Plugin API Gateway, dynamic OpenAPI explorer and path-variable inputs, plus the existing Windows x64 standalone `.exe`, portable `.zip`, and `SHA256SUMS.txt` artifacts. Until v1.4.0 is published, download the latest publicly available version from GitHub Releases. These are portable builds, not an installer.
 
 A prebuilt Linux release artifact is not currently published. Linux users can review the source-build prerequisites and commands in [Development](#development); Linux release packaging and validation remain to be confirmed.
 

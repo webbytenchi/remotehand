@@ -60,6 +60,7 @@ pub struct ApiServerState {
     inner: Mutex<Inner>,
     started: Instant,
     history: ApiHistory,
+    app_handle: Mutex<Option<tauri::AppHandle>>,
 }
 
 impl Default for ApiServerState {
@@ -74,6 +75,7 @@ impl Default for ApiServerState {
             }),
             started: Instant::now(),
             history: ApiHistory::default(),
+            app_handle: Mutex::new(None),
         }
     }
 }
@@ -134,6 +136,11 @@ fn create_token() -> Result<String, String> {
 }
 
 impl ApiServerState {
+    pub fn set_app_handle(&self, app: tauri::AppHandle) -> Result<(), String> {
+        *self.app_handle.lock().map_err(|e| e.to_string())? = Some(app);
+        Ok(())
+    }
+
     pub fn configure(
         &self, enabled: bool, port: u16, bind_address: &str,
         tls_enabled: bool, certificate_path: &str, key_path: &str
@@ -180,6 +187,7 @@ impl ApiServerState {
         let credentials = inner.credential.clone();
         let since = self.started;
         let history = self.history.clone();
+        let app_handle = self.app_handle.lock().map_err(|e| e.to_string())?.clone();
         let worker = thread::Builder::new()
             .name("remotehand-api".into())
             .spawn(move || {
@@ -209,7 +217,7 @@ impl ApiServerState {
                                         match handshake {
                                             Ok(()) => {
                                                 let secured = StreamOwned::new(connection, stream);
-                                                serve_connection(secured, peer, &credentials, since, &history);
+                                                serve_connection(secured, peer, &credentials, since, &history, app_handle.as_ref());
                                             }
                                             Err(error) => log::warn!("API TLS handshake failed for {peer}: {error}"),
                                         }
@@ -217,7 +225,7 @@ impl ApiServerState {
                                     Err(error) => log::warn!("API TLS setup failed for {peer}: {error}"),
                                 }
                             } else {
-                                serve_connection(stream, peer, &credentials, since, &history);
+                                serve_connection(stream, peer, &credentials, since, &history, app_handle.as_ref());
                             }
                         },
                         Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
@@ -309,6 +317,7 @@ impl ApiServerState {
 #[tauri::command]
 pub fn api_server_configure(
     state: tauri::State<'_, ApiServerState>,
+    app: tauri::AppHandle,
     enabled: bool,
     port: u16,
     bind_address: String,
@@ -316,6 +325,7 @@ pub fn api_server_configure(
     certificate_path: String,
     key_path: String,
 ) -> Result<ApiStatus, String> {
+    state.set_app_handle(app)?;
     state.configure(enabled, port, &bind_address, tls_enabled, &certificate_path, &key_path)
 }
 
@@ -535,12 +545,12 @@ fn openapi_spec() -> Value {
         }
         value
     };
-    json!({
+    let mut spec = json!({
         "openapi": "3.0.3",
         "info": {
             "title": "RemoteHand Core API",
             "version": "1.0.0",
-            "description": "Opt-in read-only API for localhost or explicitly selected IPv4 interfaces. Runs only while RemoteHand is running. Plugin API publication is not implemented yet."
+            "description": "Opt-in, read-only, authenticated API with dynamically discovered routes from enabled plugins providing api.json."
         },
         "servers": [{ "url": "/", "description": "Current RemoteHand API listener" }],
         "components": {
@@ -581,11 +591,11 @@ fn openapi_spec() -> Value {
                 } })
             )},
             "/api/v1/plugins": { "get": operation(
-                "API-enabled plugins", "Currently returns an empty list until plugin API publication is implemented.", true,
+                "API-enabled plugins", "Lists enabled plugins publishing validated API routes.", true,
                 json!({ "type": "array", "items": { "type": "object" } })
             )},
             "/api/v1/routes": { "get": operation(
-                "Route discovery", "Lists the currently active HTTP paths and their authentication requirements.", true,
+                "Route discovery", "Lists Core and dynamically discovered enabled plugin routes.", true,
                 json!({ "type": "array", "items": {
                     "type": "object", "properties": {
                         "method": { "type": "string" },
@@ -593,10 +603,33 @@ fn openapi_spec() -> Value {
                         "authRequired": { "type": "boolean" }
                     }
                 } })
-            )}
+            )},
+
         }
-    })
+    });
+    for route in crate::api_gateway::published_routes() {
+        spec["paths"][route.path.as_str()] = json!({"get": operation(
+            &route.summary, &route.description, true,
+            json!({"type":"object"})
+        )});
+        spec["paths"][route.path.as_str()]["get"]["responses"]["503"] =
+            json!({"description":"Plugin runtime unavailable or incompatible"});
+        spec["paths"][route.path.as_str()]["get"]["responses"]["502"] =
+            json!({"description":"Invalid or oversized plugin response"});
+        let parameters = route.path.split('/').filter_map(|segment| {
+            segment.strip_prefix('{').and_then(|name| name.strip_suffix('}'))
+                .map(|name| json!({
+                    "name": name, "in": "path", "required": true,
+                    "schema": {"type": "string", "minLength": 1, "maxLength": 128}
+                }))
+        }).collect::<Vec<_>>();
+        if !parameters.is_empty() {
+            spec["paths"][route.path.as_str()]["get"]["parameters"] = json!(parameters);
+        }
+    }
+    spec
 }
+
 
 fn response_for(path: &str, auth: Option<&str>, expected: &str, since: Instant)
     -> (u16, Value)
@@ -622,15 +655,25 @@ fn response_for(path: &str, auth: Option<&str>, expected: &str, since: Instant)
                 "uptimeSeconds": since.elapsed().as_secs()
             }
         })),
-        // Plugin API publication is not implemented yet. Do not expose plugin
-        // package paths, permissions, or installed names prematurely.
-        "/api/v1/plugins" => (200, json!({ "status": "ok", "data": [] })),
-        "/api/v1/routes" => (200, json!({
-            "status": "ok", "data": ROUTES.iter().map(|path| json!({
+        "/api/v1/plugins" => {
+            let mut ids: Vec<String> = crate::api_gateway::published_routes()
+                .into_iter().map(|r| r.plugin_id).collect();
+            ids.sort();
+            ids.dedup();
+            (200, json!({"status":"ok","data": ids.into_iter()
+                .map(|id| json!({"id":id})).collect::<Vec<_>>()}))
+        },
+        "/api/v1/routes" => {
+            let mut routes = ROUTES.iter().map(|path| json!({
                 "method": "GET", "path": path,
                 "authRequired": *path != "/api/v1/health" && *path != "/api/docs" && *path != "/api/openapi.json"
-            })).collect::<Vec<_>>()
-        })),
+            })).collect::<Vec<_>>();
+            routes.extend(crate::api_gateway::published_routes().iter().map(|r| json!({
+                "method": "GET", "path": r.path, "authRequired": true,
+                "pluginId": r.plugin_id
+            })));
+            (200, json!({"status":"ok","data":routes}))
+        },
         _ => (404, json!({ "status": "error", "error": "not_found" })),
     }
 }
@@ -638,6 +681,7 @@ fn response_for(path: &str, auth: Option<&str>, expected: &str, since: Instant)
 fn serve_connection<S: Read + Write>(
     mut stream: S, peer: SocketAddr, credentials: &Arc<Mutex<String>>, since: Instant,
     history: &ApiHistory,
+    app: Option<&tauri::AppHandle>,
 ) {
     let started = Instant::now();
     let mut buf = [0u8; 4096];
@@ -660,7 +704,16 @@ fn serve_connection<S: Read + Write>(
             name.eq_ignore_ascii_case("authorization").then_some(value.trim())
         }));
         let expected = match credentials.lock() { Ok(token) => token.clone(), Err(_) => return };
-        response_for(parts[1], auth, &expected, since)
+        if authorized(auth, &expected) {
+            let routes = crate::api_gateway::published_routes();
+            if let Some((route, params)) = crate::api_gateway::match_route(parts[1], &routes) {
+                crate::api_gateway::read(&route, params, app)
+            } else {
+                response_for(parts[1], auth, &expected, since)
+            }
+        } else {
+            response_for(parts[1], auth, &expected, since)
+        }
     };
     let is_docs = parts.len() == 3 && parts[0] == "GET" && parts[1] == "/api/docs"
         && request.contains("\r\n\r\n") && code == 200;
@@ -670,7 +723,7 @@ fn serve_connection<S: Read + Write>(
         (code, body.to_string(), "application/json; charset=utf-8")
     };
     let reason = match code { 200 => "OK", 400 => "Bad Request", 401 => "Unauthorized",
-        404 => "Not Found", 405 => "Method Not Allowed", _ => "Error" };
+        404 => "Not Found", 405 => "Method Not Allowed", 502 => "Bad Gateway", 503 => "Service Unavailable", _ => "Error" };
     let headers = format!("HTTP/1.1 {code} {reason}\r\nContent-Type: {content_type}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\nContent-Length: {}\r\n\r\n", body.len());
     let _ = stream.write_all(headers.as_bytes());
     let _ = stream.write_all(body.as_bytes());

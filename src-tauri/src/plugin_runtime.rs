@@ -1493,6 +1493,27 @@ impl PluginRuntimeState {
         method: &str,
         params: serde_json::Value,
     ) -> Result<serde_json::Value, String> {
+        self.call_internal(id, method, params, None)
+    }
+
+    // Bounded calls for external HTTP clients; existing UI calls remain unchanged.
+    pub fn call_with_timeout(
+        &self,
+        id: &str,
+        method: &str,
+        params: serde_json::Value,
+        timeout: Duration,
+    ) -> Result<serde_json::Value, String> {
+        self.call_internal(id, method, params, Some(timeout))
+    }
+
+    fn call_internal(
+        &self,
+        id: &str,
+        method: &str,
+        params: serde_json::Value,
+        timeout: Option<Duration>,
+    ) -> Result<serde_json::Value, String> {
         if !valid_message_name(method) {
             return Err("invalid plugin method".to_string());
         }
@@ -1508,11 +1529,28 @@ impl PluginRuntimeState {
                 .call_lock
                 .clone()
         };
-        let _call_guard = call_lock
-            .lock()
-            .map_err(|_| "plugin call lock poisoned".to_string())?;
+        // An HTTP call must not wait forever behind an already-running UI call.
+        let started = std::time::Instant::now();
+        let _call_guard = match timeout {
+            Some(limit) => loop {
+                match call_lock.try_lock() {
+                    Ok(guard) => break guard,
+                    Err(std::sync::TryLockError::WouldBlock) => {
+                        if started.elapsed() >= limit {
+                            return Err("plugin call queue timed out".to_string());
+                        }
+                        thread::sleep(Duration::from_millis(10));
+                    },
+                    Err(std::sync::TryLockError::Poisoned(_)) => {
+                        return Err("plugin call lock poisoned".to_string());
+                    }
+                }
+            },
+            None => call_lock.lock()
+                .map_err(|_| "plugin call lock poisoned".to_string())?,
+        };
 
-        let receiver = {
+        let (receiver, request_id) = {
             let mut sessions = self
                 .sessions
                 .lock()
@@ -1555,12 +1593,28 @@ impl PluginRuntimeState {
                 }
                 return Err(error);
             }
-            receiver
+            (receiver, request_id)
         };
 
-        let response = receiver
-            .recv()
-            .map_err(|_| "plugin response channel closed".to_string())??;
+        let response = match timeout {
+            Some(limit) => match receiver.recv_timeout(limit.saturating_sub(started.elapsed())) {
+                Ok(result) => result?,
+                Err(error) => {
+                    // Drop the pending slot on timeout/disconnect; prevent unbounded
+                    // accumulation when clients repeatedly poll an unresponsive plugin.
+                    if let Ok(sessions) = self.sessions.lock() {
+                        if let Some(session) = sessions.get(id) {
+                            if let Ok(mut pending) = session.pending.lock() {
+                                pending.remove(&request_id);
+                            }
+                        }
+                    }
+                    return Err(format!("plugin response timed out or disconnected: {error}"));
+                }
+            },
+            None => receiver.recv()
+                .map_err(|_| "plugin response channel closed".to_string())??,
+        };
         if response.message_type != "plugin.response" {
             return Err("plugin returned an unexpected message type".to_string());
         }

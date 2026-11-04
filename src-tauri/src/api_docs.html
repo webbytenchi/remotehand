@@ -18,7 +18,13 @@ button:hover{background:#305685}input{width:100%;padding:10px;background:#0c1420
 .endpoint summary::-webkit-details-marker{display:none}.method{font-weight:800;color:#7adab9;background:#104935;padding:5px 10px;border-radius:4px}
 .path{font:600 14px ui-monospace,SFMono-Regular,Consolas,monospace}.desc{margin-left:auto;color:#a2b3c8;font-size:13px}
 .content{padding:16px;border-top:1px solid #364861}pre{white-space:pre-wrap;word-break:break-word;overflow:auto;padding:14px;background:#070c14;border-radius:6px;border:1px solid #26354a}
-.code{font-family:ui-monospace,Consolas,monospace}small{color:#aab8c9}#notice{color:#ffd18b}
+.code{font-family:ui-monospace,Consolas,monospace}
+.path-params{display:grid;gap:10px;margin:14px 0 10px;max-width:580px}
+.path-param{display:grid;gap:5px}
+.path-param label{font-weight:600;color:#e2e8f0}
+.path-param small{font-weight:400}
+.path-param input:invalid{border-color:#e1a46d}
+small{color:#aab8c9}#notice{color:#ffd18b}
 @media(max-width:600px){.desc{display:none}.toolbar div{align-items:start;flex-direction:column}}
 </style>
 </head>
@@ -50,13 +56,49 @@ try{
    const content=el('div','content');item.append(content);
    content.append(el('p','',operation.description||operation.summary||''));
    content.append(el('small','',operation.security?.length?'Requires a Bearer token':'No authorization required'));
+   // Path parameters are defined by OpenAPI and must be substituted before a request.
+   // Keep values local to this endpoint; never put the bearer token into the URL.
+   const params=(operation.parameters||[]).filter(p=>p.in==='path');
+   const inputs=[];
+   if(params.length){
+    const fields=el('div','path-params');
+    for(const p of params){
+     const field=el('div','path-param');
+     const label=el('label','',p.name+' (required)');
+     const input=el('input');
+     input.type='text';input.required=true;input.autocomplete='off';input.spellcheck=false;
+     input.placeholder='Enter '+p.name;
+     input.maxLength=Math.min(p.schema?.maxLength||128,128);
+     const id='path-param-'+Math.random().toString(36).slice(2);
+     input.id=id;label.htmlFor=id;
+     input.addEventListener('input',()=>input.setCustomValidity(''));
+     field.append(label,input);
+     fields.append(field);
+     inputs.push({name:p.name,input});
+    }
+    content.append(fields);
+   }
    const actions=el('div');const run=el('button','','Try it out');run.type='button';actions.append(run);content.append(actions);
    const output=el('pre','code','Select "Try it out" to call this endpoint.');content.append(output);
    run.addEventListener('click',async()=>{
+    // Gateway v1 deliberately accepts only literal ASCII segment characters,
+    // rejecting percent-encoded paths. Validate before making any network call.
+    let requestPath=path;
+    for(const {name,input} of inputs){
+     const value=input.value.trim();
+     if(!/^[A-Za-z0-9_.-]{1,128}$/.test(value)||value==='.'||value==='..'){
+      input.setCustomValidity('Use 1–128 ASCII letters, numbers, hyphens, underscores or dots (not . or ..).');
+      input.reportValidity();input.focus();
+      output.textContent='Enter a valid '+name+' path value before calling this endpoint.';
+      return;
+     }
+     input.setCustomValidity('');
+     requestPath=requestPath.replace('{'+name+'}',value);
+    }
     run.disabled=true;output.textContent='Loading…';
     const headers={};if(operation.security?.length&&token.value)headers.Authorization='Bearer '+token.value;
     try{
-     const response=await fetch(path,{headers,cache:'no-store'});
+     const response=await fetch(requestPath,{headers,cache:'no-store'});
      const raw=await response.text();
      let formatted=raw;try{formatted=JSON.stringify(JSON.parse(raw),null,2);}catch{}
      output.textContent='HTTP '+response.status+' '+response.statusText+'\n'+formatted;

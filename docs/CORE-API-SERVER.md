@@ -2,6 +2,12 @@
 
 RemoteHand exposes an opt-in read-only HTTP API **only while the RemoteHand process is running**.
 
+## Generic Plugin API Gateway — RemoteHand v1.4.0
+
+The v1.4.0 Core API Server dynamically discovers enabled plugins' optional `api.json` descriptors and publishes authenticated GET-only routes from their `api.read` handlers. Neither plugin names nor their endpoint implementations are hardcoded in Core. The explorer at `/api/docs` renders OpenAPI parameters as editable inputs, validates each named path variable (including multiple variables), and substitutes the values before issuing a request. The gateway enforces GET-only, descriptor/route/response bounds and existing bearer-token authorization. Plugins must sanitize their own response objects.
+
+System Monitor v0.5.2 and Target Monitor v0.7.12 have been live-tested with the gateway on Windows, including authorized requests, HTTP 401 for missing credentials, Target Monitor's `{id}` paths, live TCP/HTTP checks, and enabled/disabled plugin route isolation. A gateway-enabled Core release is required for these plugin endpoints; older Core builds continue running the existing plugin UIs. See [Generic Plugin API Gateway v1](SYSTEM-MONITOR-API-V1.md).
+
 ## Settings and network bindings
 
 Open **Settings → API Server**. The API is **disabled by default**. With the default localhost binding it listens on `127.0.0.1:8765` using HTTP; a configurable port in the range 1024–65535 is supported. Its status remains available even when minimized or in the system tray, but the server stops on full process exit or when disabled.
@@ -87,12 +93,12 @@ The listener supports explicit LAN/Tailnet IPv4 binding using either opt-in unen
 
 ## Later milestones
 
-- Plugin route registration and authorization policy through generic host-owned IPC.
-- System Monitor read-only metric endpoints.
-- Target Monitor read-only target status endpoints.
+- **Generic Plugin API gateway candidate:** optional plugin-root `api.json` enables read-only GET route registration without adding per-plugin Core code, with Core-managed bearer auth, IPC timeouts and dynamic OpenAPI/route discovery. See [Generic Plugin API Gateway v1](SYSTEM-MONITOR-API-V1.md). This feature branch is not yet Windows-accepted or merged.
+- System Monitor plugin integration is on its own feature branch; its candidate ZIP must contain `api.json` and support `api.read`.
+- Target Monitor read-only HTTP endpoints are a future *plugin-only* addition using the same gateway.
 - Safe remote-device consumption from DisplayHand.
 
-These are **not yet implemented**. Do not treat the empty plugins response as a list of all installed plugins.
+In the new gateway candidate, `/api/v1/plugins` enumerates enabled API-publishing plugins, not all installed plugins. The existing production Core API still returns the original empty placeholder.
 
 ## Notes for developers
 
