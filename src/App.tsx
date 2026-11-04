@@ -2920,14 +2920,28 @@ setApiIpv4LookupError("");
 <strong>HTTPS certificate configuration</strong>
 <span>Supply a trusted PEM certificate and matching private key. Free local certificates can be created with mkcert; instructions are in the API documentation.</span>
 </div>
-<label className="settings-field">
-<span>TLS certificate path (PEM)</span>
-<input value={apiDraft.certificatePath} onChange={(event) => setApiDraft((current) => ({ ...current, certificatePath: event.target.value }))} placeholder="C:\\certs\\remotehand.crt" spellCheck={false} />
-</label>
-<label className="settings-field">
-<span>TLS private key path (PEM)</span>
-<input value={apiDraft.keyPath} onChange={(event) => setApiDraft((current) => ({ ...current, keyPath: event.target.value }))} placeholder="C:\\certs\\remotehand.key" spellCheck={false} />
-</label>
+<div className="settings-field">
+<label htmlFor="api-tls-certificate">TLS certificate path (PEM)</label>
+<div className="api-tls-file-row">
+<input id="api-tls-certificate" value={apiDraft.certificatePath} onChange={(event) => setApiDraft((current) => ({ ...current, certificatePath: event.target.value }))} placeholder="C:\\certs\\remotehand.crt" spellCheck={false} />
+<button type="button" className="settings-reset" onClick={() => {
+void invoke<string | null>("api_server_pick_tls_file", { kind: "certificate" })
+.then((selected) => { if (selected) { setApiDraft((current) => ({ ...current, certificatePath: selected })); setApiError(""); } })
+.catch((error) => setApiError(String(error)));
+}}>Browse…</button>
+</div>
+</div>
+<div className="settings-field">
+<label htmlFor="api-tls-key">TLS private key path (PEM)</label>
+<div className="api-tls-file-row">
+<input id="api-tls-key" value={apiDraft.keyPath} onChange={(event) => setApiDraft((current) => ({ ...current, keyPath: event.target.value }))} placeholder="C:\\certs\\remotehand.key" spellCheck={false} />
+<button type="button" className="settings-reset" onClick={() => {
+void invoke<string | null>("api_server_pick_tls_file", { kind: "key" })
+.then((selected) => { if (selected) { setApiDraft((current) => ({ ...current, keyPath: selected })); setApiError(""); } })
+.catch((error) => setApiError(String(error)));
+}}>Browse…</button>
+</div>
+</div>
 <details className="api-certificate-guide">
 <summary>How to create a free HTTPS certificate</summary>
 <p>For development, install the free mkcert utility on the computer running RemoteHand, then use these commands in PowerShell:</p>
