@@ -30,7 +30,7 @@ mkcert -install
 mkcert -cert-file C:\certs\remotehand.crt -key-file C:\certs\remotehand.key 192.168.1.100 localhost 127.0.0.1
 ```
 
-Then choose **HTTPS** in Settings and enter `C:\certs\remotehand.crt` and `C:\certs\remotehand.key` in the certificate/key fields. Connect using the IP or hostname covered by the certificate. Each separate client machine (including a Raspberry Pi running DisplayHand) needs to trust the **mkcert local CA certificate**. Use `mkcert -CAROOT` to locate the CA directory on the issuing machine, then distribute **only `rootCA.pem`**, never the CA private key (`rootCA-key.pem`). A certificate made with mkcert is not automatically trusted on other devices and is intended for development, not public production.
+Then choose **HTTPS** in Settings. Use each field's **Browse…** button to select the certificate and private key with a native file picker, or type/paste their absolute paths manually (for example `C:\certs\remotehand.crt` and `C:\certs\remotehand.key`). Cancelling a file picker leaves the existing value unchanged. Connect using the IP or hostname covered by the certificate. Each separate client machine (including a Raspberry Pi running DisplayHand) needs to trust the **mkcert local CA certificate**. Use `mkcert -CAROOT` to locate the CA directory on the issuing machine, then distribute **only `rootCA.pem`**, never the CA private key (`rootCA-key.pem`). A certificate made with mkcert is not automatically trusted on other devices and is intended for development, not public production.
 
 Alternatively, use a certificate issued by an already-trusted internal or public CA. Public TLS certificates can often be obtained free of charge through an ACME provider for a suitable domain.
 
