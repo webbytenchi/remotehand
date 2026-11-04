@@ -765,6 +765,7 @@ type LocalIpv4Address = { address: string; interfaceName: string };
 const [apiIpv4LookupError, setApiIpv4LookupError] = useState("");
 const [apiAvailableIpv4, setApiAvailableIpv4] = useState<LocalIpv4Address[]>([]);
 const [pendingApiBinding, setPendingApiBinding] = useState<typeof apiDraft | null>(null);
+const [pendingApiAction, setPendingApiAction] = useState<"rotate-token" | "clear-history" | null>(null);
 const [apiCopiedUrl, setApiCopiedUrl] = useState("");
 const [apiCopyError, setApiCopyError] = useState("");
 const copyApiAccessUrl = useCallback((url: string) => {
@@ -792,6 +793,7 @@ setGlobalShortcutError("");
 setApiToken("");
 setApiTokenVisible(false);
 setPendingApiBinding(null);
+setPendingApiAction(null);
 setSettingsOpen(false);
 }, [settings.globalShortcut]);
 const [papaTabUnlocked, setPapaTabUnlocked] = useState(false);
@@ -3036,8 +3038,7 @@ if (apiTokenVisible) { setApiTokenVisible(false); setApiToken(""); return; }
 void invoke<string>("api_server_token").then((token) => { setApiToken(token); setApiTokenVisible(true); setApiError(""); }).catch((error) => setApiError(String(error)));
 }}>{apiTokenVisible ? "Hide Token" : "Reveal Token"}</button>
 <button type="button" className="settings-reset" onClick={() => {
-if (!window.confirm("Rotate the API token? All existing API clients will need the new token.")) return;
-void invoke<string>("api_server_rotate_token").then((token) => { setApiToken(token); setApiTokenVisible(true); setApiError(""); }).catch((error) => setApiError(String(error)));
+setPendingApiAction("rotate-token");
 }}>Rotate Token</button>
 </div>
 {apiTokenVisible ? <input aria-label="API access token" type="text" readOnly value={apiToken} onFocus={(event) => event.currentTarget.select()} /> : null}
@@ -3055,8 +3056,7 @@ void invoke("api_server_open_docs").catch((error) => setApiError(String(error)))
 <div className="api-history-actions">
 <button type="button" className="settings-reset" onClick={refreshApiHistory}>Refresh</button>
 <button type="button" className="settings-reset" onClick={() => {
-if (!window.confirm("Clear saved API access history?")) return;
-void invoke("api_server_history_clear").then(() => refreshApiHistory()).catch((error) => setApiHistoryError(String(error)));
+setPendingApiAction("clear-history");
 }}>Clear history</button>
 </div>
 </div>
@@ -3170,6 +3170,37 @@ Reset shortcuts
 <span>Papa</span>
 </div>
 </div>
+)}
+</AppModal>
+<AppModal
+open={pendingApiAction !== null}
+title={pendingApiAction === "rotate-token" ? "Rotate API access token?" : "Clear API access history?"}
+className="api-bind-confirm-modal"
+confirmLabel={pendingApiAction === "rotate-token" ? "Rotate Token" : "Clear history"}
+cancelLabel="Cancel"
+danger
+focusDialog
+restoreFocus
+elevated
+onCancel={() => setPendingApiAction(null)}
+onConfirm={() => {
+const action = pendingApiAction;
+setPendingApiAction(null);
+if (action === "rotate-token") {
+void invoke<string>("api_server_rotate_token")
+.then((token) => { setApiToken(token); setApiTokenVisible(true); setApiError(""); })
+.catch((error) => setApiError(String(error)));
+} else if (action === "clear-history") {
+void invoke("api_server_history_clear")
+.then(() => refreshApiHistory())
+.catch((error) => setApiHistoryError(String(error)));
+}
+}}
+>
+{pendingApiAction === "rotate-token" ? (
+<p>All existing API clients will need the new token. The current token will stop working immediately.</p>
+) : (
+<p>Delete the saved API access history? This action cannot be undone.</p>
 )}
 </AppModal>
 <AppModal
