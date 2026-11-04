@@ -2719,6 +2719,25 @@ html[data-theme="light"] .vault-prompt input {
 .api-history-toolbar strong { font-size: 13px; }
 .api-history-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .api-history-actions button { padding: 7px 10px; }
+.api-history-retention {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: #aeb8c6;
+  font-size: 12px;
+}
+.api-history-retention input[type="number"] {
+  width: 112px;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid #2b3747;
+  border-radius: 7px;
+  background: #0d141d;
+  color: #d2dae5;
+}
+.api-history-retention input[type="number"]:focus { outline: 1px solid var(--accent-border); }
+.api-history-retention button { padding: 7px 10px; }
 .api-history-stats { font-size: 12px; color: #94a3b8; }
 .api-history-scroll {
   min-width: 0;
