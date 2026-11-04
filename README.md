@@ -279,6 +279,10 @@ Planned areas include:
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the current sequencing.
 
+## Core API Server (experimental)
+
+A new optional, localhost-only, read-only API is available for testing on the `emma/core-api-server-v1` feature branch. It provides health, application status, and route discovery endpoints. API hosting is disabled by default and runs only while RemoteHand is running. Plugin API publication and remote network access are not yet supported. See [Core API Server](docs/CORE-API-SERVER.md) for route contracts, security restrictions, and Windows acceptance steps.
+
 ## Documentation
 
 - [Requirements](docs/REQUIREMENTS.md)
