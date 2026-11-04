@@ -25,12 +25,6 @@ const ROUTES: &[&str] = &[
     "/api/v1/core/status",
     "/api/v1/plugins",
     "/api/v1/routes",
-    "/api/v1/system-monitor",
-    "/api/v1/system-monitor/metrics",
-    "/api/v1/system-monitor/gpus",
-    "/api/v1/system-monitor/disks",
-    "/api/v1/system-monitor/history",
-    "/api/v1/system-monitor/alerts",
 ];
 
 #[derive(Clone, Serialize)]
@@ -547,12 +541,12 @@ fn openapi_spec() -> Value {
         }
         value
     };
-    json!({
+    let mut spec = json!({
         "openapi": "3.0.3",
         "info": {
             "title": "RemoteHand Core API",
             "version": "1.0.0",
-            "description": "Opt-in read-only API for localhost or explicitly selected IPv4 interfaces. Monitoring routes require the matching enabled plugin with an API-capable version."
+            "description": "Opt-in, read-only, authenticated API with dynamically discovered routes from enabled plugins providing api.json."
         },
         "servers": [{ "url": "/", "description": "Current RemoteHand API listener" }],
         "components": {
@@ -593,11 +587,11 @@ fn openapi_spec() -> Value {
                 } })
             )},
             "/api/v1/plugins": { "get": operation(
-                "API-enabled plugins", "Currently returns an empty list until plugin API publication is implemented.", true,
+                "API-enabled plugins", "Lists enabled plugins publishing validated API routes.", true,
                 json!({ "type": "array", "items": { "type": "object" } })
             )},
             "/api/v1/routes": { "get": operation(
-                "Route discovery", "Lists the registered HTTP paths and their authentication requirements. System Monitor routes respond 503 when the compatible plugin is unavailable.", true,
+                "Route discovery", "Lists Core and dynamically discovered enabled plugin routes.", true,
                 json!({ "type": "array", "items": {
                     "type": "object", "properties": {
                         "method": { "type": "string" },
@@ -606,69 +600,22 @@ fn openapi_spec() -> Value {
                     }
                 } })
             )},
-            "/api/v1/system-monitor": { "get": operation(
-                "System Monitor summary", "Sanitized latest CPU, memory and temperature summary.", true, json!({"type":"object"})
-            )},
-            "/api/v1/system-monitor/metrics": { "get": operation(
-                "System metrics", "Current CPU, memory and CPU temperature samples.", true, json!({"type":"object"})
-            )},
-            "/api/v1/system-monitor/gpus": { "get": operation(
-                "GPU metrics", "Sanitized GPU metrics; hardware identity omitted.", true, json!({"type":"object"})
-            )},
-            "/api/v1/system-monitor/disks": { "get": operation(
-                "Disk metrics", "Sanitized disk metrics; mount paths and volume names omitted.", true, json!({"type":"object"})
-            )},
-            "/api/v1/system-monitor/history": { "get": operation(
-                "System metrics history", "Up to 120 sampled CPU/memory/temperature points.", true, json!({"type":"object"})
-            )},
-            "/api/v1/system-monitor/alerts": { "get": operation(
-                "Active System Monitor alerts", "Active warning and critical alerts only; no resolved alert history.", true, json!({"type":"object"})
-            )}
+
         }
-    })
+    });
+    for route in crate::api_gateway::published_routes() {
+        spec["paths"][&route.path] = json!({"get": operation(
+            &route.summary, &route.description, true,
+            json!({"type":"object"})
+        )});
+        spec["paths"][&route.path]["get"]["responses"]["503"] =
+            json!({"description":"Plugin runtime unavailable or incompatible"});
+        spec["paths"][&route.path]["get"]["responses"]["502"] =
+            json!({"description":"Invalid or oversized plugin response"});
+    }
+    spec
 }
 
-
-fn system_monitor_view(path: &str) -> Option<&'static str> {
-    match path {
-        "/api/v1/system-monitor" => Some("summary"),
-        "/api/v1/system-monitor/metrics" => Some("metrics"),
-        "/api/v1/system-monitor/gpus" => Some("gpus"),
-        "/api/v1/system-monitor/disks" => Some("disks"),
-        "/api/v1/system-monitor/history" => Some("history"),
-        "/api/v1/system-monitor/alerts" => Some("alerts"),
-        _ => None,
-    }
-}
-
-fn system_monitor_response(path: &str, app: Option<&tauri::AppHandle>) -> (u16, Value) {
-    let Some(view) = system_monitor_view(path) else {
-        return (404, json!({"status":"error","error":"not_found"}));
-    };
-    let Some(app) = app else {
-        return (503, json!({"status":"error","error":"plugin_unavailable"}));
-    };
-    const PLUGIN_ID: &str = "remotehand.system-monitor";
-    if !matches!(crate::plugins::plugin_available(PLUGIN_ID), Ok(true)) {
-        return (503, json!({"status":"error","error":"plugin_unavailable"}));
-    }
-    let runtime = app.state::<crate::plugin_runtime::PluginRuntimeState>();
-    match runtime.call_with_timeout(PLUGIN_ID, "system.api.read", json!({"view":view}), Duration::from_secs(2)) {
-        Ok(data) => {
-            // Plugin deliberately publishes only fields from its safe API projection.
-            // Never fall back to raw system.status if the installed plugin is outdated.
-            if data.to_string().len() > 256 * 1024 {
-                (502, json!({"status":"error","error":"plugin_response_too_large"}))
-            } else {
-                (200, json!({"status":"ok","data":data}))
-            }
-        },
-        Err(error) => {
-            log::warn!("System Monitor API unavailable: {error}");
-            (503, json!({"status":"error","error":"plugin_unavailable"}))
-        }
-    }
-}
 
 fn response_for(path: &str, auth: Option<&str>, expected: &str, since: Instant)
     -> (u16, Value)
@@ -685,11 +632,6 @@ fn response_for(path: &str, auth: Option<&str>, expected: &str, since: Instant)
     if !authorized(auth, expected) {
         return (401, json!({ "status": "error", "error": "unauthorized" }));
     }
-    // Endpoint authorization is checked above; plugin I/O is handled separately
-    // on the actual HTTP listener to avoid an app dependency in core unit tests.
-    if system_monitor_view(path).is_some() {
-        return (503, json!({"status":"error","error":"plugin_unavailable"}));
-    }
     match path {
         "/api/v1/core/status" => (200, json!({
             "status": "ok", "data": {
@@ -699,15 +641,26 @@ fn response_for(path: &str, auth: Option<&str>, expected: &str, since: Instant)
                 "uptimeSeconds": since.elapsed().as_secs()
             }
         })),
-        // Plugin API publication is not implemented yet. Do not expose plugin
-        // package paths, permissions, or installed names prematurely.
-        "/api/v1/plugins" => (200, json!({ "status": "ok", "data": [] })),
-        "/api/v1/routes" => (200, json!({
-            "status": "ok", "data": ROUTES.iter().map(|path| json!({
+        "/api/v1/plugins" => (200, json!({
+            "status": "ok", "data": {
+                let mut ids: Vec<String> = crate::api_gateway::published_routes()
+                    .into_iter().map(|r| r.plugin_id).collect();
+                ids.sort();
+                ids.dedup();
+                ids
+            }
+        })),
+        "/api/v1/routes" => {
+            let mut routes = ROUTES.iter().map(|path| json!({
                 "method": "GET", "path": path,
                 "authRequired": *path != "/api/v1/health" && *path != "/api/docs" && *path != "/api/openapi.json"
-            })).collect::<Vec<_>>()
-        })),
+            })).collect::<Vec<_>>();
+            routes.extend(crate::api_gateway::published_routes().iter().map(|r| json!({
+                "method": "GET", "path": r.path, "authRequired": true,
+                "pluginId": r.plugin_id
+            })));
+            (200, json!({"status":"ok","data":routes}))
+        },
         _ => (404, json!({ "status": "error", "error": "not_found" })),
     }
 }
@@ -738,8 +691,13 @@ fn serve_connection<S: Read + Write>(
             name.eq_ignore_ascii_case("authorization").then_some(value.trim())
         }));
         let expected = match credentials.lock() { Ok(token) => token.clone(), Err(_) => return };
-        if system_monitor_view(parts[1]).is_some() && authorized(auth, &expected) {
-            system_monitor_response(parts[1], app)
+        if authorized(auth, &expected) {
+            let routes = crate::api_gateway::published_routes();
+            if let Some((route, params)) = crate::api_gateway::match_route(parts[1], &routes) {
+                crate::api_gateway::read(&route, params, app)
+            } else {
+                response_for(parts[1], auth, &expected, since)
+            }
         } else {
             response_for(parts[1], auth, &expected, since)
         }
@@ -769,8 +727,7 @@ mod tests {
         assert_eq!(response_for("/api/v1/health", None, "secret", since).0, 200);
         for path in &ROUTES[3..] {
             assert_eq!(response_for(path, None, "secret", since).0, 401);
-            let expected = if system_monitor_view(path).is_some() { 503 } else { 200 };
-            assert_eq!(response_for(path, Some("Bearer secret"), "secret", since).0, expected);
+            assert_eq!(response_for(path, Some("Bearer secret"), "secret", since).0, 200);
         }
         assert_eq!(response_for("/api/docs", None, "secret", since).0, 200);
         assert_eq!(response_for("/api/openapi.json", None, "secret", since).0, 200);
