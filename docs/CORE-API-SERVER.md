@@ -9,7 +9,7 @@ Open **Settings → API Server**. The API is **disabled by default**. With the d
 Use **Listening network** to select:
 
 - **Localhost** (`127.0.0.1`) — default, no remote access.
-- **All IPv4 interfaces** (`0.0.0.0`) — reachable on all IPv4 interfaces when allowed by firewall.
+- **All IPv4 interfaces** (`0.0.0.0`) — reachable on all IPv4 interfaces when allowed by firewall. The status panel reports `Listening on: 0.0.0.0:<port>` separately from local access (`127.0.0.1`) and detected network URLs; the latter are connection examples, not additional sockets. Windows Firewall may restrict individual interfaces or profiles.
 - **Specific IPv4 address** — bind only an address assigned to this host, such as a LAN or Tailnet IP.
   Selecting this mode automatically fills the first detected active, non-loopback IPv4 address (preferring normal LAN adapters over recognizable virtual adapters). The field stays fully editable; you can replace the suggested address. If no suitable address is found, the field remains blank and an explanation appears. Switching modes never applies a new binding until you click **Apply listening configuration**.
 
