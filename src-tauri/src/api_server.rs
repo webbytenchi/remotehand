@@ -83,6 +83,7 @@ impl Drop for ApiServerState {
         if let Ok(mut inner) = self.inner.lock() {
             stop_server(&mut inner);
         }
+        let _ = self.history.flush();
     }
 }
 
@@ -246,6 +247,10 @@ impl ApiServerState {
 
     pub fn clear_history(&self) -> Result<(), String> {
         self.history.clear()
+    }
+
+    pub fn flush_history(&self) -> Result<(), String> {
+        self.history.flush()
     }
 
     pub fn token(&self) -> Result<String, String> {
