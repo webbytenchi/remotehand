@@ -120,7 +120,20 @@ pub fn load_settings() -> Result<Settings, String> {
         return Ok(Settings::default());
     }
     let contents = fs::read_to_string(&path).map_err(|error| error.to_string())?;
-    serde_json::from_str(&contents).map_err(|error| error.to_string())
+    let mut settings: Settings = serde_json::from_str(&contents).map_err(|error| error.to_string())?;
+    // Existing TLS-only feature builds did not persist apiTlsEnabled.
+    // Preserve their remote HTTPS configuration instead of silently
+    // downgrading a previously encrypted remote listener to HTTP.
+    if let Ok(raw) = serde_json::from_str::<serde_json::Value>(&contents) {
+        if raw.get("apiTlsEnabled").is_none()
+            && settings.api_bind_address != "127.0.0.1"
+            && !settings.api_tls_certificate_path.trim().is_empty()
+            && !settings.api_tls_key_path.trim().is_empty()
+        {
+            settings.api_tls_enabled = true;
+        }
+    }
+    Ok(settings)
 }
 #[tauri::command]
 pub fn save_settings(settings: Settings) -> Result<(), String> {
