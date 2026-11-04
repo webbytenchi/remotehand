@@ -763,6 +763,7 @@ certificatePath: "", keyPath: ""
 });
 type LocalIpv4Address = { address: string; interfaceName: string };
 const [apiIpv4LookupError, setApiIpv4LookupError] = useState("");
+const [apiAvailableIpv4, setApiAvailableIpv4] = useState<LocalIpv4Address[]>([]);
 const [pendingApiBinding, setPendingApiBinding] = useState<typeof apiDraft | null>(null);
 const [apiStatus, setApiStatus] = useState<ApiStatus | null>(null);
 const [apiHistory, setApiHistory] = useState<ApiHistorySnapshot | null>(null);
@@ -1526,6 +1527,7 @@ keyPath: settings.apiTlsKeyPath,
 useEffect(() => {
 if (!settingsOpen || settingsTab !== "api" || !isTauri()) return;
 void invoke<ApiStatus>("api_server_status").then(setApiStatus).catch((error) => setApiError(String(error)));
+void invoke<LocalIpv4Address[]>("api_server_ipv4_addresses").then(setApiAvailableIpv4).catch(() => setApiAvailableIpv4([]));
 refreshApiHistory();
 const poll = window.setInterval(refreshApiHistory, 5000);
 return () => window.clearInterval(poll);
@@ -2975,7 +2977,17 @@ apiTlsCertificatePath: candidate.certificatePath, apiTlsKeyPath: candidate.keyPa
 }}>Apply listening configuration</button>
 <div className="plugin-security-note">
 <strong>Server status: {apiStatus?.running ? "Running" : "Stopped"}</strong>
-<span>{apiStatus?.url || "Localhost only — disabled until enabled."}</span>
+{apiStatus?.running ? (
+<>
+<span>Listening on: {apiStatus.bindAddress}:{apiStatus.port}{apiStatus.bindAddress === "0.0.0.0" ? " (all IPv4 interfaces)" : ""}</span>
+{apiStatus.bindAddress === "0.0.0.0" ? (
+<>
+<span>Local access: {apiStatus.url}</span>
+{apiAvailableIpv4.length > 0 ? <span>Network access: {apiAvailableIpv4.map((item) => `${apiStatus.tls ? "https" : "http"}://${item.address}:${apiStatus.port}`).join(" · ")}</span> : <span>Network access: use this machine's LAN or Tailnet IPv4 address and port {apiStatus.port}.</span>}
+</>
+) : <span>Access URL: {apiStatus.url}</span>}
+</>
+) : <span>Server is stopped. Enable the API Server to start listening.</span>}
 <span>{apiStatus?.tls ? "HTTPS is enabled for this listener." : apiStatus?.bindAddress === "127.0.0.1" ? "Localhost-only HTTP." : "WARNING: Remote HTTP is unencrypted; use only on isolated trusted networks."}</span>
 </div>
 <div className="settings-section-heading">
