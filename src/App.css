@@ -2796,3 +2796,32 @@ html[data-theme="light"] .api-certificate-guide pre { background: #f5f7fb; color
 html[data-theme="light"] .api-bind-confirm-content p {
   color: #475569;
 }
+
+/* TLS paths stay editable; native Browse buttons share the same field row. */
+.api-tls-file-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.api-tls-file-row input {
+  flex: 1 1 240px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #2b3747;
+  border-radius: 7px;
+  background: #0d141d;
+  color: #d2dae5;
+  outline: none;
+}
+.api-tls-file-row input:focus { border-color: var(--accent-border); }
+.api-tls-file-row button {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+}
+html[data-theme="light"] .api-tls-file-row input {
+  background: #fff;
+  color: #1e293b;
+  border-color: #cbd5e1;
+}
