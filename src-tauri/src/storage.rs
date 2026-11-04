@@ -25,6 +25,7 @@ pub struct Settings {
     pub api_enabled: bool,
     pub api_port: u16,
     pub api_bind_address: String,
+    pub api_tls_enabled: bool,
     pub api_tls_certificate_path: String,
     pub api_tls_key_path: String,
 }
@@ -55,6 +56,7 @@ impl Default for Settings {
             api_enabled: false,
             api_port: 8765,
             api_bind_address: "127.0.0.1".to_string(),
+            api_tls_enabled: false,
             api_tls_certificate_path: String::new(),
             api_tls_key_path: String::new(),
         }
