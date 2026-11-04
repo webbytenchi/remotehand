@@ -326,6 +326,33 @@ pub fn api_server_ipv4_addresses() -> Result<Vec<LocalIpv4Address>, String> {
 }
 
 #[tauri::command]
+pub fn api_server_copy_url(
+    state: tauri::State<'_, ApiServerState>,
+    url: String,
+) -> Result<(), String> {
+    let status = state.status()?;
+    if !status.running {
+        return Err("API server is not running".to_owned());
+    }
+    let scheme = if status.tls { "https" } else { "http" };
+    let local_url = format!("{scheme}://127.0.0.1:{}", status.port);
+    let valid = if status.bind_address == "0.0.0.0" {
+        url == local_url || local_ipv4_addresses()?.iter().any(|item| {
+            url == format!("{scheme}://{}:{}", item.address, status.port)
+        })
+    } else {
+        url == status.url.as_deref().unwrap_or("")
+    };
+    if !valid {
+        return Err("Address is not available on the current API listener".to_owned());
+    }
+    arboard::Clipboard::new()
+        .map_err(|error| format!("Clipboard unavailable: {error}"))?
+        .set_text(url)
+        .map_err(|error| format!("Could not copy API address: {error}"))
+}
+
+#[tauri::command]
 pub fn api_server_status(state: tauri::State<'_, ApiServerState>) -> Result<ApiStatus, String> {
     state.status()
 }
