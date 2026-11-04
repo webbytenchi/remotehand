@@ -88,6 +88,7 @@ vaultAutoLockMinutes: number;
 apiEnabled: boolean;
 apiPort: number;
 apiBindAddress: string;
+apiTlsEnabled: boolean;
 apiTlsCertificatePath: string;
 apiTlsKeyPath: string;
 };
@@ -119,6 +120,7 @@ vaultAutoLockMinutes: 15,
 apiEnabled: false,
 apiPort: 8765,
 apiBindAddress: "127.0.0.1",
+apiTlsEnabled: false,
 apiTlsCertificatePath: "",
 apiTlsKeyPath: "",
 };
@@ -756,7 +758,7 @@ type ApiStatus = { enabled: boolean; running: boolean; port: number; bindAddress
 type ApiHistoryEntry = { timestamp: string; ip: string; method: string; route: string; status: number; durationMs: number };
 type ApiHistorySnapshot = { entries: ApiHistoryEntry[]; total: number; succeeded: number; failed: number };
 const [apiDraft, setApiDraft] = useState({
-port: 8765, bindAddress: "127.0.0.1",
+port: 8765, bindAddress: "127.0.0.1", tlsEnabled: false,
 certificatePath: "", keyPath: ""
 });
 const [apiStatus, setApiStatus] = useState<ApiStatus | null>(null);
@@ -1438,6 +1440,7 @@ console.error("Failed to load startup preference", error);
 const nextSettings = { ...DEFAULT_SETTINGS, ...saved, startWithSystem };
 setSettings(nextSettings);
 setApiDraft({ port: nextSettings.apiPort, bindAddress: nextSettings.apiBindAddress,
+tlsEnabled: nextSettings.apiTlsEnabled,
 certificatePath: nextSettings.apiTlsCertificatePath, keyPath: nextSettings.apiTlsKeyPath });
 setGlobalShortcutDraft(nextSettings.globalShortcut);
 if (isTauri()) {
@@ -1509,12 +1512,13 @@ void invoke<ApiStatus>(
 "api_server_configure", {
 enabled: settings.apiEnabled, port: settings.apiPort,
 bindAddress: settings.apiBindAddress,
+tlsEnabled: settings.apiTlsEnabled,
 certificatePath: settings.apiTlsCertificatePath,
 keyPath: settings.apiTlsKeyPath,
 })
 .then((status) => { setApiStatus(status); setApiError(""); })
 .catch((error) => { setApiError(String(error)); void invoke<typeof apiStatus>("api_server_status").then(setApiStatus).catch(() => {}); });
-}, [settingsLoaded, settings.apiEnabled, settings.apiPort, settings.apiBindAddress, settings.apiTlsCertificatePath, settings.apiTlsKeyPath]);
+}, [settingsLoaded, settings.apiEnabled, settings.apiPort, settings.apiBindAddress, settings.apiTlsEnabled, settings.apiTlsCertificatePath, settings.apiTlsKeyPath]);
 useEffect(() => {
 if (!settingsOpen || settingsTab !== "api" || !isTauri()) return;
 void invoke<ApiStatus>("api_server_status").then(setApiStatus).catch((error) => setApiError(String(error)));
@@ -2870,8 +2874,8 @@ const address = event.target.value === "localhost" ? "127.0.0.1" : event.target.
 setApiDraft((current) => ({ ...current, bindAddress: address }));
 }}>
 <option value="localhost">Localhost only — 127.0.0.1 (recommended)</option>
-<option value="all">All IPv4 interfaces — 0.0.0.0 (requires TLS)</option>
-<option value="custom">Specific IPv4 address (requires TLS)</option>
+<option value="all">All IPv4 interfaces — 0.0.0.0</option>
+<option value="custom">Specific IPv4 address</option>
 </select>
 </div>
 {apiDraft.bindAddress !== "127.0.0.1" && apiDraft.bindAddress !== "0.0.0.0" ? (
@@ -2880,11 +2884,24 @@ setApiDraft((current) => ({ ...current, bindAddress: address }));
 <input value={apiDraft.bindAddress} onChange={(event) => setApiDraft((current) => ({ ...current, bindAddress: event.target.value }))} placeholder="192.168.1.100" />
 </label>
 ) : null}
-{apiDraft.bindAddress !== "127.0.0.1" ? (
+<div className="settings-field">
+<label htmlFor="api-transport">Transport security</label>
+<select id="api-transport" value={apiDraft.tlsEnabled ? "https" : "http"} onChange={(event) => setApiDraft((current) => ({ ...current, tlsEnabled: event.target.value === "https" }))}>
+<option value="http">HTTP — unencrypted (trusted networks only)</option>
+<option value="https">HTTPS — TLS certificate (recommended)</option>
+</select>
+</div>
+{apiDraft.bindAddress !== "127.0.0.1" && !apiDraft.tlsEnabled ? (
+<div className="plugin-security-note">
+<strong>Warning: unencrypted remote API access</strong>
+<span>HTTP exposes the Bearer token and response data to anyone who can observe the network traffic. Use only on a trusted, isolated network; never forward this listener to the public Internet. HTTPS is recommended.</span>
+</div>
+) : null}
+{apiDraft.tlsEnabled ? (
 <>
 <div className="plugin-security-note">
-<strong>HTTPS required for remote listening</strong>
-<span>Non-local bindings use TLS with a trusted PEM certificate and matching private key. Use an address present on this computer and a certificate trusted by your API clients. Do not publicly expose the port or share the access token.</span>
+<strong>HTTPS certificate configuration</strong>
+<span>Supply a trusted PEM certificate and matching private key. Free local certificates can be created with mkcert; instructions are in the API documentation.</span>
 </div>
 <label className="settings-field">
 <span>TLS certificate path (PEM)</span>
@@ -2898,17 +2915,21 @@ setApiDraft((current) => ({ ...current, bindAddress: address }));
 ) : null}
 <button type="button" className="settings-reset" style={{ justifySelf: "start", padding: "9px 12px" }}
 onClick={() => {
-if (apiDraft.bindAddress !== "127.0.0.1") {
-if (!apiDraft.certificatePath.trim() || !apiDraft.keyPath.trim()) {
-setApiError("A TLS certificate and matching private key are required for remote listening.");
+if (apiDraft.tlsEnabled && (!apiDraft.certificatePath.trim() || !apiDraft.keyPath.trim())) {
+setApiError("HTTPS requires a TLS certificate and matching private key.");
 return;
 }
-if (!window.confirm("Allow RemoteHand's API to listen beyond localhost using HTTPS? Only proceed on a trusted interface with a valid TLS certificate. Firewall rules are not changed automatically.")) return;
+if (apiDraft.bindAddress !== "127.0.0.1") {
+const warning = apiDraft.tlsEnabled
+? "Enable RemoteHand HTTPS access on this network interface? Confirm the certificate is trusted and firewall rules restrict access to trusted clients."
+: "SECURITY WARNING: This exposes your API and Bearer tokens over UNENCRYPTED HTTP. Anyone observing this network could steal access credentials. Only use an isolated, trusted network; never expose this port publicly. Continue?";
+if (!window.confirm(warning)) return;
 }
 setApiError("");
 setSettings((current) => ({ ...current,
 apiPort: apiDraft.port,
 apiBindAddress: apiDraft.bindAddress.trim(),
+apiTlsEnabled: apiDraft.tlsEnabled,
 apiTlsCertificatePath: apiDraft.certificatePath.trim(),
 apiTlsKeyPath: apiDraft.keyPath.trim()
 }));
@@ -2916,7 +2937,7 @@ apiTlsKeyPath: apiDraft.keyPath.trim()
 <div className="plugin-security-note">
 <strong>Server status: {apiStatus?.running ? "Running" : "Stopped"}</strong>
 <span>{apiStatus?.url || "Localhost only — disabled until enabled."}</span>
-<span>{apiStatus?.tls ? "HTTPS is enabled for this listener." : "Localhost-only HTTP. Remote bindings require TLS."}</span>
+<span>{apiStatus?.tls ? "HTTPS is enabled for this listener." : apiStatus?.bindAddress === "127.0.0.1" ? "Localhost-only HTTP." : "WARNING: Remote HTTP is unencrypted; use only on isolated trusted networks."}</span>
 </div>
 <div className="settings-section-heading">
 <strong>API Access Token</strong>
