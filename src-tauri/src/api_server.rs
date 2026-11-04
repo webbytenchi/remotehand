@@ -1,11 +1,13 @@
 //! Opt-in, process-owned, loopback-only read API for RemoteHand.
 use rand_core::{OsRng, RngCore};
+use crate::api_history::{ApiHistory, HistorySnapshot};
+use rustls::{ServerConfig, ServerConnection, StreamOwned};
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::{
     fs,
-    io::{Read, Write},
-    net::{TcpListener, TcpStream},
+    io::{BufReader, Read, Write},
+    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream},
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -30,12 +32,16 @@ pub struct ApiStatus {
     enabled: bool,
     running: bool,
     port: u16,
+    bind_address: String,
+    tls: bool,
     url: Option<String>,
     error: Option<String>,
 }
 
 struct Running {
     port: u16,
+    address: Ipv4Addr,
+    tls: bool,
     stop: Arc<AtomicBool>,
     worker: JoinHandle<()>,
 }
@@ -44,12 +50,14 @@ struct Inner {
     server: Option<Running>,
     error: Option<String>,
     requested_port: u16,
+    requested_address: Ipv4Addr,
     credential: Arc<Mutex<String>>,
 }
 
 pub struct ApiServerState {
     inner: Mutex<Inner>,
     started: Instant,
+    history: ApiHistory,
 }
 
 impl Default for ApiServerState {
@@ -59,9 +67,11 @@ impl Default for ApiServerState {
                 server: None,
                 error: None,
                 requested_port: 8765,
+                requested_address: Ipv4Addr::LOCALHOST,
                 credential: Arc::new(Mutex::new(String::new())),
             }),
             started: Instant::now(),
+            history: ApiHistory::default(),
         }
     }
 }
@@ -121,18 +131,31 @@ fn create_token() -> Result<String, String> {
 }
 
 impl ApiServerState {
-    pub fn configure(&self, enabled: bool, port: u16) -> Result<ApiStatus, String> {
+    pub fn configure(
+        &self, enabled: bool, port: u16, bind_address: &str,
+        certificate_path: &str, key_path: &str
+    ) -> Result<ApiStatus, String> {
         if !(1024..=65535).contains(&port) {
             return Err("API port must be between 1024 and 65535".into());
         }
+        let address: Ipv4Addr = bind_address.parse()
+            .map_err(|_| "Listening address must be a valid IPv4 address".to_string())?;
+        let remote = !address.is_loopback();
+        if remote && (certificate_path.trim().is_empty() || key_path.trim().is_empty()) {
+            return Err("Remote API binding requires a TLS certificate and private key (PEM)".into());
+        }
+        let tls = if remote {
+            Some(load_tls_config(certificate_path, key_path)?)
+        } else { None };
         let mut inner = self.inner.lock().map_err(|e| e.to_string())?;
         inner.requested_port = port;
+        inner.requested_address = address;
         if !enabled {
             stop_server(&mut inner);
             inner.error = None;
             return Ok(self.status_inner(&inner));
         }
-        if inner.server.as_ref().is_some_and(|running| running.port == port) {
+        if inner.server.as_ref().is_some_and(|running| running.port == port && running.address == address && running.tls == remote) {
             return Ok(self.status_inner(&inner));
         }
         stop_server(&mut inner);
@@ -141,10 +164,10 @@ impl ApiServerState {
             Err(error) => { inner.error = Some(error.clone()); return Err(error); }
         };
         *inner.credential.lock().map_err(|e| e.to_string())? = token;
-        let listener = match TcpListener::bind(("127.0.0.1", port)) {
+        let listener = match TcpListener::bind((address, port)) {
             Ok(listener) => listener,
             Err(error) => {
-                let message = format!("Could not bind localhost port {port}: {error}");
+                let message = format!("Could not bind {address}:{port}: {error}");
                 inner.error = Some(message.clone());
                 return Err(message);
             }
@@ -154,12 +177,27 @@ impl ApiServerState {
         let stopping = stop.clone();
         let credentials = inner.credential.clone();
         let since = self.started;
+        let history = self.history.clone();
         let worker = thread::Builder::new()
             .name("remotehand-api".into())
             .spawn(move || {
                 while !stopping.load(Ordering::Acquire) {
                     match listener.accept() {
-                        Ok((stream, _)) => serve_connection(stream, &credentials, since),
+                        Ok((stream, peer)) => {
+                            let _ = stream.set_read_timeout(Some(Duration::from_millis(700)));
+                            let _ = stream.set_write_timeout(Some(Duration::from_millis(700)));
+                            if let Some(config) = &tls {
+                                match ServerConnection::new(config.clone()) {
+                                    Ok(connection) => {
+                                        let secured = StreamOwned::new(connection, stream);
+                                        serve_connection(secured, peer, &credentials, since, &history);
+                                    }
+                                    Err(error) => log::warn!("API TLS setup failed: {error}"),
+                                }
+                            } else {
+                                serve_connection(stream, peer, &credentials, since, &history);
+                            }
+                        },
                         Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                             thread::sleep(Duration::from_millis(40));
                         }
@@ -171,18 +209,26 @@ impl ApiServerState {
                 }
             })
             .map_err(|e| e.to_string())?;
-        inner.server = Some(Running { port, stop, worker });
+        inner.server = Some(Running { port, address, tls: remote, stop, worker });
         inner.error = None;
         Ok(self.status_inner(&inner))
     }
 
     fn status_inner(&self, inner: &Inner) -> ApiStatus {
         let port = inner.server.as_ref().map_or(inner.requested_port, |s| s.port);
+        let address = inner.server.as_ref().map_or(inner.requested_address, |s| s.address);
+        let tls = inner.server.as_ref().is_some_and(|s| s.tls);
         ApiStatus {
             enabled: inner.server.is_some(),
             running: inner.server.is_some(),
             port,
-            url: inner.server.as_ref().map(|_| format!("http://127.0.0.1:{port}")),
+            bind_address: address.to_string(),
+            tls,
+            url: inner.server.as_ref().map(|_| {
+                let scheme = if tls { "https" } else { "http" };
+                let host = if address.is_unspecified() { "127.0.0.1".to_owned() } else { address.to_string() };
+                format!("{scheme}://{host}:{port}")
+            }),
             error: inner.error.clone(),
         }
     }
@@ -190,6 +236,14 @@ impl ApiServerState {
     pub fn status(&self) -> Result<ApiStatus, String> {
         let inner = self.inner.lock().map_err(|e| e.to_string())?;
         Ok(self.status_inner(&inner))
+    }
+
+    pub fn history(&self) -> Result<HistorySnapshot, String> {
+        self.history.snapshot()
+    }
+
+    pub fn clear_history(&self) -> Result<(), String> {
+        self.history.clear()
     }
 
     pub fn token(&self) -> Result<String, String> {
@@ -209,13 +263,26 @@ pub fn api_server_configure(
     state: tauri::State<'_, ApiServerState>,
     enabled: bool,
     port: u16,
+    bind_address: String,
+    certificate_path: String,
+    key_path: String,
 ) -> Result<ApiStatus, String> {
-    state.configure(enabled, port)
+    state.configure(enabled, port, &bind_address, &certificate_path, &key_path)
 }
 
 #[tauri::command]
 pub fn api_server_status(state: tauri::State<'_, ApiServerState>) -> Result<ApiStatus, String> {
     state.status()
+}
+
+#[tauri::command]
+pub fn api_server_history(state: tauri::State<'_, ApiServerState>) -> Result<HistorySnapshot, String> {
+    state.history()
+}
+
+#[tauri::command]
+pub fn api_server_history_clear(state: tauri::State<'_, ApiServerState>) -> Result<(), String> {
+    state.clear_history()
 }
 
 #[tauri::command]
@@ -242,6 +309,23 @@ pub fn api_server_open_docs(state: tauri::State<'_, ApiServerState>) -> Result<(
     return Err("opening documentation is not supported on this platform".into());
     command.arg(url).spawn().map_err(|e| e.to_string())?;
     Ok(())
+}
+
+fn load_tls_config(cert_path: &str, key_path: &str) -> Result<Arc<ServerConfig>, String> {
+    let mut certificate_file = BufReader::new(fs::File::open(cert_path)
+        .map_err(|e| format!("TLS certificate cannot be read: {e}"))?);
+    let certs = rustls_pemfile::certs(&mut certificate_file)
+        .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+    if certs.is_empty() { return Err("TLS certificate file contains no certificates".into()); }
+    let mut key_file = BufReader::new(fs::File::open(key_path)
+        .map_err(|e| format!("TLS private key cannot be read: {e}"))?);
+    let key = rustls_pemfile::private_key(&mut key_file)
+        .map_err(|e| e.to_string())?
+        .ok_or("TLS private key file contains no supported key")?;
+    let config = ServerConfig::builder().with_no_client_auth()
+        .with_single_cert(certs, key)
+        .map_err(|e| format!("TLS certificate/key mismatch: {e}"))?;
+    Ok(Arc::new(config))
 }
 
 fn authorized(provided: Option<&str>, expected: &str) -> bool {
@@ -387,9 +471,11 @@ fn response_for(path: &str, auth: Option<&str>, expected: &str, since: Instant)
     }
 }
 
-fn serve_connection(mut stream: TcpStream, credentials: &Arc<Mutex<String>>, since: Instant) {
-    let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
-    let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
+fn serve_connection<S: Read + Write>(
+    mut stream: S, peer: SocketAddr, credentials: &Arc<Mutex<String>>, since: Instant,
+    history: &ApiHistory,
+) {
+    let started = Instant::now();
     let mut buf = [0u8; 4096];
     let size = match stream.read(&mut buf) { Ok(size) => size, Err(_) => return };
     let request = match std::str::from_utf8(&buf[..size]) { Ok(value) => value, Err(_) => return };
@@ -421,6 +507,8 @@ fn serve_connection(mut stream: TcpStream, credentials: &Arc<Mutex<String>>, sin
     let headers = format!("HTTP/1.1 {code} {reason}\r\nContent-Type: {content_type}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\nContent-Length: {}\r\n\r\n", body.len());
     let _ = stream.write_all(headers.as_bytes());
     let _ = stream.write_all(body.as_bytes());
+    history.record(peer.ip(), parts.first().copied().unwrap_or("UNKNOWN"),
+        parts.get(1).copied().unwrap_or("/"), code, started.elapsed());
 }
 
 #[cfg(test)]
