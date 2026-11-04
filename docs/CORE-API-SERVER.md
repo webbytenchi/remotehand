@@ -117,3 +117,11 @@ Do not expose the server over public internet or broadly open Windows Firewall. 
 Windows acceptance found the API listener reporting HTTPS running while `curl.exe -vk https://127.0.0.1:8765/api/v1/health` failed with `Recv failure: Connection was aborted` during TLS negotiation. The fix explicitly switches each accepted socket to blocking mode (a nonblocking listening socket may produce nonblocking accepted sockets on Windows), completes the Rustls handshake before reading the HTTP request, and logs handshake/read failures. This change requires a fresh Windows build and operator re-test.
 
 Smoke-test on the RemoteHand machine with `curl.exe -vk https://127.0.0.1:8765/api/v1/health`, then from the client using the real LAN IP. `-k` is for TLS diagnosis only: remove it once the client trusts the mkcert root CA, and verify without disabling TLS validation. Do not consider HTTPS accepted until both handshake and authenticated routes work.
+
+## API Access History CSV export and retention
+
+Settings → API Server → API Access History now offers **Export CSV** alongside Refresh and Clear history. It opens a native Save dialog, exporting the entire retained audit log, latest entries first—not only the 100 shown in the table. Columns are `Timestamp (Unix ms)`, `Client IP`, `Method`, `Route`, `Status`, and `Duration (ms)`. CSV fields are quoted and untrusted leading spreadsheet-formula characters are escaped. Authorization headers and bearer tokens are never logged or exported.
+
+**Maximum saved requests** is configurable from **100 to 10,000**, default **1,000**. Choose a value and click **Apply**; RemoteHand saves the preference and trims the oldest entries immediately if the new limit is smaller. The UI still displays only the latest 100 for responsiveness, while the CSV contains all retained records. A canceled Save dialog does not write a file.
+
+Acceptance still required: Windows release build; export and inspect CSV rows (including >100 entries); change limit and verify retention after restart; verify cancel behavior and permissions/error display.
