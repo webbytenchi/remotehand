@@ -87,12 +87,12 @@ The listener supports explicit LAN/Tailnet IPv4 binding using either opt-in unen
 
 ## Later milestones
 
-- Plugin route registration and authorization policy through generic host-owned IPC.
-- System Monitor read-only metric endpoints.
-- Target Monitor read-only target status endpoints.
+- **Generic Plugin API gateway candidate:** optional plugin-root `api.json` enables read-only GET route registration without adding per-plugin Core code, with Core-managed bearer auth, IPC timeouts and dynamic OpenAPI/route discovery. See [Generic Plugin API Gateway v1](SYSTEM-MONITOR-API-V1.md). This feature branch is not yet Windows-accepted or merged.
+- System Monitor plugin integration is on its own feature branch; its candidate ZIP must contain `api.json` and support `api.read`.
+- Target Monitor read-only HTTP endpoints are a future *plugin-only* addition using the same gateway.
 - Safe remote-device consumption from DisplayHand.
 
-These are **not yet implemented**. Do not treat the empty plugins response as a list of all installed plugins.
+In the new gateway candidate, `/api/v1/plugins` enumerates enabled API-publishing plugins, not all installed plugins. The existing production Core API still returns the original empty placeholder.
 
 ## Notes for developers
 
