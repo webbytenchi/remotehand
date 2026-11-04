@@ -28,6 +28,7 @@ pub struct Settings {
     pub api_tls_enabled: bool,
     pub api_tls_certificate_path: String,
     pub api_tls_key_path: String,
+    pub api_history_max_entries: usize,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -59,6 +60,7 @@ impl Default for Settings {
             api_tls_enabled: false,
             api_tls_certificate_path: String::new(),
             api_tls_key_path: String::new(),
+            api_history_max_entries: 1000,
         }
     }
 }
