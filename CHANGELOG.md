@@ -2,11 +2,37 @@
 
 All notable changes to RemoteHand are documented here.
 
-## Unreleased
+## `1.4.0` - 2026-11-05
+
+### Added
+
+- **Generic Plugin API Gateway v1.** Enabled plugins can declare GET-only REST endpoints with optional `api.json` descriptors. Core discovers, validates and serves plugin routes dynamically without hardcoded System Monitor or Target Monitor handlers.
+- **Dynamic API documentation.** `/api/openapi.json`, `/api/docs`, `/api/v1/routes` and `/api/v1/plugins` expose the registered plugin APIs. The explorer now prompts for each named path variable such as `{id}` and substitutes validated values in test requests.
+- **Plugin-owned JSON telemetry.** The gateway forwards a fixed `api.read` IPC call with a view identifier and bounded named path parameters. System Monitor v0.5.2 and Target Monitor v0.7.12 already provide seven sanitized dashboard endpoints each.
+
+### Improved
+
+- **Extensible monitoring integrations.** Additional compatible plugin APIs require packaging an optional descriptor and implementing the shared IPC contract, without future plugin-specific Core changes.
+- **Security and isolation.** The gateway reuses opt-in Core API Server bearer-token authentication and HTTPS/network settings, enforces GET-only routes, descriptor/path bounds, response size/timeout limits, and removes disabled-plugin routes dynamically. Authentication headers and tokens are not forwarded into plugin IPC.
+- **Plugin separation.** Disabling Target Monitor removes its APIs without affecting System Monitor's published routes; this was verified on Windows.
 
 ### Fixed
 
-- **Plugin popout navigation styling.** Refresh the repaired stylesheet when an embedded plugin replaces its HTML/CSS inside a detached Dockview window; this keeps Arcade Home and Compute Empire styled while navigating between them. Windows acceptance confirmed on 2026-10-31. Release packaging and broader regression tests remain pending.
+- **Plugin popout navigation styling.** Refresh repaired styles when an embedded plugin replaces its HTML/CSS in detached Dockview windows, keeping Arcade Home and Compute Empire styled while navigating; Windows acceptance reported 2026-10-31.
+- **Parameterized endpoint testing.** API explorer now renders inputs for OpenAPI path variables instead of requesting literal `{id}` paths, which had returned HTTP 404 for Target Monitor.
+
+### Compatibility
+
+- Existing Core API Server remains opt-in and disabled by default; existing monitoring UI, plugin API v1, bearer authorization, network bindings and settings remain unchanged.
+- HTTP plugin APIs require compatible plugins; System Monitor v0.5.2 and Target Monitor v0.7.12 are independently released. Older plugins lacking `api.json` continue functioning normally.
+
+### Verification
+
+- Windows acceptance: generic gateway and API explorer operated with both released monitoring plugins; all fourteen plugin GET endpoints exercised successfully, including target-specific Ping history, TCP and HTTP check results.
+- Missing/invalid bearer-token requests rejected with HTTP 401; disabling one plugin removed only its own routes; enabled plugins continued to work.
+- Windows optimized Tauri Core build succeeded on the feature branch at `80ddaf9a0ca816eac8d1ac9e4fb17238cf90e3a1`.
+- **Core Rust unit tests have not passed on Windows**: the test executable previously failed to launch with `0xc0000139 STATUS_ENTRYPOINT_NOT_FOUND`; compile/check and release build success do not count as successful unit-test execution.
+- Final exact-main build, smoke test, packaging, SHA256 and annotated tag validation remain required before GitHub Release publication.
 
 ## `1.3.8` - 2026-10-05
 
