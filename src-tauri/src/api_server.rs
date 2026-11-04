@@ -4,7 +4,6 @@ use crate::api_history::{ApiHistory, HistorySnapshot};
 use rustls::{ServerConfig, ServerConnection, StreamOwned};
 use serde::Serialize;
 use serde_json::{json, Value};
-use tauri::Manager;
 use std::{
     fs,
     io::{BufReader, Read, Write},
