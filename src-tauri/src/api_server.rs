@@ -137,6 +137,11 @@ fn create_token() -> Result<String, String> {
 }
 
 impl ApiServerState {
+    pub fn set_app_handle(&self, app: tauri::AppHandle) -> Result<(), String> {
+        *self.app_handle.lock().map_err(|e| e.to_string())? = Some(app);
+        Ok(())
+    }
+
     pub fn configure(
         &self, enabled: bool, port: u16, bind_address: &str,
         tls_enabled: bool, certificate_path: &str, key_path: &str
@@ -321,7 +326,7 @@ pub fn api_server_configure(
     certificate_path: String,
     key_path: String,
 ) -> Result<ApiStatus, String> {
-    *state.app_handle.lock().map_err(|e| e.to_string())? = Some(app);
+    state.set_app_handle(app)?;
     state.configure(enabled, port, &bind_address, tls_enabled, &certificate_path, &key_path)
 }
 
