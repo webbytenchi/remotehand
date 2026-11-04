@@ -22,6 +22,8 @@ pub struct Settings {
     pub global_shortcut: String,
     pub function_key_shortcuts: BTreeMap<String, String>,
     pub vault_auto_lock_minutes: u64,
+    pub api_enabled: bool,
+    pub api_port: u16,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -47,6 +49,8 @@ impl Default for Settings {
                 "Ctrl+F12".to_string(),
             )]),
             vault_auto_lock_minutes: 15,
+            api_enabled: false,
+            api_port: 8765,
         }
     }
 }
