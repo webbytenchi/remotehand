@@ -24,7 +24,13 @@ The separate **Transport security** selector supports:
 
 ### Create a free HTTPS certificate
 
-For development or a private home lab, the free open-source [mkcert utility](https://github.com/FiloSottile/mkcert) can issue local certificates without buying one. Install mkcert from its official release instructions on the RemoteHand machine. In PowerShell (replace the sample IP with the actual RemoteHand machine's address):
+For development or a private home lab, the free open-source [mkcert utility](https://github.com/FiloSottile/mkcert) can issue local certificates without buying one. On Windows, install mkcert on the RemoteHand machine with PowerShell:
+
+```powershell
+winget install --id FiloSottile.mkcert --exact --source winget
+```
+
+Close and reopen PowerShell, then verify the installation with `mkcert -version`. If winget isn't available, use the installation guidance in the official mkcert repository. Next, generate a certificate (replace the sample IP with the actual RemoteHand machine's address):
 
 ```powershell
 New-Item -ItemType Directory -Force C:\certs | Out-Null
