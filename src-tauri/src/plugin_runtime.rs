@@ -1529,9 +1529,26 @@ impl PluginRuntimeState {
                 .call_lock
                 .clone()
         };
-        let _call_guard = call_lock
-            .lock()
-            .map_err(|_| "plugin call lock poisoned".to_string())?;
+        // An HTTP call must not wait forever behind an already-running UI call.
+        let started = std::time::Instant::now();
+        let _call_guard = match timeout {
+            Some(limit) => loop {
+                match call_lock.try_lock() {
+                    Ok(guard) => break guard,
+                    Err(std::sync::TryLockError::WouldBlock) => {
+                        if started.elapsed() >= limit {
+                            return Err("plugin call queue timed out".to_string());
+                        }
+                        thread::sleep(Duration::from_millis(10));
+                    },
+                    Err(std::sync::TryLockError::Poisoned(_)) => {
+                        return Err("plugin call lock poisoned".to_string());
+                    }
+                }
+            },
+            None => call_lock.lock()
+                .map_err(|_| "plugin call lock poisoned".to_string())?,
+        };
 
         let receiver = {
             let mut sessions = self
@@ -1580,7 +1597,7 @@ impl PluginRuntimeState {
         };
 
         let response = match timeout {
-            Some(limit) => receiver.recv_timeout(limit)
+            Some(limit) => receiver.recv_timeout(limit.saturating_sub(started.elapsed()))
                 .map_err(|error| format!("plugin response timed out or disconnected: {error}"))??,
             None => receiver.recv()
                 .map_err(|_| "plugin response channel closed".to_string())??,
