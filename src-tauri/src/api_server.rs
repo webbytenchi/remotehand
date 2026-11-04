@@ -136,7 +136,7 @@ fn create_token() -> Result<String, String> {
 impl ApiServerState {
     pub fn configure(
         &self, enabled: bool, port: u16, bind_address: &str,
-        certificate_path: &str, key_path: &str
+        tls_enabled: bool, certificate_path: &str, key_path: &str
     ) -> Result<ApiStatus, String> {
         if !(1024..=65535).contains(&port) {
             return Err("API port must be between 1024 and 65535".into());
@@ -152,13 +152,13 @@ impl ApiServerState {
             .map_err(|_| "Listening address must be a valid IPv4 address".to_string())?;
         let remote = !address.is_loopback();
         inner.requested_address = address;
-        if remote && (certificate_path.trim().is_empty() || key_path.trim().is_empty()) {
-            return Err("Remote API binding requires a TLS certificate and private key (PEM)".into());
+        if tls_enabled && (certificate_path.trim().is_empty() || key_path.trim().is_empty()) {
+            return Err("HTTPS requires a TLS certificate and private key (PEM)".into());
         }
-        let tls = if remote {
+        let tls = if tls_enabled {
             Some(load_tls_config(certificate_path, key_path)?)
         } else { None };
-        if inner.server.as_ref().is_some_and(|running| running.port == port && running.address == address && running.tls == remote && running.certificate_path == certificate_path && running.key_path == key_path) {
+        if inner.server.as_ref().is_some_and(|running| running.port == port && running.address == address && running.tls == tls_enabled && running.certificate_path == certificate_path && running.key_path == key_path) {
             return Ok(self.status_inner(&inner));
         }
         stop_server(&mut inner);
@@ -212,7 +212,7 @@ impl ApiServerState {
                 }
             })
             .map_err(|e| e.to_string())?;
-        inner.server = Some(Running { port, address, tls: remote, certificate_path: certificate_path.to_owned(), key_path: key_path.to_owned(), stop, worker });
+        inner.server = Some(Running { port, address, tls: tls_enabled, certificate_path: certificate_path.to_owned(), key_path: key_path.to_owned(), stop, worker });
         inner.error = None;
         Ok(self.status_inner(&inner))
     }
@@ -271,10 +271,11 @@ pub fn api_server_configure(
     enabled: bool,
     port: u16,
     bind_address: String,
+    tls_enabled: bool,
     certificate_path: String,
     key_path: String,
 ) -> Result<ApiStatus, String> {
-    state.configure(enabled, port, &bind_address, &certificate_path, &key_path)
+    state.configure(enabled, port, &bind_address, tls_enabled, &certificate_path, &key_path)
 }
 
 #[tauri::command]
@@ -543,16 +544,16 @@ mod tests {
     #[test]
     fn remote_binding_requires_tls_material() {
         let api = ApiServerState::default();
-        let error = api.configure(true, 8765, "0.0.0.0", "", "")
+        let error = api.configure(true, 8765, "0.0.0.0", true, "", "")
             .err().expect("remote binding without TLS must fail");
         assert!(error.contains("TLS certificate"));
         assert!(!api.status().unwrap().running);
-        assert!(api.configure(false, 8765, "0.0.0.0", "", "").is_ok());
+        assert!(api.configure(false, 8765, "0.0.0.0", false, "", "").is_ok());
     }
 
     #[test]
     fn invalid_ipv4_address_is_rejected() {
         let api = ApiServerState::default();
-        assert!(api.configure(true, 8765, "not-an-address", "", "").is_err());
+        assert!(api.configure(true, 8765, "not-an-address", false, "", "").is_err());
     }
 }
