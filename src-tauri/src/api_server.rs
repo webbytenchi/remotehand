@@ -4,6 +4,7 @@ use crate::api_history::{ApiHistory, HistorySnapshot};
 use rustls::{ServerConfig, ServerConnection, StreamOwned};
 use serde::Serialize;
 use serde_json::{json, Value};
+use tauri::Manager;
 use std::{
     fs,
     io::{BufReader, Read, Write},
@@ -24,6 +25,12 @@ const ROUTES: &[&str] = &[
     "/api/v1/core/status",
     "/api/v1/plugins",
     "/api/v1/routes",
+    "/api/v1/system-monitor",
+    "/api/v1/system-monitor/metrics",
+    "/api/v1/system-monitor/gpus",
+    "/api/v1/system-monitor/disks",
+    "/api/v1/system-monitor/history",
+    "/api/v1/system-monitor/alerts",
 ];
 
 #[derive(Clone, Serialize)]
@@ -60,6 +67,7 @@ pub struct ApiServerState {
     inner: Mutex<Inner>,
     started: Instant,
     history: ApiHistory,
+    app_handle: Mutex<Option<tauri::AppHandle>>,
 }
 
 impl Default for ApiServerState {
@@ -74,6 +82,7 @@ impl Default for ApiServerState {
             }),
             started: Instant::now(),
             history: ApiHistory::default(),
+            app_handle: Mutex::new(None),
         }
     }
 }
@@ -180,6 +189,7 @@ impl ApiServerState {
         let credentials = inner.credential.clone();
         let since = self.started;
         let history = self.history.clone();
+        let app_handle = self.app_handle.lock().map_err(|e| e.to_string())?.clone();
         let worker = thread::Builder::new()
             .name("remotehand-api".into())
             .spawn(move || {
@@ -209,7 +219,7 @@ impl ApiServerState {
                                         match handshake {
                                             Ok(()) => {
                                                 let secured = StreamOwned::new(connection, stream);
-                                                serve_connection(secured, peer, &credentials, since, &history);
+                                                serve_connection(secured, peer, &credentials, since, &history, app_handle.as_ref());
                                             }
                                             Err(error) => log::warn!("API TLS handshake failed for {peer}: {error}"),
                                         }
@@ -217,7 +227,7 @@ impl ApiServerState {
                                     Err(error) => log::warn!("API TLS setup failed for {peer}: {error}"),
                                 }
                             } else {
-                                serve_connection(stream, peer, &credentials, since, &history);
+                                serve_connection(stream, peer, &credentials, since, &history, app_handle.as_ref());
                             }
                         },
                         Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
@@ -309,6 +319,7 @@ impl ApiServerState {
 #[tauri::command]
 pub fn api_server_configure(
     state: tauri::State<'_, ApiServerState>,
+    app: tauri::AppHandle,
     enabled: bool,
     port: u16,
     bind_address: String,
@@ -316,6 +327,7 @@ pub fn api_server_configure(
     certificate_path: String,
     key_path: String,
 ) -> Result<ApiStatus, String> {
+    *state.app_handle.lock().map_err(|e| e.to_string())? = Some(app);
     state.configure(enabled, port, &bind_address, tls_enabled, &certificate_path, &key_path)
 }
 
@@ -540,7 +552,7 @@ fn openapi_spec() -> Value {
         "info": {
             "title": "RemoteHand Core API",
             "version": "1.0.0",
-            "description": "Opt-in read-only API for localhost or explicitly selected IPv4 interfaces. Runs only while RemoteHand is running. Plugin API publication is not implemented yet."
+            "description": "Opt-in read-only API for localhost or explicitly selected IPv4 interfaces. Monitoring routes require the matching enabled plugin with an API-capable version."
         },
         "servers": [{ "url": "/", "description": "Current RemoteHand API listener" }],
         "components": {
@@ -585,7 +597,7 @@ fn openapi_spec() -> Value {
                 json!({ "type": "array", "items": { "type": "object" } })
             )},
             "/api/v1/routes": { "get": operation(
-                "Route discovery", "Lists the currently active HTTP paths and their authentication requirements.", true,
+                "Route discovery", "Lists the registered HTTP paths and their authentication requirements. System Monitor routes respond 503 when the compatible plugin is unavailable.", true,
                 json!({ "type": "array", "items": {
                     "type": "object", "properties": {
                         "method": { "type": "string" },
@@ -593,9 +605,69 @@ fn openapi_spec() -> Value {
                         "authRequired": { "type": "boolean" }
                     }
                 } })
+            )},
+            "/api/v1/system-monitor": { "get": operation(
+                "System Monitor summary", "Sanitized latest CPU, memory and temperature summary.", true, json!({"type":"object"})
+            )},
+            "/api/v1/system-monitor/metrics": { "get": operation(
+                "System metrics", "Current CPU, memory and CPU temperature samples.", true, json!({"type":"object"})
+            )},
+            "/api/v1/system-monitor/gpus": { "get": operation(
+                "GPU metrics", "Sanitized GPU metrics; hardware identity omitted.", true, json!({"type":"object"})
+            )},
+            "/api/v1/system-monitor/disks": { "get": operation(
+                "Disk metrics", "Sanitized disk metrics; mount paths and volume names omitted.", true, json!({"type":"object"})
+            )},
+            "/api/v1/system-monitor/history": { "get": operation(
+                "System metrics history", "Up to 120 sampled CPU/memory/temperature points.", true, json!({"type":"object"})
+            )},
+            "/api/v1/system-monitor/alerts": { "get": operation(
+                "Active System Monitor alerts", "Active warning and critical alerts only; no resolved alert history.", true, json!({"type":"object"})
             )}
         }
     })
+}
+
+
+fn system_monitor_view(path: &str) -> Option<&'static str> {
+    match path {
+        "/api/v1/system-monitor" => Some("summary"),
+        "/api/v1/system-monitor/metrics" => Some("metrics"),
+        "/api/v1/system-monitor/gpus" => Some("gpus"),
+        "/api/v1/system-monitor/disks" => Some("disks"),
+        "/api/v1/system-monitor/history" => Some("history"),
+        "/api/v1/system-monitor/alerts" => Some("alerts"),
+        _ => None,
+    }
+}
+
+fn system_monitor_response(path: &str, app: Option<&tauri::AppHandle>) -> (u16, Value) {
+    let Some(view) = system_monitor_view(path) else {
+        return (404, json!({"status":"error","error":"not_found"}));
+    };
+    let Some(app) = app else {
+        return (503, json!({"status":"error","error":"plugin_unavailable"}));
+    };
+    const PLUGIN_ID: &str = "remotehand.system-monitor";
+    if !matches!(crate::plugins::plugin_available(PLUGIN_ID), Ok(true)) {
+        return (503, json!({"status":"error","error":"plugin_unavailable"}));
+    }
+    let runtime = app.state::<crate::plugin_runtime::PluginRuntimeState>();
+    match runtime.call_with_timeout(PLUGIN_ID, "system.api.read", json!({"view":view}), Duration::from_secs(2)) {
+        Ok(data) => {
+            // Plugin deliberately publishes only fields from its safe API projection.
+            // Never fall back to raw system.status if the installed plugin is outdated.
+            if data.to_string().len() > 256 * 1024 {
+                (502, json!({"status":"error","error":"plugin_response_too_large"}))
+            } else {
+                (200, json!({"status":"ok","data":data}))
+            }
+        },
+        Err(error) => {
+            log::warn!("System Monitor API unavailable: {error}");
+            (503, json!({"status":"error","error":"plugin_unavailable"}))
+        }
+    }
 }
 
 fn response_for(path: &str, auth: Option<&str>, expected: &str, since: Instant)
@@ -612,6 +684,11 @@ fn response_for(path: &str, auth: Option<&str>, expected: &str, since: Instant)
     }
     if !authorized(auth, expected) {
         return (401, json!({ "status": "error", "error": "unauthorized" }));
+    }
+    // Endpoint authorization is checked above; plugin I/O is handled separately
+    // on the actual HTTP listener to avoid an app dependency in core unit tests.
+    if system_monitor_view(path).is_some() {
+        return (503, json!({"status":"error","error":"plugin_unavailable"}));
     }
     match path {
         "/api/v1/core/status" => (200, json!({
@@ -638,6 +715,7 @@ fn response_for(path: &str, auth: Option<&str>, expected: &str, since: Instant)
 fn serve_connection<S: Read + Write>(
     mut stream: S, peer: SocketAddr, credentials: &Arc<Mutex<String>>, since: Instant,
     history: &ApiHistory,
+    app: Option<&tauri::AppHandle>,
 ) {
     let started = Instant::now();
     let mut buf = [0u8; 4096];
@@ -660,7 +738,11 @@ fn serve_connection<S: Read + Write>(
             name.eq_ignore_ascii_case("authorization").then_some(value.trim())
         }));
         let expected = match credentials.lock() { Ok(token) => token.clone(), Err(_) => return };
-        response_for(parts[1], auth, &expected, since)
+        if system_monitor_view(parts[1]).is_some() && authorized(auth, &expected) {
+            system_monitor_response(parts[1], app)
+        } else {
+            response_for(parts[1], auth, &expected, since)
+        }
     };
     let is_docs = parts.len() == 3 && parts[0] == "GET" && parts[1] == "/api/docs"
         && request.contains("\r\n\r\n") && code == 200;
@@ -670,7 +752,7 @@ fn serve_connection<S: Read + Write>(
         (code, body.to_string(), "application/json; charset=utf-8")
     };
     let reason = match code { 200 => "OK", 400 => "Bad Request", 401 => "Unauthorized",
-        404 => "Not Found", 405 => "Method Not Allowed", _ => "Error" };
+        404 => "Not Found", 405 => "Method Not Allowed", 502 => "Bad Gateway", 503 => "Service Unavailable", _ => "Error" };
     let headers = format!("HTTP/1.1 {code} {reason}\r\nContent-Type: {content_type}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\nContent-Length: {}\r\n\r\n", body.len());
     let _ = stream.write_all(headers.as_bytes());
     let _ = stream.write_all(body.as_bytes());
@@ -687,7 +769,8 @@ mod tests {
         assert_eq!(response_for("/api/v1/health", None, "secret", since).0, 200);
         for path in &ROUTES[3..] {
             assert_eq!(response_for(path, None, "secret", since).0, 401);
-            assert_eq!(response_for(path, Some("Bearer secret"), "secret", since).0, 200);
+            let expected = if system_monitor_view(path).is_some() { 503 } else { 200 };
+            assert_eq!(response_for(path, Some("Bearer secret"), "secret", since).0, expected);
         }
         assert_eq!(response_for("/api/docs", None, "secret", since).0, 200);
         assert_eq!(response_for("/api/openapi.json", None, "secret", since).0, 200);
