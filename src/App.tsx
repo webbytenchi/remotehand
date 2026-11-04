@@ -2911,6 +2911,13 @@ setApiDraft((current) => ({ ...current, bindAddress: address }));
 <span>TLS private key path (PEM)</span>
 <input value={apiDraft.keyPath} onChange={(event) => setApiDraft((current) => ({ ...current, keyPath: event.target.value }))} placeholder="C:\\certs\\remotehand.key" spellCheck={false} />
 </label>
+<details className="api-certificate-guide">
+<summary>How to create a free HTTPS certificate</summary>
+<p>For development, install the free mkcert utility on the computer running RemoteHand, then use these commands in PowerShell:</p>
+<pre>{'New-Item -ItemType Directory -Force C:\\certs\\ | Out-Null\nmkcert -install\nmkcert -cert-file C:\\certs\\remotehand.crt -key-file C:\\certs\\remotehand.key 192.168.1.100 localhost 127.0.0.1'}</pre>
+<p>Replace 192.168.1.100 with the IP or hostname clients will actually use. Enter the two generated file paths above. Install and trust mkcert's root CA certificate on each client device; <strong>never copy the CA private key</strong>. Keep remotehand.key private. This is for trusted development networks, not internet-facing production.</p>
+<p>Installer and details: github.com/FiloSottile/mkcert. You can also use a certificate issued by an existing trusted CA.</p>
+</details>
 </>
 ) : null}
 <button type="button" className="settings-reset" style={{ justifySelf: "start", padding: "9px 12px" }}
