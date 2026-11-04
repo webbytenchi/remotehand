@@ -755,6 +755,10 @@ const [settingsTab, setSettingsTab] = useState<"appearance" | "layout" | "startu
 type ApiStatus = { enabled: boolean; running: boolean; port: number; bindAddress: string; tls: boolean; url: string | null; error: string | null };
 type ApiHistoryEntry = { timestamp: string; ip: string; method: string; route: string; status: number; durationMs: number };
 type ApiHistorySnapshot = { entries: ApiHistoryEntry[]; total: number; succeeded: number; failed: number };
+const [apiDraft, setApiDraft] = useState({
+port: 8765, bindAddress: "127.0.0.1",
+certificatePath: "", keyPath: ""
+});
 const [apiStatus, setApiStatus] = useState<ApiStatus | null>(null);
 const [apiHistory, setApiHistory] = useState<ApiHistorySnapshot | null>(null);
 const [apiHistoryError, setApiHistoryError] = useState("");
@@ -1433,6 +1437,8 @@ console.error("Failed to load startup preference", error);
 }
 const nextSettings = { ...DEFAULT_SETTINGS, ...saved, startWithSystem };
 setSettings(nextSettings);
+setApiDraft({ port: nextSettings.apiPort, bindAddress: nextSettings.apiBindAddress,
+certificatePath: nextSettings.apiTlsCertificatePath, keyPath: nextSettings.apiTlsKeyPath });
 setGlobalShortcutDraft(nextSettings.globalShortcut);
 if (isTauri()) {
 try {
@@ -2851,30 +2857,30 @@ return <div key={id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1
 </label>
 <label className="api-server-port">
 <span>Port (1024–65535)</span>
-<input type="number" min={1024} max={65535} value={settings.apiPort} onChange={(event) => {
+<input type="number" min={1024} max={65535} value={apiDraft.port} onChange={(event) => {
 const port = Number(event.target.value);
-if (Number.isInteger(port) && port >= 1024 && port <= 65535) setSettings((current) => ({ ...current, apiPort: port }));
+if (Number.isInteger(port) && port >= 1024 && port <= 65535) setApiDraft((current) => ({ ...current, port }));
 }} />
 </label>
 </div>
 <div className="settings-field">
 <label htmlFor="api-bind-mode">Listening network</label>
-<select id="api-bind-mode" value={settings.apiBindAddress === "127.0.0.1" ? "localhost" : settings.apiBindAddress === "0.0.0.0" ? "all" : "custom"} onChange={(event) => {
+<select id="api-bind-mode" value={apiDraft.bindAddress === "127.0.0.1" ? "localhost" : apiDraft.bindAddress === "0.0.0.0" ? "all" : "custom"} onChange={(event) => {
 const address = event.target.value === "localhost" ? "127.0.0.1" : event.target.value === "all" ? "0.0.0.0" : "192.168.1.100";
-setSettings((current) => ({ ...current, apiBindAddress: address }));
+setApiDraft((current) => ({ ...current, bindAddress: address }));
 }}>
 <option value="localhost">Localhost only — 127.0.0.1 (recommended)</option>
 <option value="all">All IPv4 interfaces — 0.0.0.0 (requires TLS)</option>
 <option value="custom">Specific IPv4 address (requires TLS)</option>
 </select>
 </div>
-{settings.apiBindAddress !== "127.0.0.1" && settings.apiBindAddress !== "0.0.0.0" ? (
+{apiDraft.bindAddress !== "127.0.0.1" && apiDraft.bindAddress !== "0.0.0.0" ? (
 <label className="settings-field">
 <span>Specific IPv4 listening address</span>
-<input value={settings.apiBindAddress} onChange={(event) => setSettings((current) => ({ ...current, apiBindAddress: event.target.value }))} placeholder="192.168.1.100" />
+<input value={apiDraft.bindAddress} onChange={(event) => setApiDraft((current) => ({ ...current, bindAddress: event.target.value }))} placeholder="192.168.1.100" />
 </label>
 ) : null}
-{settings.apiBindAddress !== "127.0.0.1" ? (
+{apiDraft.bindAddress !== "127.0.0.1" ? (
 <>
 <div className="plugin-security-note">
 <strong>HTTPS required for remote listening</strong>
@@ -2882,14 +2888,31 @@ setSettings((current) => ({ ...current, apiBindAddress: address }));
 </div>
 <label className="settings-field">
 <span>TLS certificate path (PEM)</span>
-<input value={settings.apiTlsCertificatePath} onChange={(event) => setSettings((current) => ({ ...current, apiTlsCertificatePath: event.target.value }))} placeholder="C:\\certs\\remotehand.crt" spellCheck={false} />
+<input value={apiDraft.certificatePath} onChange={(event) => setApiDraft((current) => ({ ...current, certificatePath: event.target.value }))} placeholder="C:\\certs\\remotehand.crt" spellCheck={false} />
 </label>
 <label className="settings-field">
 <span>TLS private key path (PEM)</span>
-<input value={settings.apiTlsKeyPath} onChange={(event) => setSettings((current) => ({ ...current, apiTlsKeyPath: event.target.value }))} placeholder="C:\\certs\\remotehand.key" spellCheck={false} />
+<input value={apiDraft.keyPath} onChange={(event) => setApiDraft((current) => ({ ...current, keyPath: event.target.value }))} placeholder="C:\\certs\\remotehand.key" spellCheck={false} />
 </label>
 </>
 ) : null}
+<button type="button" className="settings-reset" style={{ justifySelf: "start", padding: "9px 12px" }}
+onClick={() => {
+if (apiDraft.bindAddress !== "127.0.0.1") {
+if (!apiDraft.certificatePath.trim() || !apiDraft.keyPath.trim()) {
+setApiError("A TLS certificate and matching private key are required for remote listening.");
+return;
+}
+if (!window.confirm("Allow RemoteHand's API to listen beyond localhost using HTTPS? Only proceed on a trusted interface with a valid TLS certificate. Firewall rules are not changed automatically.")) return;
+}
+setApiError("");
+setSettings((current) => ({ ...current,
+apiPort: apiDraft.port,
+apiBindAddress: apiDraft.bindAddress.trim(),
+apiTlsCertificatePath: apiDraft.certificatePath.trim(),
+apiTlsKeyPath: apiDraft.keyPath.trim()
+}));
+}}>Apply listening configuration</button>
 <div className="plugin-security-note">
 <strong>Server status: {apiStatus?.running ? "Running" : "Stopped"}</strong>
 <span>{apiStatus?.url || "Localhost only — disabled until enabled."}</span>
