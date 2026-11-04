@@ -351,6 +351,25 @@ pub fn api_server_rotate_token(state: tauri::State<'_, ApiServerState>) -> Resul
 }
 
 #[tauri::command]
+pub async fn api_server_pick_tls_file(kind: String) -> Result<Option<String>, String> {
+    if kind != "certificate" && kind != "key" {
+        return Err("Unsupported TLS file kind".to_owned());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let dialog = if kind == "certificate" {
+            rfd::FileDialog::new()
+                .set_title("Select TLS certificate")
+                .add_filter("Certificates (PEM, CRT, CER)", &["pem", "crt", "cer"])
+        } else {
+            rfd::FileDialog::new()
+                .set_title("Select TLS private key")
+                .add_filter("Private keys (PEM, KEY)", &["pem", "key"])
+        };
+        Ok(dialog.pick_file().map(|path| path.to_string_lossy().into_owned()))
+    }).await.map_err(|error| format!("File picker failed: {error}"))?
+}
+
+#[tauri::command]
 pub fn api_server_open_docs(state: tauri::State<'_, ApiServerState>) -> Result<(), String> {
     let status = state.status()?;
     let url = status.url.ok_or("API server is not running")? + "/api/docs";
