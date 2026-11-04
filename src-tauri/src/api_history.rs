@@ -37,6 +37,7 @@ pub struct HistorySnapshot {
 enum Message {
     Append(HistoryEntry),
     Clear(SyncSender<Result<(), String>>),
+    Flush(SyncSender<Result<(), String>>),
 }
 
 #[derive(Clone)]
@@ -94,6 +95,11 @@ fn writer(entries: Arc<Mutex<VecDeque<HistoryEntry>>>, rx: Receiver<Message>) {
                     while history.len() > MAX_ENTRIES { history.pop_front(); }
                     dirty = true;
                 }
+            }
+            Ok(Message::Flush(reply)) => {
+                let result = match entries.lock() { Ok(history) => save(&history), Err(error) => Err(error.to_string()) };
+                if result.is_ok() { dirty = false; }
+                let _ = reply.send(result);
             }
             Ok(Message::Clear(reply)) => {
                 let result = match entries.lock() {
@@ -166,6 +172,12 @@ impl ApiHistory {
             entries: entries.iter().rev().take(100).cloned().collect(),
             total, succeeded, failed: total - succeeded,
         })
+    }
+
+    pub fn flush(&self) -> Result<(), String> {
+        let (tx, rx) = mpsc::sync_channel(1);
+        self.tx.send(Message::Flush(tx)).map_err(|e| e.to_string())?;
+        rx.recv_timeout(Duration::from_secs(5)).map_err(|e| e.to_string())?
     }
 
     pub fn clear(&self) -> Result<(), String> {
