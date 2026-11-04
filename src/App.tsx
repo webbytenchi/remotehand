@@ -757,6 +757,8 @@ const closeSettings = useCallback(() => {
 setGlobalShortcutDraft(settings.globalShortcut);
 setGlobalShortcutCapturing(false);
 setGlobalShortcutError("");
+setApiToken("");
+setApiTokenVisible(false);
 setSettingsOpen(false);
 }, [settings.globalShortcut]);
 const [papaTabUnlocked, setPapaTabUnlocked] = useState(false);
