@@ -85,6 +85,8 @@ globalShortcutEnabled: boolean;
 globalShortcut: string;
 functionKeyShortcuts: Record<string, string>;
 vaultAutoLockMinutes: number;
+apiEnabled: boolean;
+apiPort: number;
 };
 type WorkspaceLayout = Parameters<DockviewApi["fromJSON"]>[0];
 const WORKSPACE_KEY = "remotehand.workspace";
@@ -111,6 +113,8 @@ globalShortcutEnabled: true,
 globalShortcut: "Ctrl+Shift+Space",
 functionKeyShortcuts: { "core.commandPalette": "Ctrl+F12" },
 vaultAutoLockMinutes: 15,
+apiEnabled: false,
+apiPort: 8765,
 };
 const UI_FONT_OPTIONS = ["Inter", "IBM Plex Sans", "Segoe UI", "System Default"] as const;
 const TERMINAL_FONT_OPTIONS = ["JetBrains Mono", "IBM Plex Mono", "Cascadia Mono", "Consolas", "System Monospace"] as const;
@@ -741,7 +745,11 @@ const [vaultPromptPassphrase, setVaultPromptPassphrase] = useState("");
 const [vaultPromptPassphraseConfirm, setVaultPromptPassphraseConfirm] = useState("");
 const [vaultPromptError, setVaultPromptError] = useState("");
 const [vaultPromptBusy, setVaultPromptBusy] = useState(false);
-const [settingsTab, setSettingsTab] = useState<"appearance" | "layout" | "startup" | "vault" | "plugins" | "shortcuts" | "about" | "papa">("appearance");
+const [settingsTab, setSettingsTab] = useState<"appearance" | "layout" | "startup" | "vault" | "plugins" | "shortcuts" | "about" | "api" | "papa">("appearance");
+const [apiStatus, setApiStatus] = useState<{ enabled: boolean; running: boolean; port: number; url: string | null; error: string | null } | null>(null);
+const [apiError, setApiError] = useState("");
+const [apiToken, setApiToken] = useState("");
+const [apiTokenVisible, setApiTokenVisible] = useState(false);
 const [vaultStatus, setVaultStatus] = useState<{ exists: boolean; unlocked: boolean } | null>(null);
 const [vaultStatusError, setVaultStatusError] = useState("");
 const [vaultActionBusy, setVaultActionBusy] = useState(false);
@@ -1472,6 +1480,17 @@ void invoke("save_settings", { settings }).catch((error) =>
 console.error("Failed to save settings", error),
 );
 }, [settings, settingsLoaded]);
+useEffect(() => {
+if (!settingsLoaded || !isTauri()) return;
+void invoke<{ enabled: boolean; running: boolean; port: number; url: string | null; error: string | null }>(
+"api_server_configure", { enabled: settings.apiEnabled, port: settings.apiPort })
+.then((status) => { setApiStatus(status); setApiError(""); })
+.catch((error) => { setApiError(String(error)); void invoke<typeof apiStatus>("api_server_status").then(setApiStatus).catch(() => {}); });
+}, [settingsLoaded, settings.apiEnabled, settings.apiPort]);
+useEffect(() => {
+if (!settingsOpen || settingsTab !== "api" || !isTauri()) return;
+void invoke<typeof apiStatus>("api_server_status").then(setApiStatus).catch((error) => setApiError(String(error)));
+}, [settingsOpen, settingsTab]);
 const shortcutFromKeyboardEvent = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
 if (event.key === "Escape") {
 event.preventDefault();
@@ -2519,6 +2538,7 @@ tabs={<div className="settings-tabs" role="tablist" aria-label="Settings section
 <button type="button" role="tab" aria-selected={settingsTab === "startup"} className={settingsTab === "startup" ? "active" : ""} onClick={() => setSettingsTab("startup")}>Startup &amp; Tray</button>
 <button type="button" role="tab" aria-selected={settingsTab === "vault"} className={settingsTab === "vault" ? "active" : ""} onClick={() => setSettingsTab("vault")}>Vault</button>
 <button type="button" role="tab" aria-selected={settingsTab === "plugins"} className={settingsTab === "plugins" ? "active" : ""} onClick={() => setSettingsTab("plugins")}>Plugins</button>
+<button type="button" role="tab" aria-selected={settingsTab === "api"} className={settingsTab === "api" ? "active" : ""} onClick={() => setSettingsTab("api")}>API Server</button>
 <button type="button" role="tab" aria-selected={settingsTab === "shortcuts"} className={settingsTab === "shortcuts" ? "active" : ""} onClick={() => setSettingsTab("shortcuts")}>Keyboard Shortcuts</button>
 <button type="button" role="tab" aria-selected={settingsTab === "about"} className={settingsTab === "about" ? "active" : ""} onClick={() => setSettingsTab("about")}>About</button>
 {papaTabUnlocked ? <span className="papa-tab-reveal"><button ref={papaTabButtonRef} type="button" role="tab" aria-selected={settingsTab === "papa"} className={settingsTab === "papa" ? "active" : ""} onClick={() => { setSettingsTab("papa"); startPapaAudio(); }}>Papa</button></span> : null}
@@ -2792,6 +2812,50 @@ return <div key={id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1
 <span>Install, enable, disable, and remove RemoteHand plugins.</span>
 </div>
 <div ref={setPluginSettingsHost} />
+</div>
+) : settingsTab === "api" ? (
+<div className="settings-tab-content" style={{ display: "grid", gap: 18 }}>
+<div className="settings-section-heading">
+<strong>RemoteHand Core API</strong>
+<span>Read-only JSON endpoints for approved monitoring clients. The server runs only while RemoteHand runs, including when minimized to the tray.</span>
+</div>
+<label className="settings-field">
+<span>Enable API Server</span>
+<input type="checkbox" checked={settings.apiEnabled} onChange={(event) => setSettings((current) => ({ ...current, apiEnabled: event.target.checked }))} />
+</label>
+<label className="settings-field">
+<span>Localhost port (1024–65535)</span>
+<input type="number" min={1024} max={65535} value={settings.apiPort} onChange={(event) => {
+const port = Number(event.target.value);
+if (Number.isInteger(port) && port >= 1024 && port <= 65535) setSettings((current) => ({ ...current, apiPort: port }));
+}} />
+</label>
+<div className="plugin-security-note">
+<strong>Server status: {apiStatus?.running ? "Running" : "Stopped"}</strong>
+<span>{apiStatus?.url || "Localhost only — disabled until enabled."}</span>
+<span>For this first release the HTTP API binds only to 127.0.0.1. Direct LAN or Tailnet access is not enabled.</span>
+</div>
+<div className="settings-section-heading">
+<strong>API Access Token</strong>
+<span>Keep this token private. Protected routes require an Authorization: Bearer header. The health route is public on localhost.</span>
+</div>
+<div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+<button type="button" className="settings-reset" onClick={() => {
+if (apiTokenVisible) { setApiTokenVisible(false); setApiToken(""); return; }
+void invoke<string>("api_server_token").then((token) => { setApiToken(token); setApiTokenVisible(true); setApiError(""); }).catch((error) => setApiError(String(error)));
+}}>{apiTokenVisible ? "Hide Token" : "Reveal Token"}</button>
+<button type="button" className="settings-reset" onClick={() => {
+if (!window.confirm("Rotate the API token? All existing API clients will need the new token.")) return;
+void invoke<string>("api_server_rotate_token").then((token) => { setApiToken(token); setApiTokenVisible(true); setApiError(""); }).catch((error) => setApiError(String(error)));
+}}>Rotate Token</button>
+</div>
+{apiTokenVisible ? <input aria-label="API access token" type="text" readOnly value={apiToken} onFocus={(event) => event.currentTarget.select()} /> : null}
+<div className="settings-section-heading">
+<strong>Core routes</strong>
+<span>GET /api/v1/health (public) · GET /api/v1/core/status · GET /api/v1/plugins · GET /api/v1/routes</span>
+<span>Plugin route publication is reserved for a later milestone. The plugin list is empty until explicitly supported.</span>
+</div>
+{apiError || apiStatus?.error ? <div className="plugin-error">{apiError || apiStatus?.error}</div> : null}
 </div>
 ) : settingsTab === "shortcuts" ? (
 <div className="settings-tab-content">
