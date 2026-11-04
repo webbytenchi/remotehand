@@ -609,13 +609,13 @@ fn openapi_spec() -> Value {
         }
     });
     for route in crate::api_gateway::published_routes() {
-        spec["paths"][&route.path] = json!({"get": operation(
+        spec["paths"][route.path.as_str()] = json!({"get": operation(
             &route.summary, &route.description, true,
             json!({"type":"object"})
         )});
-        spec["paths"][&route.path]["get"]["responses"]["503"] =
+        spec["paths"][route.path.as_str()]["get"]["responses"]["503"] =
             json!({"description":"Plugin runtime unavailable or incompatible"});
-        spec["paths"][&route.path]["get"]["responses"]["502"] =
+        spec["paths"][route.path.as_str()]["get"]["responses"]["502"] =
             json!({"description":"Invalid or oversized plugin response"});
         let parameters = route.path.split('/').filter_map(|segment| {
             segment.strip_prefix('{').and_then(|name| name.strip_suffix('}'))
@@ -625,7 +625,7 @@ fn openapi_spec() -> Value {
                 }))
         }).collect::<Vec<_>>();
         if !parameters.is_empty() {
-            spec["paths"][&route.path]["get"]["parameters"] = json!(parameters);
+            spec["paths"][route.path.as_str()]["get"]["parameters"] = json!(parameters);
         }
     }
     spec
