@@ -12,6 +12,7 @@ All notable changes to RemoteHand are documented here.
 
 ### Improved
 
+- **Independent Plugin API Routes controls.** Settings → API Server now lists enabled plugins that register valid API routes, displays each plugin's GET paths, and offers a persistent per-plugin API publication switch. Turning off HTTP access removes only its API routes; plugin monitoring and UI remain running.
 - **Extensible monitoring integrations.** Additional compatible plugin APIs require packaging an optional descriptor and implementing the shared IPC contract, without future plugin-specific Core changes.
 - **Security and isolation.** The gateway reuses opt-in Core API Server bearer-token authentication and HTTPS/network settings, enforces GET-only routes, descriptor/path bounds, response size/timeout limits, and removes disabled-plugin routes dynamically. Authentication headers and tokens are not forwarded into plugin IPC.
 - **Plugin separation.** Disabling Target Monitor removes its APIs without affecting System Monitor's published routes; this was verified on Windows.
