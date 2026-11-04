@@ -2748,3 +2748,30 @@ html[data-theme="light"] .vault-prompt input {
 .api-history-ok { color: #65c98b; font-weight: 600; }
 .api-history-failed { color: #ff8c8c; font-weight: 600; }
 html[data-theme="light"] .api-history-table th { background: #ecf0f6; color: #334155; }
+
+.api-certificate-guide {
+  min-width: 0;
+  border: 1px solid #303c4c;
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: #aeb8c6;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.api-certificate-guide summary {
+  color: #9ec5ff;
+  font-weight: 600;
+  cursor: pointer;
+}
+.api-certificate-guide p { margin: 10px 0 0; }
+.api-certificate-guide pre {
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 10px;
+  background: #111823;
+  border: 1px solid #303c4c;
+  border-radius: 6px;
+  user-select: text;
+}
+html[data-theme="light"] .api-certificate-guide pre { background: #f5f7fb; color: #334155; }
