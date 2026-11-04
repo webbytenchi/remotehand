@@ -365,8 +365,8 @@ pub async fn api_server_pick_tls_file(kind: String) -> Result<Option<String>, St
                 .set_title("Select TLS private key")
                 .add_filter("Private keys (PEM, KEY)", &["pem", "key"])
         };
-        Ok(dialog.pick_file().map(|path| path.to_string_lossy().into_owned()))
-    }).await.map_err(|error| format!("File picker failed: {error}"))?
+        dialog.pick_file().map(|path| path.to_string_lossy().into_owned())
+    }).await.map_err(|error| format!("File picker failed: {error}"))
 }
 
 #[tauri::command]
