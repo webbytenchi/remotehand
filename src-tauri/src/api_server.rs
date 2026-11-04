@@ -272,7 +272,7 @@ impl ApiServerState {
         let entries = self.history.all_entries()?;
         fn cell(value: &str) -> String {
             // Prevent spreadsheet programs from treating untrusted route text as formulas.
-            let value = if value.starts_with(['=', '+', '-', '@', '\t', '\r', '\n']) {
+            let value = if value.chars().next().is_some_and(|c| matches!(c, '=' | '+' | '-' | '@' | '\t' | '\r' | '\n')) {
                 format!("'{}", value)
             } else { value.to_string() };
             format!("\"{}\"", value.replace('"', "\"\""))
