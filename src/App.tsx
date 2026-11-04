@@ -2953,7 +2953,11 @@ void invoke<string | null>("api_server_pick_tls_file", { kind: "key" })
 </div>
 <details className="api-certificate-guide">
 <summary>How to create a free HTTPS certificate</summary>
-<p>For development, install the free mkcert utility on the computer running RemoteHand, then use these commands in PowerShell:</p>
+<p><strong>1. Install mkcert on Windows</strong> using PowerShell:</p>
+<pre>{'winget install --id FiloSottile.mkcert --exact --source winget'}</pre>
+<p>Close and reopen PowerShell after installing, then verify:</p>
+<pre>{'mkcert -version'}</pre>
+<p><strong>2. Generate a local certificate</strong> (replace the example IPv4 address with the actual RemoteHand machine IP):</p>
 <pre>{'New-Item -ItemType Directory -Force C:\\certs\\ | Out-Null\nmkcert -install\nmkcert -cert-file C:\\certs\\remotehand.crt -key-file C:\\certs\\remotehand.key 192.168.1.100 localhost 127.0.0.1'}</pre>
 <p>Replace 192.168.1.100 with the IP or hostname clients will actually use. Enter the two generated file paths above. Install and trust mkcert's root CA certificate on each client device; <strong>never copy the CA private key</strong>. Keep remotehand.key private. This is for trusted development networks, not internet-facing production.</p>
 <p>Installer and details: github.com/FiloSottile/mkcert. You can also use a certificate issued by an existing trusted CA.</p>
