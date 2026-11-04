@@ -347,6 +347,7 @@ pub fn run() {
             api_server::api_server_token,
             api_server::api_server_rotate_token,
             api_server::api_server_open_docs,
+            api_server::api_server_pick_tls_file,
             storage::save_settings,
             storage::load_ui_contribution_layout,
             storage::save_ui_contribution_layout,
