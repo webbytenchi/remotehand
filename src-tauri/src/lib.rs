@@ -345,6 +345,8 @@ pub fn run() {
             api_server::api_server_copy_url,
             api_server::api_server_history,
             api_server::api_server_history_clear,
+            api_server::api_server_history_set_limit,
+            api_server::api_server_history_export,
             api_server::api_server_token,
             api_server::api_server_rotate_token,
             api_server::api_server_open_docs,
